@@ -1,4 +1,3 @@
-cat << 'EOF' > api/webhook.go
 package api
 
 import (
@@ -31,7 +30,6 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("پیامک/نوتیفیکیشن دریافت شد:\n%s", req.Text)
 
-	// اول تمام اعداد فارسی/عربی رو به انگلیسی تبدیل می‌کنیم
 	englishText := convertPersianNumbersToEnglish(req.Text)
 
 	amount := extractAmountFromBale(englishText)
@@ -53,7 +51,6 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// تابع تبدیل اعداد فارسی به انگلیسی
 func convertPersianNumbersToEnglish(text string) string {
 	persianNumbers := []string{"۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"}
 	arabicNumbers := []string{"٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"}
@@ -66,10 +63,7 @@ func convertPersianNumbersToEnglish(text string) string {
 	return text
 }
 
-// استخراج دقیق بر اساس ساختار بانک ملی / بله
 func extractAmountFromBale(text string) int {
-	// ریجکس می‌گرده دنبال کلمه "مبلغ:" ، ممکنه بعدش فاصله یا ستاره باشه، بعدش عدد میاد، بعدش ممکنه + یا ریال باشه
-	// مثال هدف: مبلغ: *2,000,000+* ریال
 	reTarget := regexp.MustCompile(`مبلغ[\s:*]*([\d,]+)`)
 	match := reTarget.FindStringSubmatch(text)
 	
@@ -99,4 +93,3 @@ func verifyPaymentInDB(amount int) bool {
 
 	return rowsAffected > 0
 }
-EOF
