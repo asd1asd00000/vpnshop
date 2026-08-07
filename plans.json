@@ -1,0 +1,18 @@
+[
+  {
+    "id": "20GB-1M",
+    "title": "۲۰ گیگابایت - ۱ ماهه",
+    "price": 50000,
+    "volume_gb": 20,
+    "days": 30,
+    "is_special": false
+  },
+  {
+    "id": "50GB-1M",
+    "title": "۵۰ گیگابایت - ۱ ماهه",
+    "price": 100000,
+    "volume_gb": 50,
+    "days": 30,
+    "is_special": true
+  }
+]
