@@ -19,12 +19,16 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// generateRandomUsername یه نام کاربری تصادفی می‌سازه
-// فرمت: user_sh0000r (همه حروف کوچک)
+// generateRandomUsername یه نام کاربری تصادفی ۶ حرفی می‌سازه
+// فرمت: user_xxxxxx (حروف کوچک + اعداد)
+// مثال: user_f2d5tg
 func generateRandomUsername() string {
-	randomDigits := rand.Intn(10000)          // عدد ۴ رقمی
-	randomLetter := rune('a' + rand.Intn(26)) // حرف کوچک a-z
-	return fmt.Sprintf("user_sh%04d%c", randomDigits, randomLetter)
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	randomPart := make([]byte, 6)
+	for i := range randomPart {
+		randomPart[i] = charset[rand.Intn(len(charset))]
+	}
+	return fmt.Sprintf("user_%s", string(randomPart))
 }
 
 // isDuplicateError بررسی می‌کنه ارور مربوط به تکراری بودن یوزرنیم هست
@@ -55,7 +59,7 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 
 	// 🎯 خواندن حجم و انقضا از فایل JSON
 	plans, _ := models.LoadPlans()
-	var limitUsage int64 = 20 * 1073741824 // پیش‌فرض 20 گیگ
+	var limitUsage int64 = 20 * 1073741824
 	days := 30
 
 	for _, p := range plans {
@@ -71,13 +75,13 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 	// 🎯 ساخت نام کاربری تصادفی
 	baseUsername := generateRandomUsername()
 
-	// لیست نام‌های کاربری برای امتحان: base, base2, base3, ..., base9
+	// لیست نام‌های کاربری: base, base2, base3, ..., base9
 	candidates := []string{baseUsername}
 	for i := 2; i <= 9; i++ {
 		candidates = append(candidates, fmt.Sprintf("%s%d", baseUsername, i))
 	}
 
-	// 🎯 تلاش برای ساخت کاربر با هر نام
+	// 🎯 تلاش برای ساخت کاربر
 	for _, username := range candidates {
 		fmt.Printf("🔄 تلاش برای ساخت کاربر: %s\n", username)
 
@@ -87,17 +91,15 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 			return link, nil
 		}
 
-		// اگه ارور تکراری بودن هست، برو نام بعدی
 		if isDuplicateError(err) {
 			fmt.Printf("⚠️ کاربر %s تکراری بود، امتحان بعدی...\n", username)
 			continue
 		}
 
-		// اگه ارور دیگه‌ای هست (مثلاً خطای شبکه)، متوقف شو
 		return "", fmt.Errorf("خطا در ساخت کاربر %s: %w", username, err)
 	}
 
-	return "", fmt.Errorf("تمام نام‌های کاربری تکراری بودند، لطفاً دوباره تلاش کنید")
+	return "", fmt.Errorf("تمام نام‌های کاربری تکراری بودند")
 }
 
 func GetToken(nodeURL, username, password string) (string, error) {
