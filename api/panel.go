@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,50 +15,44 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// TokenResponse ساختار دریافت توکن لاگین
-type TokenResponse struct {
-	AccessToken string `json:"access_token"`
-}
-
-// SubscriptionCreate ساختار ارسال اطلاعات کاربر جدید بر اساس مستندات شما
-type SubscriptionCreate struct {
-	Username    string `json:"username"`
-	LimitUsage  int64  `json:"limit_usage"`
-	LimitExpire int64  `json:"limit_expire"`
-	ServiceIDs  []int  `json:"service_ids"`
-	Note        string `json:"note"`
-}
-
-// SubscriptionResponse ساختار دریافت لینک بعد از ساخته شدن کاربر
-type SubscriptionResponse struct {
-	Link string `json:"link"`
-}
-
-// getPanelToken دریافت توکن لاگین از API پنل
-func getPanelToken() (string, error) {
+// GenerateConfigFromOrder پل ارتباطی بین فاکتور پرداخت شده و توابع گارد
+func GenerateConfigFromOrder(order models.Order) (string, error) {
 	panelURL := os.Getenv("PANEL_URL")
 	user := os.Getenv("PANEL_USER")
 	pass := os.Getenv("PANEL_PASS")
 
 	if panelURL == "" || user == "" || pass == "" {
-		return "", fmt.Errorf("اطلاعات ورود به پنل در متغیرهای محیطی تنظیم نشده است")
+		return "", fmt.Errorf("متغیرهای محیطی پنل تنظیم نشده‌اند")
 	}
 
-	endpoint := fmt.Sprintf("%s/api/admins/token", strings.TrimRight(panelURL, "/"))
-
-	// مستندات می‌گوید باید با فرمت Form Data ارسال شود
-	data := url.Values{}
-	data.Set("grant_type", "password")
-	data.Set("username", user)
-	data.Set("password", pass)
-
-	req, err := http.NewRequest("POST", endpoint, strings.NewReader(data.Encode()))
+	token, err := GetToken(panelURL, user, pass)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	var limitUsage int64 = 20 * 1073741824            // 20 GB
+	limitExpire := time.Now().AddDate(0, 1, 0).Unix() // 30 Days
+
+	username := fmt.Sprintf("user_%s", order.TrackingCode)
+
+	return CreateSubscription(panelURL, token, username, limitUsage, limitExpire)
+}
+
+func GetToken(nodeURL, username, password string) (string, error) {
+	data := url.Values{}
+	data.Set("grant_type", "password")
+	data.Set("username", username)
+	data.Set("password", password)
+
+	req, err := http.NewRequest("POST", nodeURL+"/api/admins/token", strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Accept", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -65,53 +60,68 @@ func getPanelToken() (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("خطا در لاگین به پنل، کد وضعیت: %d", resp.StatusCode)
+		return "", fmt.Errorf("auth failed, status: %d", resp.StatusCode)
 	}
 
-	var tokenRes TokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokenRes); err != nil {
-		return "", err
-	}
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
 
-	return tokenRes.AccessToken, nil
+	if token, ok := result["access_token"].(string); ok {
+		return token, nil
+	}
+	return "", fmt.Errorf("token not found")
 }
 
-// CreateSubscription اتصال به پنل و ساخت کانفیگ
-func CreateSubscription(order models.Order) (string, error) {
-	token, err := getPanelToken()
+func GetNodeServiceIDs(nodeURL, token string) []int {
+	req, _ := http.NewRequest("GET", nodeURL+"/api/services", nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return []int{1}
 	}
+	defer resp.Body.Close()
 
-	panelURL := os.Getenv("PANEL_URL")
-	endpoint := fmt.Sprintf("%s/api/subscriptions", strings.TrimRight(panelURL, "/"))
+	bodyBytes, _ := io.ReadAll(resp.Body)
 
-	// تبدیل پلن به بایت و زمان (به صورت پیش‌فرض 20 گیگ و 30 روز)
-	// در آینده می‌توانید این مقادیر را بر اساس order.PlanName تغییر دهید
-	var limitUsage int64 = 20 * 1073741824 // 20 GB to Bytes
-	limitExpire := time.Now().AddDate(0, 1, 0).Unix() // 30 روز آینده
-
-	// ساخت نام کاربری یکتا بر اساس کد پیگیری
-	username := fmt.Sprintf("user_%s", order.TrackingCode)
-
-	payload := SubscriptionCreate{
-		Username:    username,
-		LimitUsage:  limitUsage,
-		LimitExpire: limitExpire,
-		ServiceIDs:  []int{1}, // شناسه سرویس پیش‌فرض، اگر در پنل شما متفاوت است آن را تغییر دهید
-		Note:        fmt.Sprintf("ساخته شده خودکار - فاکتور: %d", order.ID),
+	var listResult []map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &listResult); err == nil {
+		var ids []int
+		for _, s := range listResult {
+			if id, ok := s["id"].(float64); ok {
+				ids = append(ids, int(id))
+			}
+		}
+		if len(ids) > 0 {
+			return ids
+		}
 	}
+	return []int{1}
+}
 
+func CreateSubscription(nodeURL, token, username string, nodeVolumeLimit int64, expireTimestamp int64) (string, error) {
+	serviceIDs := GetNodeServiceIDs(nodeURL, token)
+
+	payload := []map[string]interface{}{
+		{
+			"username":     username,
+			"limit_usage":  nodeVolumeLimit,
+			"limit_expire": expireTimestamp,
+			"service_ids":  serviceIDs,
+			"enabled":      true,
+		},
+	}
 	jsonData, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonData))
+
+	req, err := http.NewRequest("POST", nodeURL+"/api/subscriptions", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Content-Type", "application/json")
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 8 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -119,14 +129,136 @@ func CreateSubscription(order models.Order) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("خطا در ساخت کاربر: %s", string(bodyBytes))
+		return "", fmt.Errorf("create failed, status: %d", resp.StatusCode)
 	}
 
-	var subRes SubscriptionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&subRes); err != nil {
+	var rawResult interface{}
+	json.NewDecoder(resp.Body).Decode(&rawResult)
+
+	var firstResult map[string]interface{}
+	if listRes, ok := rawResult.([]interface{}); ok && len(listRes) > 0 {
+		firstResult, _ = listRes[0].(map[string]interface{})
+	} else if mapRes, ok := rawResult.(map[string]interface{}); ok {
+		firstResult = mapRes
+	}
+
+	if firstResult != nil {
+		if link, ok := firstResult["link"].(string); ok && link != "" {
+			return link, nil
+		}
+		secret, _ := firstResult["secret"].(string)
+		tag, _ := firstResult["tag"].(string)
+		if secret != "" && tag != "" {
+			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), tag, secret), nil
+		}
+	}
+	return "", fmt.Errorf("could not extract subscription link properties")
+}
+
+func UpdateSubscription(nodeURL, token, targetUser string, nodeVolumeLimit int64, expireTimestamp int64) (string, error) {
+	baseURL := strings.TrimRight(nodeURL, "/")
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	reqGet, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/subscriptions/%s", baseURL, targetUser), nil)
+	reqGet.Header.Add("Authorization", "Bearer "+token)
+	respGet, err := client.Do(reqGet)
+	if err != nil {
 		return "", err
 	}
 
-	return subRes.Link, nil
+	if respGet.StatusCode != http.StatusOK {
+		respGet.Body.Close()
+		log.Printf("⚠️ User %s not found on GuardCore during update. Auto-creating it now...", targetUser)
+		newLink, errCreate := CreateSubscription(nodeURL, token, targetUser, nodeVolumeLimit, expireTimestamp)
+		if errCreate != nil {
+			return "", fmt.Errorf("user not found, and auto-creation failed: %v", errCreate)
+		}
+		return newLink, nil
+	}
+
+	var user map[string]interface{}
+	json.NewDecoder(respGet.Body).Decode(&user)
+	respGet.Body.Close()
+
+	cleanPayload := map[string]interface{}{
+		"limit_usage":  nodeVolumeLimit,
+		"limit_expire": expireTimestamp,
+	}
+
+	if sIDs, ok := user["service_ids"]; ok {
+		cleanPayload["service_ids"] = sIDs
+	} else if sID, ok := user["service_id"]; ok {
+		cleanPayload["service_ids"] = []interface{}{sID}
+	}
+
+	jsonData, _ := json.Marshal(cleanPayload)
+	reqPut, _ := http.NewRequest("PUT", fmt.Sprintf("%s/api/subscriptions/%s", baseURL, targetUser), bytes.NewBuffer(jsonData))
+	reqPut.Header.Add("Authorization", "Bearer "+token)
+	reqPut.Header.Add("Content-Type", "application/json")
+
+	respPut, err := client.Do(reqPut)
+	if err != nil {
+		return "", err
+	}
+	defer respPut.Body.Close()
+
+	if respPut.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("guardcore update failed, status: %d", respPut.StatusCode)
+	}
+
+	enablePayload := map[string][]string{"usernames": {targetUser}}
+	enableData, _ := json.Marshal(enablePayload)
+	reqEnable, _ := http.NewRequest("POST", baseURL+"/api/subscriptions/enable", bytes.NewBuffer(enableData))
+	reqEnable.Header.Add("Authorization", "Bearer "+token)
+	reqEnable.Header.Add("Content-Type", "application/json")
+	respEnable, err := client.Do(reqEnable)
+	if err == nil {
+		respEnable.Body.Close()
+	}
+
+	return "", nil
+}
+
+func GetUserUsage(nodeURL, token, targetUser string) (int64, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/subscriptions/%s", nodeURL, targetUser), nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if current, ok := result["current_usage"].(float64); ok {
+		return int64(current), nil
+	} else if total, ok := result["total_usage"].(float64); ok {
+		return int64(total), nil
+	}
+	return 0, fmt.Errorf("could not find usage data")
+}
+
+func DisableSubscriptions(nodeURL, token string, usernames []string) error {
+	payload := map[string][]string{"usernames": usernames}
+	jsonData, _ := json.Marshal(payload)
+
+	req, err := http.NewRequest("POST", nodeURL+"/api/subscriptions/disable", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
 }
