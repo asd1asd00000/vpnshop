@@ -36,19 +36,19 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 	// ۱. تبدیل اعداد فارسی/عربی به انگلیسی
 	englishText := convertPersianNumbersToEnglish(req.Text)
-
-	// ۲. استخراج مبلغ به ریال
 	amountRial := extractAmountFromBale(englishText)
+
 	if amountRial == 0 {
 		log.Println("❌ هیچ مبلغ معتبری در پیام یافت نشد.")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// ۳. تبدیل ریال به تومان
 	amountToman := amountRial / 10
 
-	log.Printf("💰 مبلغ ریالی: %d | مبلغ تومانی: %d", amountRial, amountToman)
+	log.Printf("💰 ریال: %d | تومان: %d", amountRial, amountToman)
+
+	order := verifyPaymentInDB(amountToman)
 
 	// ۴. بررسی در دیتابیس
 	order := verifyPaymentInDB(amountToman)
