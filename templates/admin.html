@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مدیریت فروشگاه | VPNShop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div class="bg-gray-800 px-6 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-white">داشبورد مدیریت فاکتورها</h1>
+            <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">VPNShop</span>
+        </div>
+        
+        <div class="p-6 overflow-x-auto">
+            <table class="w-full text-sm text-right text-gray-500">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-100 rounded-t-lg">
+                    <tr>
+                        <th scope="col" class="px-6 py-4 rounded-tr-lg">شماره فاکتور</th>
+                        <th scope="col" class="px-6 py-4">کد پیگیری (سفارش)</th>
+                        <th scope="col" class="px-6 py-4">نام پلن</th>
+                        <th scope="col" class="px-6 py-4">مبلغ دریافتی (تومان)</th>
+                        <th scope="col" class="px-6 py-4">وضعیت</th>
+                        <th scope="col" class="px-6 py-4 rounded-tl-lg">لینک کانفیگ استخراج شده</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Orders}}
+                    <tr class="bg-white border-b hover:bg-gray-50 transition duration-150">
+                        <td class="px-6 py-4 font-bold text-gray-900">#{{.ID}}</td>
+                        <td class="px-6 py-4 font-mono text-gray-700">{{.TrackingCode}}</td>
+                        <td class="px-6 py-4 text-blue-600">{{.PlanName}}</td>
+                        <td class="px-6 py-4 font-bold text-green-600">{{.UniqueAmount}}</td>
+                        <td class="px-6 py-4">
+                            {{if eq .Status "paid"}}
+                                <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200">پرداخت شده</span>
+                            {{else}}
+                                <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs border border-orange-200">در انتظار پرداخت</span>
+                            {{end}}
+                        </td>
+                        <td class="px-6 py-4" dir="ltr">
+                            {{if .ConfigLink}}
+                                <input type="text" value="{{.ConfigLink}}" readonly onclick="this.select();" 
+                                class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 cursor-pointer hover:bg-gray-100 transition">
+                            {{else}}
+                                <span class="text-gray-400 italic font-sans">-</span>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            
+            {{if not .Orders}}
+            <div class="text-center py-8 text-gray-500">
+                هیچ سفارشی در دیتابیس یافت نشد.
+            </div>
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>
