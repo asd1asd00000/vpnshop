@@ -9,24 +9,20 @@ import (
 )
 
 func main() {
-	// ۱. راه‌اندازی دیتابیس
 	db.InitDB("./vpnshop.db")
 	defer db.DB.Close()
 
-	// ۲. ساخت یک فاکتور تستی (فقط برای الان)
-	// مبلغ خرد شده در اینجا 200045 است
+	// تغییر مبلغ یکتا به 2000000 تا با تست پیامک «بله» شما هماهنگ شود
 	_, err := db.DB.Exec(`INSERT OR IGNORE INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
-		VALUES ('TEST-123', '20GB-1Month', 200000, 200045, 'pending')`)
+		VALUES ('TEST-BALE', '20GB-1Month', 2000000, 2000000, 'pending')`)
 	if err != nil {
 		log.Printf("خطا در ساخت فاکتور تستی: %v", err)
 	} else {
-		log.Println("فاکتور تستی (TEST-123) با مبلغ 200045 به دیتابیس اضافه شد.")
+		log.Println("فاکتور تستی (TEST-BALE) با مبلغ 2000000 به دیتابیس اضافه شد.")
 	}
 
-	// ۳. تعریف مسیر وب‌هوک
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
 
-	// ۴. اجرای وب‌سرور
 	port := ":8080"
 	log.Printf("سرور VPNShop روی پورت %s در حال اجرا است...", port)
 	
