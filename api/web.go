@@ -21,40 +21,53 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	plans, _ := models.LoadPlans()
+
 	if r.Method == http.MethodGet {
-		tmpl.Execute(w, nil)
+		tmpl.Execute(w, map[string]interface{}{"Plans": plans})
 		return
 	}
 
 	if r.Method == http.MethodPost {
-		planName := r.FormValue("plan_name")
-		basePriceStr := r.FormValue("base_price")
-		basePrice, _ := strconv.Atoi(basePriceStr)
+		planID := r.FormValue("plan_id")
+		
+		// پیدا کردن پلن در دیتابیس متنی ما برای امنیت
+		var selectedPlan *models.Plan
+		for _, p := range plans {
+			if p.ID == planID {
+				selectedPlan = &p
+				break
+			}
+		}
 
-		// تولید یک مبلغ یکتا برای این تراکنش (مثلاً 50000 + عدد تصادفی بین 1 تا 999)
+		if selectedPlan == nil {
+			http.Error(w, "پلن انتخاب شده نامعتبر است", http.StatusBadRequest)
+			return
+		}
+
+		// قیمت از فایل JSON خوانده می‌شود نه از HTML (امنیت مطلق)
+		basePrice := selectedPlan.Price
+
 		rand.Seed(time.Now().UnixNano())
 		uniqueAmount := basePrice + rand.Intn(999) + 1
-
-		// تولید یک کد پیگیری رندوم 6 حرفی
 		trackingCode := fmt.Sprintf("VP%d", rand.Intn(900000)+100000)
 
-		// ذخیره فاکتور در دیتابیس در حالت pending
+		// آیدی پلن (مثل 20GB-1M) را در دیتابیس ذخیره می‌کنیم
 		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
-			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, planName, basePrice, uniqueAmount)
+			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
 		
 		if err != nil {
 			http.Error(w, "خطا در ثبت سفارش", http.StatusInternalServerError)
 			return
 		}
 
-		// ارسال اطلاعات فاکتور به صفحه تا مشتری شماره کارت و مبلغ را ببیند
 		order := models.Order{
 			TrackingCode: trackingCode,
-			PlanName:     planName,
+			PlanName:     selectedPlan.Title, // برای نمایش زیبا به کاربر
 			UniqueAmount: uniqueAmount,
 		}
 
-		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order})
+		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": plans})
 	}
 }
 
