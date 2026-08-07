@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/asd1asd00000/vpnshop/db"
