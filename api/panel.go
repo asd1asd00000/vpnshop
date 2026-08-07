@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -32,10 +31,10 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 	var limitUsage int64 = 20 * 1073741824            // 20 GB
 	limitExpire := time.Now().AddDate(0, 1, 0).Unix() // 30 Days
 
-	// 🎯 تغییر اصلی: حذف تمام کاراکترهای غیر از حروف و اعداد برای رعایت قوانین گارد
-	reg := regexp.MustCompile("[^a-zA-Z0-9]+")
-	cleanTracking := reg.ReplaceAllString(order.TrackingCode, "")
-	username := fmt.Sprintf("user%s", cleanTracking)
+	// 🎯 ایجاد نام کاربری یکتا و استاندارد ترکیب کلمه shopuser و آیدی فاکتور (بدون هیچ خط تیره و آندرلاین)
+	username := fmt.Sprintf("shopuser%d", order.ID)
+	
+	fmt.Printf("دیباگ - نام کاربری نهایی برای گارد: %s\n", username)
 
 	return CreateSubscription(panelURL, token, username, limitUsage, limitExpire)
 }
