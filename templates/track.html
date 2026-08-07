@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دریافت کانفیگ | VPNShop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-4 border-blue-600">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">دریافت کانفیگ خریداری شده</h1>
+        
+        <form method="POST" class="space-y-4">
+            <div>
+                <label class="block text-right text-sm font-medium text-gray-700 mb-1">کد پیگیری سفارش:</label>
+                <input type="text" name="tracking_code" placeholder="مثلاً TEST-BALE" required
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-left font-sans" dir="ltr">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200">
+                جستجو و دریافت لینک
+            </button>
+        </form>
+
+        {{if .Error}}
+        <div class="mt-6 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm">
+            {{.Error}}
+        </div>
+        {{end}}
+
+        {{if .Order}}
+            <div class="mt-8 border-t pt-6 text-right">
+                <h2 class="text-lg font-bold text-green-600 mb-4">✅ سفارش شما یافت شد!</h2>
+                
+                <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2">
+                    <span class="text-sm text-gray-600">وضعیت پرداخت:</span>
+                    <span class="text-sm font-bold {{if eq .Order.Status "paid"}}text-green-600{{else}}text-orange-500{{end}}">
+                        {{if eq .Order.Status "paid"}}پرداخت شده{{else}}در انتظار پرداخت{{end}}
+                    </span>
+                </div>
+                
+                {{if .Order.ConfigLink}}
+                <div class="mt-4 bg-blue-50 p-4 rounded-lg border border-blue-100 relative">
+                    <p class="text-xs text-blue-800 mb-2 font-bold">لینک اتصال شما (برای V2ray):</p>
+                    <textarea id="configLink" readonly class="w-full bg-white border border-blue-200 rounded text-sm text-gray-800 resize-none outline-none h-20 p-2 font-sans" dir="ltr">{{.Order.ConfigLink}}</textarea>
+                    
+                    <button onclick="copyLink()" class="mt-2 w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded transition text-sm">
+                        کپی کردن لینک
+                    </button>
+                </div>
+                <p id="copyMsg" class="text-xs text-green-600 text-center mt-2 hidden font-bold">لینک با موفقیت کپی شد!</p>
+                
+                <script>
+                    function copyLink() {
+                        var copyText = document.getElementById("configLink");
+                        copyText.select();
+                        copyText.setSelectionRange(0, 99999);
+                        navigator.clipboard.writeText(copyText.value);
+                        document.getElementById("copyMsg").classList.remove("hidden");
+                        setTimeout(() => document.getElementById("copyMsg").classList.add("hidden"), 3000);
+                    }
+                </script>
+                {{else if eq .Order.Status "paid"}}
+                <div class="mt-4 p-3 bg-yellow-50 text-yellow-700 rounded-lg text-sm border border-yellow-200">
+                    پرداخت تایید شده اما لینک در حال ساخت است. چند ثانیه دیگر صفحه را رفرش کنید.
+                </div>
+                {{end}}
+            </div>
+        {{end}}
+    </div>
+</body>
+</html>
