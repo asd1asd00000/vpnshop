@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,30 @@ import (
 
 	"github.com/asd1asd00000/vpnshop/models"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+// generateRandomUsername یه نام کاربری تصادفی می‌سازه
+// فرمت: user_sh0000r (همه حروف کوچک)
+func generateRandomUsername() string {
+	randomDigits := rand.Intn(10000)          // عدد ۴ رقمی
+	randomLetter := rune('a' + rand.Intn(26)) // حرف کوچک a-z
+	return fmt.Sprintf("user_sh%04d%c", randomDigits, randomLetter)
+}
+
+// isDuplicateError بررسی می‌کنه ارور مربوط به تکراری بودن یوزرنیم هست
+func isDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "already exists") ||
+		strings.Contains(errMsg, "duplicate") ||
+		strings.Contains(errMsg, "conflict") ||
+		strings.Contains(errMsg, "409")
+}
 
 func GenerateConfigFromOrder(order models.Order) (string, error) {
 	panelURL := os.Getenv("PANEL_URL")
@@ -28,13 +53,13 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 		return "", err
 	}
 
-	// 🎯 خواندن حجم و انقضا به صورت کاملاً داینامیک از فایل JSON
+	// 🎯 خواندن حجم و انقضا از فایل JSON
 	plans, _ := models.LoadPlans()
 	var limitUsage int64 = 20 * 1073741824 // پیش‌فرض 20 گیگ
-	days := 30                             // پیش‌فرض 30 روز
+	days := 30
 
 	for _, p := range plans {
-		if p.ID == order.PlanName { // ما در مرحله قبل ID را در دیتابیس ذخیره کردیم
+		if p.ID == order.PlanName {
 			limitUsage = int64(p.VolumeGB) * 1073741824
 			days = p.Days
 			break
@@ -42,11 +67,37 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 	}
 
 	limitExpire := time.Now().AddDate(0, 0, days).Unix()
-	username := fmt.Sprintf("shopuser%d", order.ID)
 
-	fmt.Printf("دیباگ - ساخت کانفیگ: کاربر %s | حجم: %d بایت | روز: %d\n", username, limitUsage, days)
+	// 🎯 ساخت نام کاربری تصادفی
+	baseUsername := generateRandomUsername()
 
-	return CreateSubscription(panelURL, token, username, limitUsage, limitExpire)
+	// لیست نام‌های کاربری برای امتحان: base, base2, base3, ..., base9
+	candidates := []string{baseUsername}
+	for i := 2; i <= 9; i++ {
+		candidates = append(candidates, fmt.Sprintf("%s%d", baseUsername, i))
+	}
+
+	// 🎯 تلاش برای ساخت کاربر با هر نام
+	for _, username := range candidates {
+		fmt.Printf("🔄 تلاش برای ساخت کاربر: %s\n", username)
+
+		link, err := CreateSubscription(panelURL, token, username, limitUsage, limitExpire)
+		if err == nil {
+			fmt.Printf("✅ کاربر %s با موفقیت ساخته شد\n", username)
+			return link, nil
+		}
+
+		// اگه ارور تکراری بودن هست، برو نام بعدی
+		if isDuplicateError(err) {
+			fmt.Printf("⚠️ کاربر %s تکراری بود، امتحان بعدی...\n", username)
+			continue
+		}
+
+		// اگه ارور دیگه‌ای هست (مثلاً خطای شبکه)، متوقف شو
+		return "", fmt.Errorf("خطا در ساخت کاربر %s: %w", username, err)
+	}
+
+	return "", fmt.Errorf("تمام نام‌های کاربری تکراری بودند، لطفاً دوباره تلاش کنید")
 }
 
 func GetToken(nodeURL, username, password string) (string, error) {
