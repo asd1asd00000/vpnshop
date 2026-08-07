@@ -13,8 +13,12 @@ import (
 )
 
 type SMSRequest struct {
-	Text string `json:"text"`
+	Text  string `json:"text"`
+	Token string `json:"token"`
 }
+
+// 🔑 توکن امنیتی ۱۰ رقمی - حتماً عوضش کن!
+const webhookSecret = "KHIHgu1451lhgugiu54DFG51FDLOI"
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -28,15 +32,22 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ✅ بررسی توکن امنیتی
+	if req.Token != webhookSecret {
+		log.Println("⚠️ دسترسی غیرمجاز: توکن نامعتبر")
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	log.Printf("📩 پیامک دریافتی: %s", req.Text)
 
-	// ۱. تبدیل اعداد فارسی به انگلیسی
+	// ۱. تبدیل اعداد فارسی/عربی به انگلیسی
 	englishText := convertPersianNumbersToEnglish(req.Text)
 
 	// ۲. استخراج مبلغ (ریال)
 	amountRial := extractAmountFromBale(englishText)
 	if amountRial == 0 {
-		log.Println("❌ مبلغی یافت نشد")
+		log.Println("❌ مبلغی در پیام یافت نشد")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
