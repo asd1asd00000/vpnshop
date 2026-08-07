@@ -53,16 +53,23 @@ systemctl restart vpnshop
 
 echo "✅ سرویس دائمی VPNShop با موفقیت نصب و روشن شد!"
 # ==========================================
-# 🌐 تنظیمات Nginx و دامنه
+# 🌐 تنظیمات Nginx و دریافت خودکار SSL
 # ==========================================
 echo ""
-echo "🌐 تنظیمات دامنه (پروکسی معکوس Nginx)"
+echo "🌐 تنظیمات دامنه و SSL (Nginx & Certbot)"
 read -p "لطفاً نام دامنه یا ساب‌دامین فروشگاه خود را وارد کنید (مثلاً shop.erfjab.com) [اگر نمی‌خواهید اینتر بزنید]: " domain_name </dev/tty
 
 if [ ! -z "$domain_name" ]; then
+    echo "⚙️ در حال بررسی و نصب Nginx و Certbot..."
+    if ! command -v nginx &> /dev/null; then
+        apt update && apt install -y nginx certbot python3-certbot-nginx
+    fi
+
+    # ایجاد پوشه‌های Nginx در صورت عدم وجود
+    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+
     echo "⚙️ در حال ساخت کانفیگ Nginx برای دامنه $domain_name ..."
-    
-    cat <<EOF> /etc/nginx/sites-available/vpnshop
+    cat <<EOF > /etc/nginx/sites-available/vpnshop
 server {
     listen 80;
     server_name $domain_name;
@@ -77,15 +84,22 @@ server {
 }
 EOF
 
-    # ایجاد اتصال (سیم‌لینک) و ری‌استارت انجینکس
     ln -sf /etc/nginx/sites-available/vpnshop /etc/nginx/sites-enabled/
     nginx -t && systemctl restart nginx
-    echo "✅ دامنه $domain_name با موفقیت تنظیم شد و به پورت 8080 متصل گردید!"
+
+    echo "🔒 در حال دریافت گواهینامه SSL (Let's Encrypt) برای $domain_name ..."
+    certbot --nginx -d "$domain_name" --non-interactive --agree-tos -m "admin@$domain_name" --redirect || echo "⚠️ دریافت SSL با خطا مواجه شد. لطفاً مطمئن شوید دامنه به این سرور وصل است."
+
+    echo "✅ دامنه $domain_name با پروتکل امن HTTPS با موفقیت تنظیم شد!"
 else
     echo "⚠️ نام دامنه‌ای وارد نشد. تنظیمات Nginx نادیده گرفته شد."
 fi
 
 echo ""
 echo "🎉 نصب و راه‌اندازی با موفقیت به پایان رسید!"
-echo "🛒 آدرس فروشگاه شما: http://$domain_name (یا http://IP:8080)"
-echo "🔒 آدرس داشبورد مدیریت: http://$domain_name/admin"
+if [ ! -z "$domain_name" ]; then
+    echo "🛒 آدرس فروشگاه شما: https://$domain_name"
+    echo "🔒 آدرس داشبورد مدیریت: https://$domain_name/admin"
+else
+    echo "🛒 آدرس فروشگاه شما: http://IP:8080"
+fi
