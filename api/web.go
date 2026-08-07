@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"time"
+	"os"
 
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
@@ -108,6 +109,21 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 
 // AdminHandler مدیریت داشبورد ادمین
 func AdminHandler(w http.ResponseWriter, r *http.Request) {
+	// 🔒 لایه امنیتی: خواندن یوزر و پسورد از متغیرهای محیطی
+	adminUser := os.Getenv("ADMIN_USER")
+	adminPass := os.Getenv("ADMIN_PASS")
+	
+	// اگر متغیرها تنظیم نشده بودند، مقادیر پیش‌فرض قرار بده
+	if adminUser == "" { adminUser = "admin" }
+	if adminPass == "" { adminPass = "123456" }
+
+	user, pass, ok := r.BasicAuth()
+	if !ok || user != adminUser || pass != adminPass {
+		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted Admin Dashboard"`)
+		http.Error(w, "دسترسی غیرمجاز - لطفاً نام کاربری و رمز عبور را وارد کنید", http.StatusUnauthorized)
+		return
+	}
+
 	tmpl, err := template.ParseFiles("templates/admin.html")
 	if err != nil {
 		http.Error(w, "خطا در بارگذاری قالب ادمین", http.StatusInternalServerError)
