@@ -48,30 +48,22 @@
             </div>
         </div>
         {{else}}
-        <!-- بخش انتخاب پلن‌ها -->
+<!-- بخش انتخاب پلن‌ها به صورت داینامیک -->
         <div class="grid md:grid-cols-2 gap-6">
-            <!-- پلن ۱ -->
-            <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center border border-gray-100">
-                <h3 class="text-xl font-bold text-gray-800 mb-2">۲۰ گیگابایت - ۱ ماهه</h3>
-                <p class="text-3xl font-bold text-blue-600 mb-6">۵۰,۰۰۰ <span class="text-sm text-gray-500 font-normal">تومان</span></p>
-                <form method="POST">
-                    <input type="hidden" name="plan_name" value="20GB-1Month">
-                    <input type="hidden" name="base_price" value="50000">
-                    <button type="submit" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
-                </form>
-            </div>
-            
-            <!-- پلن ۲ -->
-            <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center border-2 border-blue-500 relative">
+            {{range .Plans}}
+            <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center {{if .IsSpecial}}border-2 border-blue-500 relative{{else}}border border-gray-100{{end}}">
+                {{if .IsSpecial}}
                 <span class="absolute top-0 right-1/2 transform translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold">پیشنهاد ویژه</span>
-                <h3 class="text-xl font-bold text-gray-800 mb-2">۵۰ گیگابایت - ۱ ماهه</h3>
-                <p class="text-3xl font-bold text-blue-600 mb-6">۱۰۰,۰۰۰ <span class="text-sm text-gray-500 font-normal">تومان</span></p>
+                {{end}}
+                <h3 class="text-xl font-bold text-gray-800 mb-2">{{.Title}}</h3>
+                <p class="text-3xl font-bold text-blue-600 mb-6">{{.Price}} <span class="text-sm text-gray-500 font-normal">تومان</span></p>
                 <form method="POST">
-                    <input type="hidden" name="plan_name" value="50GB-1Month">
-                    <input type="hidden" name="base_price" value="100000">
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
+                    <!-- امنیت بالا: فقط آیدی ارسال می‌شود، نه قیمت! -->
+                    <input type="hidden" name="plan_id" value="{{.ID}}">
+                    <button type="submit" class="w-full {{if .IsSpecial}}bg-blue-600 hover:bg-blue-700{{else}}bg-gray-800 hover:bg-gray-900{{end}} text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
                 </form>
             </div>
+            {{end}}
         </div>
         
         <div class="text-center mt-8">
