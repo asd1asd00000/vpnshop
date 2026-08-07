@@ -12,20 +12,18 @@ func main() {
 	db.InitDB("./vpnshop.db")
 	defer db.DB.Close()
 
-	// افزودن فاکتور تستی (فقط برای تست)
-	_, err := db.DB.Exec(`INSERT OR IGNORE INTO orders (tracking_code, plan_name, base_price, unique_amount, status, config_link) 
-		VALUES ('TEST-BALE', '20GB-1Month', 2000000, 2000000, 'paid', 'https://versub.bertly.top/guards/d9e06b2ca7f7942532d28059a5d086a2')`)
-	if err == nil {
-		log.Println("فاکتور تستی با وضعیت پرداخت‌شده به دیتابیس اضافه شد.")
-	}
-
-	// مسیر مشتری (ظاهر سایت)
-	http.HandleFunc("/", api.TrackHandler)
+	// 🌐 روت‌های برنامه
 	
-	// مسیر داشبورد مدیریت (ادمین)
+	// ۱. صفحه اصلی (فروشگاه)
+	http.HandleFunc("/", api.ShopHandler)
+	
+	// ۲. صفحه پیگیری سفارش
+	http.HandleFunc("/track", api.TrackHandler)
+	
+	// ۳. داشبورد مدیریت
 	http.HandleFunc("/admin", api.AdminHandler)
 	
-	// مسیر وب‌هوک دریافت پیامک
+	// ۴. وب‌هوک دریافت پیامک
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
 
 	port := ":8080"
