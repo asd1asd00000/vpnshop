@@ -9,27 +9,23 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// TrackHandler مدیریت صفحه مشتری برای دریافت کانفیگ
+// TrackHandler مدیریت صفحه مشتری
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
-	// پارس کردن فایل HTML (قالب)
 	tmpl, err := template.ParseFiles("templates/track.html")
 	if err != nil {
 		http.Error(w, "خطا در بارگذاری قالب صفحه", http.StatusInternalServerError)
 		return
 	}
 
-	// اگر درخواست GET بود (کاربر تازه وارد سایت شده)، فقط فرم خالی را نشان بده
 	if r.Method == http.MethodGet {
 		tmpl.Execute(w, nil)
 		return
 	}
 
-	// اگر درخواست POST بود (کاربر فرم جستجو را زده است)
 	if r.Method == http.MethodPost {
 		trackingCode := r.FormValue("tracking_code")
 		var order models.Order
 
-		// جستجوی کد پیگیری در دیتابیس
 		query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '') 
 		          FROM orders WHERE tracking_code = ?`
 		
@@ -37,22 +33,44 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 			&order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
 		)
 
-		// اگر فاکتور پیدا نشد
 		if err == sql.ErrNoRows {
-			tmpl.Execute(w, map[string]interface{}{
-				"Error": "فاکتوری با این کد یافت نشد. لطفاً کد را بررسی کنید.",
-			})
+			tmpl.Execute(w, map[string]interface{}{"Error": "فاکتوری با این کد یافت نشد."})
 			return
 		} else if err != nil {
-			tmpl.Execute(w, map[string]interface{}{
-				"Error": "خطای سیستمی در ارتباط با پایگاه داده رخ داده است.",
-			})
+			tmpl.Execute(w, map[string]interface{}{"Error": "خطای سیستمی رخ داده است."})
 			return
 		}
 
-		// اگر فاکتور پیدا شد، اطلاعات را به قالب ارسال کن
-		tmpl.Execute(w, map[string]interface{}{
-			"Order": order,
-		})
+		tmpl.Execute(w, map[string]interface{}{"Order": order})
 	}
+}
+
+// AdminHandler مدیریت داشبورد ادمین
+func AdminHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("templates/admin.html")
+	if err != nil {
+		http.Error(w, "خطا در بارگذاری قالب ادمین", http.StatusInternalServerError)
+		return
+	}
+
+	// خواندن تمام فاکتورها از جدیدترین به قدیمی‌ترین
+	rows, err := db.DB.Query(`SELECT id, tracking_code, plan_name, unique_amount, status, IFNULL(config_link, '') FROM orders ORDER BY id DESC`)
+	if err != nil {
+		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var orders []models.Order
+	for rows.Next() {
+		var o models.Order
+		err := rows.Scan(&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status, &o.ConfigLink)
+		if err == nil {
+			orders = append(orders, o)
+		}
+	}
+
+	tmpl.Execute(w, map[string]interface{}{
+		"Orders": orders,
+	})
 }
