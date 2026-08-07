@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/asd1asd00000/vpnshop/db"
+	"github.com/asd1asd00000/vpnshop/models"
 )
 
 type SMSRequest struct {
@@ -41,9 +42,21 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("مبلغ استخراج شده: %d", amount)
 
-	success := verifyPaymentInDB(amount)
-	if success {
-		log.Printf("تراکنش با مبلغ %d با موفقیت تایید شد! ✅", amount)
+	// بررسی و دریافت فاکتور
+	order := verifyPaymentInDB(amount)
+	if order != nil {
+		log.Printf("تراکنش فاکتور %s با موفقیت تایید شد! در حال ارتباط با پنل...", order.TrackingCode)
+		
+		// فراخوانی تابع ساخت کاربر در پنل
+		link, err := CreateSubscription(*order)
+		if err != nil {
+			log.Printf("❌ خطا در ساخت کانفیگ در پنل: %v", err)
+		} else {
+			log.Printf("✅ کانفیگ با موفقیت ساخته شد: %s", link)
+			
+			// ذخیره لینک تحویلی در دیتابیس
+			db.DB.Exec(`UPDATE orders SET config_link = ? WHERE id = ?`, link, order.ID)
+		}
 	} else {
 		log.Printf("فاکتوری برای مبلغ %d یافت نشد یا از قبل تایید شده است. ❌", amount)
 	}
@@ -74,22 +87,34 @@ func extractAmountFromBale(text string) int {
 			return val
 		}
 	}
-	
 	return 0
 }
 
-func verifyPaymentInDB(amount int) bool {
-	query := `UPDATE orders SET status = 'paid' WHERE unique_amount = ? AND status = 'pending'`
-	result, err := db.DB.Exec(query, amount)
+// verifyPaymentInDB حالا کل آبجکت فاکتور را برمی‌گرداند
+func verifyPaymentInDB(amount int) *models.Order {
+	var order models.Order
+	
+	query := `SELECT id, tracking_code, plan_name, base_price, unique_amount, status, config_link 
+	          FROM orders WHERE unique_amount = ? AND status = 'pending'`
+	
+	err := db.DB.QueryRow(query, amount).Scan(
+		&order.ID, &order.TrackingCode, &order.PlanName, &order.BasePrice, 
+		&order.UniqueAmount, &order.Status, &order.ConfigLink,
+	)
+	
+	// اگر فاکتور پیدا نشد
 	if err != nil {
-		log.Printf("خطا در آپدیت دیتابیس: %v", err)
-		return false
+		return nil
 	}
 
-	rowsAffected, err := result.RowsAffected()
+	// آپدیت وضعیت به پرداخت شده
+	updateQuery := `UPDATE orders SET status = 'paid' WHERE id = ?`
+	_, err = db.DB.Exec(updateQuery, order.ID)
 	if err != nil {
-		return false
+		log.Printf("خطا در آپدیت وضعیت فاکتور: %v", err)
+		return nil
 	}
 
-	return rowsAffected > 0
+	order.Status = "paid"
+	return &order
 }
