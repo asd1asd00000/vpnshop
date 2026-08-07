@@ -1,8 +1,8 @@
 #!/bin/bash
 
-echo "==> در حال نصب پیش‌نیازهای لینوکس (Golang و Git)..."
+echo "==> در حال نصب پیش‌نیازهای لینوکس..."
 sudo apt update
-sudo apt install -y golang-go git
+sudo apt install -y golang-go git build-essential
 
 echo "==> در حال دریافت سورس‌کد از گیت‌هاب..."
 cd /root
@@ -12,7 +12,7 @@ cd vpnshop
 
 echo "==> در حال دانلود پکیج‌ها و کامپایل پروژه..."
 go mod tidy
-go build -o vpnshop-app main.go
+CGO_ENABLED=1 go build -o vpnshop-app main.go
 
 echo "==> نصب با موفقیت انجام شد! ✅"
 echo "برای اجرای سرور دستور زیر را وارد کنید:"
