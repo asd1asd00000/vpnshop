@@ -101,15 +101,17 @@ func GetNodeServiceIDs(nodeURL, token string) []int {
 func CreateSubscription(nodeURL, token, username string, nodeVolumeLimit int64, expireTimestamp int64) (string, error) {
 	serviceIDs := GetNodeServiceIDs(nodeURL, token)
 
-	// 🎯 تغییر اول: تبدیل آرایه به آبجکت استاندارد
-	payload := map[string]interface{}{
-		"username":     username,
-		"limit_usage":  nodeVolumeLimit,
-		"limit_expire": expireTimestamp,
-		"service_ids":  serviceIDs,
-		"enabled":      true,
+	// 🎯 تغییر اصلی: برگرداندن به حالت آرایه اما حذف فیلد اضافی
+	payload := []map[string]interface{}{
+		{
+			"username":     username,
+			"limit_usage":  nodeVolumeLimit,
+			"limit_expire": expireTimestamp,
+			"service_ids":  serviceIDs,
+			// فیلد enabled حذف شد تا سرور سخت‌گیرِ گارد ارور ۴۲۲ ندهد
+		},
 	}
-	
+
 	jsonData, _ := json.Marshal(payload)
 
 	req, err := http.NewRequest("POST", nodeURL+"/api/subscriptions", bytes.NewBuffer(jsonData))
@@ -126,7 +128,6 @@ func CreateSubscription(nodeURL, token, username string, nodeVolumeLimit int64, 
 	}
 	defer resp.Body.Close()
 
-	// 🎯 تغییر دوم: استخراج متن دقیق ارور از پنل گارد
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("create failed, status: %d, detail: %s", resp.StatusCode, string(bodyBytes))
