@@ -28,13 +28,23 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 		return "", err
 	}
 
-	var limitUsage int64 = 20 * 1073741824            // 20 GB
-	limitExpire := time.Now().AddDate(0, 1, 0).Unix() // 30 Days
+	// 🎯 خواندن حجم و انقضا به صورت کاملاً داینامیک از فایل JSON
+	plans, _ := models.LoadPlans()
+	var limitUsage int64 = 20 * 1073741824 // پیش‌فرض 20 گیگ
+	days := 30                             // پیش‌فرض 30 روز
 
-	// 🎯 ایجاد نام کاربری یکتا و استاندارد ترکیب کلمه shopuser و آیدی فاکتور (بدون هیچ خط تیره و آندرلاین)
+	for _, p := range plans {
+		if p.ID == order.PlanName { // ما در مرحله قبل ID را در دیتابیس ذخیره کردیم
+			limitUsage = int64(p.VolumeGB) * 1073741824
+			days = p.Days
+			break
+		}
+	}
+
+	limitExpire := time.Now().AddDate(0, 0, days).Unix()
 	username := fmt.Sprintf("shopuser%d", order.ID)
-	
-	fmt.Printf("دیباگ - نام کاربری نهایی برای گارد: %s\n", username)
+
+	fmt.Printf("دیباگ - ساخت کانفیگ: کاربر %s | حجم: %d بایت | روز: %d\n", username, limitUsage, days)
 
 	return CreateSubscription(panelURL, token, username, limitUsage, limitExpire)
 }
