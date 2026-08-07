@@ -52,3 +52,40 @@ systemctl enable vpnshop
 systemctl restart vpnshop
 
 echo "✅ سرویس دائمی VPNShop با موفقیت نصب و روشن شد!"
+# ==========================================
+# 🌐 تنظیمات Nginx و دامنه
+# ==========================================
+echo ""
+echo "🌐 تنظیمات دامنه (پروکسی معکوس Nginx)"
+read -p "لطفاً نام دامنه یا ساب‌دامین فروشگاه خود را وارد کنید (مثلاً shop.erfjab.com) [اگر نمی‌خواهید اینتر بزنید]: " domain_name </dev/tty
+
+if [ ! -z "$domain_name" ]; then
+    echo "⚙️ در حال ساخت کانفیگ Nginx برای دامنه $domain_name ..."
+    
+    cat <<EOF> /etc/nginx/sites-available/vpnshop
+server {
+    listen 80;
+    server_name $domain_name;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+    # ایجاد اتصال (سیم‌لینک) و ری‌استارت انجینکس
+    ln -sf /etc/nginx/sites-available/vpnshop /etc/nginx/sites-enabled/
+    nginx -t && systemctl restart nginx
+    echo "✅ دامنه $domain_name با موفقیت تنظیم شد و به پورت 8080 متصل گردید!"
+else
+    echo "⚠️ نام دامنه‌ای وارد نشد. تنظیمات Nginx نادیده گرفته شد."
+fi
+
+echo ""
+echo "🎉 نصب و راه‌اندازی با موفقیت به پایان رسید!"
+echo "🛒 آدرس فروشگاه شما: http://$domain_name (یا http://IP:8080)"
+echo "🔒 آدرس داشبورد مدیریت: http://$domain_name/admin"
