@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -31,7 +32,10 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 	var limitUsage int64 = 20 * 1073741824            // 20 GB
 	limitExpire := time.Now().AddDate(0, 1, 0).Unix() // 30 Days
 
-	username := fmt.Sprintf("user_%s", order.TrackingCode)
+	// 🎯 تغییر اصلی: حذف تمام کاراکترهای غیر از حروف و اعداد برای رعایت قوانین گارد
+	reg := regexp.MustCompile("[^a-zA-Z0-9]+")
+	cleanTracking := reg.ReplaceAllString(order.TrackingCode, "")
+	username := fmt.Sprintf("user%s", cleanTracking)
 
 	return CreateSubscription(panelURL, token, username, limitUsage, limitExpire)
 }
@@ -101,14 +105,12 @@ func GetNodeServiceIDs(nodeURL, token string) []int {
 func CreateSubscription(nodeURL, token, username string, nodeVolumeLimit int64, expireTimestamp int64) (string, error) {
 	serviceIDs := GetNodeServiceIDs(nodeURL, token)
 
-	// 🎯 تغییر اصلی: برگرداندن به حالت آرایه اما حذف فیلد اضافی
 	payload := []map[string]interface{}{
 		{
 			"username":     username,
 			"limit_usage":  nodeVolumeLimit,
 			"limit_expire": expireTimestamp,
 			"service_ids":  serviceIDs,
-			// فیلد enabled حذف شد تا سرور سخت‌گیرِ گارد ارور ۴۲۲ ندهد
 		},
 	}
 
