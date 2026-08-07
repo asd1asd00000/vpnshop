@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خرید کانفیگ | VPNShop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-3xl mx-auto">
+        <!-- هدر فروشگاه -->
+        <div class="text-center mb-10">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">فروشگاه VPNShop</h1>
+            <p class="text-gray-600">پلن مورد نظر خود را انتخاب کنید و به صورت آنی تحویل بگیرید.</p>
+        </div>
+
+        {{if .CheckoutOrder}}
+        <!-- بخش نمایش فاکتور و شماره کارت (بعد از انتخاب پلن) -->
+        <div class="bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">فاکتور شما ایجاد شد</h2>
+            <p class="text-gray-600 mb-6">لطفاً مبلغ دقیق زیر را به شماره کارت اعلام شده واریز کنید. سیستم بلافاصله پس از واریز، کانفیگ شما را می‌سازد.</p>
+            
+            <div class="bg-gray-50 p-6 rounded-lg mb-6 border border-gray-200">
+                <div class="mb-4">
+                    <span class="block text-sm text-gray-500 mb-1">مبلغ دقیق قابل پرداخت:</span>
+                    <span class="text-3xl font-bold text-green-600 tracking-wider">{{.CheckoutOrder.UniqueAmount}} تومان</span>
+                    <p class="text-xs text-red-500 mt-2 font-bold">⚠️ حتماً همین مبلغ دقیق (حتی ریال آخر) را واریز کنید تا سیستم خودکار تایید کند.</p>
+                </div>
+                <hr class="my-4 border-gray-200">
+                <div class="mb-4">
+                    <span class="block text-sm text-gray-500 mb-1">شماره کارت جهت واریز:</span>
+                    <span class="text-2xl font-bold text-gray-800 font-mono tracking-widest" dir="ltr">6037-9999-9999-9999</span>
+                    <span class="block text-sm text-gray-500 mt-1">به نام: نام صاحب کارت</span>
+                </div>
+                <hr class="my-4 border-gray-200">
+                <div>
+                    <span class="block text-sm text-gray-500 mb-1">کد پیگیری سفارش شما:</span>
+                    <span class="text-xl font-bold text-blue-600 font-mono bg-blue-50 px-4 py-1 rounded">{{.CheckoutOrder.TrackingCode}}</span>
+                </div>
+            </div>
+
+            <div class="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800 border border-yellow-200">
+                پس از انجام کارت‌به‌کارت و دریافت پیامک کسر وجه، کد پیگیری بالا را کپی کرده و وارد صفحه <a href="/track" class="text-blue-600 font-bold underline">پیگیری خرید</a> شوید.
+            </div>
+        </div>
+        {{else}}
+        <!-- بخش انتخاب پلن‌ها -->
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- پلن ۱ -->
+            <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center border border-gray-100">
+                <h3 class="text-xl font-bold text-gray-800 mb-2">۲۰ گیگابایت - ۱ ماهه</h3>
+                <p class="text-3xl font-bold text-blue-600 mb-6">۵۰,۰۰۰ <span class="text-sm text-gray-500 font-normal">تومان</span></p>
+                <form method="POST">
+                    <input type="hidden" name="plan_name" value="20GB-1Month">
+                    <input type="hidden" name="base_price" value="50000">
+                    <button type="submit" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
+                </form>
+            </div>
+            
+            <!-- پلن ۲ -->
+            <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center border-2 border-blue-500 relative">
+                <span class="absolute top-0 right-1/2 transform translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold">پیشنهاد ویژه</span>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">۵۰ گیگابایت - ۱ ماهه</h3>
+                <p class="text-3xl font-bold text-blue-600 mb-6">۱۰۰,۰۰۰ <span class="text-sm text-gray-500 font-normal">تومان</span></p>
+                <form method="POST">
+                    <input type="hidden" name="plan_name" value="50GB-1Month">
+                    <input type="hidden" name="base_price" value="100000">
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="text-center mt-8">
+            <a href="/track" class="text-blue-600 font-bold hover:underline">قبلاً خرید کرده‌ام (پیگیری سفارش)</a>
+        </div>
+        {{end}}
+    </div>
+</body>
+</html>
