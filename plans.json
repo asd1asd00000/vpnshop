@@ -14,5 +14,24 @@
     "volume_gb": 50,
     "days": 30,
     "is_special": true
+  },
+  [
+  {
+    "id": "30GB-1M",
+    "title": "30 گیگابایت - ۱ ماهه",
+    "price": 70000,
+    "volume_gb": 30,
+    "days": 30,
+    "is_special": false
+  },
+  {
+    "id": "100GB-1M",
+    "title": "100 گیگابایت - ۱ ماهه",
+    "price": 300000,
+    "volume_gb": 100,
+    "days": 30,
+    "is_special": true
   }
+]
+  
 ]
