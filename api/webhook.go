@@ -20,62 +20,53 @@ type SMSRequest struct {
 const webhookSecret = "YOUR_SECRET_HERE_CHANGE_ME"
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodPost {
-        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != http.MethodPost {
+		http.Error(w, "فقط متد POST مجاز است", http.StatusMethodNotAllowed)
+		return
+	}
 
-    var req SMSRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Bad request", http.StatusBadRequest)
-        return
-    }
+	var req SMSRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "خطا در خواندن داده‌ها", http.StatusBadRequest)
+		return
+	}
 
-    // ✅ ۱. احراز هویت
-    if req.Token != webhookSecret {
-        log.Println("⚠️ دسترسی غیرمجاز به webhook")
-        http.Error(w, "Forbidden", http.StatusForbidden)
-        return
-    }
+	log.Printf("📩 پیامک دریافتی: %s", req.Text)
 
-    log.Printf("📩 پیامک دریافتی: %s", req.Text)
+	// ۱. تبدیل اعداد فارسی/عربی به انگلیسی
+	englishText := convertPersianNumbersToEnglish(req.Text)
 
-    // ✅ ۲. تبدیل اعداد فارسی
-    englishText := convertPersianNumbersToEnglish(req.Text)
+	// ۲. استخراج مبلغ به ریال
+	amountRial := extractAmountFromBale(englishText)
+	if amountRial == 0 {
+		log.Println("❌ هیچ مبلغ معتبری در پیام یافت نشد.")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
-    // ✅ ۳. استخراج مبلغ (ریالی)
-    amountRial := extractAmountFromBale(englishText)
-    if amountRial == 0 {
-        log.Println("❌ مبلغی در پیام یافت نشد")
-        w.WriteHeader(http.StatusOK)
-        return
-    }
+	// ۳. تبدیل ریال به تومان
+	amountToman := amountRial / 10
 
-    // ✅ ۴. تبدیل ریال به تومان
-    amountToman := amountRial / 10
-    log.Printf("💰 مبلغ: %d ریال = %d تومان", amountRial, amountToman)
+	log.Printf("💰 مبلغ ریالی: %d | مبلغ تومانی: %d", amountRial, amountToman)
 
-    // ✅ ۵. تایید در دیتابیس
-    order := verifyPaymentInDB(amountToman)
-    if order == nil {
-        log.Printf("❌ فاکتوری برای %d تومان یافت نشد", amountToman)
-        w.WriteHeader(http.StatusOK)
-        return
-    }
+	// ۴. بررسی در دیتابیس
+	order := verifyPaymentInDB(amountToman)
+	if order != nil {
+		log.Printf("✅ تراکنش فاکتور %s تایید شد!", order.TrackingCode)
 
-    log.Printf("✅ سفارش %s تایید شد", order.TrackingCode)
+		link, err := GenerateConfigFromOrder(*order)
+		if err != nil {
+			log.Printf("❌ خطا در ساخت کانفیگ: %v", err)
+		} else {
+			log.Printf("🔗 کانفیگ: %s", link)
+			db.DB.Exec(`UPDATE orders SET config_link = ? WHERE id = ?`, link, order.ID)
+		}
+	} else {
+		log.Printf("❌ فاکتوری برای %d تومان یافت نشد", amountToman)
+	}
 
-    // ✅ ۶. ساخت کانفیگ
-    link, err := GenerateConfigFromOrder(*order)
-    if err != nil {
-        log.Printf("❌ خطا در ساخت کانفیگ: %v", err)
-    } else {
-        db.DB.Exec(`UPDATE orders SET config_link = ? WHERE id = ?`, link, order.ID)
-        log.Printf("🔗 کانفیگ ساخته شد: %s", link)
-    }
-
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte("OK"))
+	w.WriteHeader(http.StatusOK)
 }
 
 func convertPersianNumbersToEnglish(text string) string {
