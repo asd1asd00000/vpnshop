@@ -19,12 +19,13 @@ func main() {
 		log.Println("فاکتور تستی با وضعیت پرداخت‌شده به دیتابیس اضافه شد.")
 	}
 
-	// 🌐 روت‌های برنامه (مسیرهای سرور)
-	
-	// ۱. صفحه کاربری مشتری (ظاهر سایت) روی مسیر اصلی
+	// مسیر مشتری (ظاهر سایت)
 	http.HandleFunc("/", api.TrackHandler)
 	
-	// ۲. وب‌هوک دریافت پیامک
+	// مسیر داشبورد مدیریت (ادمین)
+	http.HandleFunc("/admin", api.AdminHandler)
+	
+	// مسیر وب‌هوک دریافت پیامک
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
 
 	port := ":8080"
