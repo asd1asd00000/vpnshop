@@ -17,8 +17,7 @@ type SMSRequest struct {
 	Token string `json:"token"`
 }
 
-// 🔑 توکن امنیتی ۱۰ رقمی - حتماً عوضش کن!
-const webhookSecret = "KHIHgu1451lhgugiu54DFG51FDLOI"
+const webhookSecret = "8372946150"
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -32,7 +31,6 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ✅ بررسی توکن امنیتی
 	if req.Token != webhookSecret {
 		log.Println("⚠️ دسترسی غیرمجاز: توکن نامعتبر")
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -44,8 +42,8 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	// ۱. تبدیل اعداد فارسی/عربی به انگلیسی
 	englishText := convertPersianNumbersToEnglish(req.Text)
 
-	// ۲. استخراج مبلغ (ریال)
-	amountRial := extractAmountFromBale(englishText)
+	// ۲. استخراج مبلغ (ریال) - پشتیبانی از چند فرمت
+	amountRial := extractAmount(englishText)
 	if amountRial == 0 {
 		log.Println("❌ مبلغی در پیام یافت نشد")
 		w.WriteHeader(http.StatusOK)
@@ -90,15 +88,35 @@ func convertPersianNumbersToEnglish(text string) string {
 	return text
 }
 
-func extractAmountFromBale(text string) int {
-	re := regexp.MustCompile(`مبلغ[\s:*]*([\d,]+)`)
-	match := re.FindStringSubmatch(text)
+// extractAmount از چند فرمت مختلف پشتیبانی می‌کنه
+func extractAmount(text string) int {
+	// لیست پترن‌ها به ترتیب اولویت
+	patterns := []*regexp.Regexp{
+		// فرمت ۱: پیامک واقعی بانک ملی
+		// انتقال:102,540+
+		regexp.MustCompile(`انتقال[:\s]*([\d,]+)`),
 
-	if len(match) > 1 {
-		cleanStr := strings.ReplaceAll(match[1], ",", "")
-		val, err := strconv.Atoi(cleanStr)
-		if err == nil {
-			return val
+		// فرمت ۲: فرمت بله/رسمی
+		// مبلغ: *1,007,120+* ریال
+		regexp.MustCompile(`مبلغ[\s:*]*([\d,]+)`),
+
+		// فرمت ۳: هر جایی که عدد با + باشه
+		// 102,540+
+		regexp.MustCompile(`([\d,]+)\+`),
+
+		// فرمت ۴: مبلغ به ریال
+		// 1,000,000 ریال
+		regexp.MustCompile(`([\d,]+)\s*ریال`),
+	}
+
+	for _, re := range patterns {
+		match := re.FindStringSubmatch(text)
+		if len(match) > 1 {
+			cleanStr := strings.ReplaceAll(match[1], ",", "")
+			val, err := strconv.Atoi(cleanStr)
+			if err == nil && val > 0 {
+				return val
+			}
 		}
 	}
 	return 0
