@@ -14,7 +14,13 @@
     <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
         <div class="bg-gray-800 px-6 py-4 flex justify-between items-center">
             <h1 class="text-xl font-bold text-white">داشبورد مدیریت فاکتورها</h1>
-            <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">VPNShop</span>
+            <div class="flex items-center gap-3">
+                <a href="/admin/backup" 
+                   class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition flex items-center gap-2">
+                    📥 دانلود بکاپ دیتابیس
+                </a>
+                <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">VPNShop</span>
+            </div>
         </div>
         
         <div class="p-6 overflow-x-auto">
@@ -26,6 +32,7 @@
                         <th scope="col" class="px-6 py-4">نام پلن</th>
                         <th scope="col" class="px-6 py-4">مبلغ دریافتی (تومان)</th>
                         <th scope="col" class="px-6 py-4">وضعیت</th>
+                        <th scope="col" class="px-6 py-4">تایید ادمین</th>
                         <th scope="col" class="px-6 py-4 rounded-tl-lg">لینک کانفیگ استخراج شده</th>
                     </tr>
                 </thead>
@@ -42,6 +49,13 @@
                             {{else}}
                                 <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs border border-orange-200">در انتظار پرداخت</span>
                             {{end}}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <input type="checkbox" 
+                                   class="w-5 h-5 accent-green-600 cursor-pointer"
+                                   {{if .AdminConfirmed}}checked{{end}}
+                                   onchange="confirmOrder({{.ID}}, this.checked)"
+                                   title="تایید دستی پرداخت توسط ادمین">
                         </td>
                         <td class="px-6 py-4" dir="ltr">
                             {{if .ConfigLink}}
@@ -63,5 +77,21 @@
             {{end}}
         </div>
     </div>
+
+    <script>
+        function confirmOrder(id, confirmed) {
+            fetch('/admin/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id, confirmed: confirmed })
+            }).then(res => {
+                if (res.ok) {
+                    console.log('✅ تایید ادمین ثبت شد');
+                } else {
+                    console.error('❌ خطا در ثبت تایید');
+                }
+            });
+        }
+    </script>
 </body>
 </html>
