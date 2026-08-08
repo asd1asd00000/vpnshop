@@ -1,19 +1,95 @@
 package api
 
 import (
+	crand "crypto/rand"
 	"database/sql"
-	"fmt"
 	"html/template"
+	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// ShopHandler نمایش فروشگاه و ساخت فاکتور جدید
+// ─────────────────────────────────────────────
+// 🔒 محدودیت نرخ (ضد brute force)
+// ─────────────────────────────────────────────
+
+var (
+	rateMu   sync.Mutex
+	attempts = make(map[string][]time.Time)
+)
+
+const (
+	rateLimitWindow = 1 * time.Minute // بازه زمانی
+	rateLimitMax    = 3               // حداکثر تلاش در بازه
+)
+
+// clientIP آی‌پی واقعی کاربر رو برمی‌گردونه
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		return strings.TrimSpace(strings.Split(fwd, ",")[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// allowTrackAttempt بررسی می‌کنه آیا این IP مجاز به تلاش هست یا نه
+func allowTrackAttempt(ip string) bool {
+	rateMu.Lock()
+	defer rateMu.Unlock()
+
+	now := time.Now()
+	windowStart := now.Add(-rateLimitWindow)
+
+	list := attempts[ip]
+	filtered := make([]time.Time, 0, len(list))
+	for _, t := range list {
+		if t.After(windowStart) {
+			filtered = append(filtered, t)
+		}
+	}
+
+	if len(filtered) >= rateLimitMax {
+		attempts[ip] = filtered
+		return false
+	}
+
+	attempts[ip] = append(filtered, now)
+	return true
+}
+
+// ─────────────────────────────────────────────
+// 🎫 کد پیگیری امن و غیرقابل حدس
+// ─────────────────────────────────────────────
+
+// generateTrackingCode یه کد مثل VPk3m8x2ab می‌سازه
+// ۳۶^۱۵ ≈ ۲۲۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰ حالت! (غیرقابل پیش‌بینی)
+func generateTrackingCode() string {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 15) // ✅ قبلاً 8 بود
+	if _, err := crand.Read(b); err != nil {
+		return "VP000000000000000"
+	}
+	for i := range b {
+		b[i] = chars[int(b[i])%len(chars)]
+	}
+	return "VP" + string(b)
+}
+
+// ─────────────────────────────────────────────
+// 🛒 فروشگاه
+// ─────────────────────────────────────────────
+
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/shop.html")
 	if err != nil {
@@ -48,7 +124,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 
 		rand.Seed(time.Now().UnixNano())
 		uniqueAmount := basePrice + rand.Intn(999) + 1
-		trackingCode := fmt.Sprintf("VP%d", rand.Intn(900000)+100000)
+		trackingCode := generateTrackingCode() // ✅ کد امن جدید
 
 		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
 			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
@@ -68,7 +144,10 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TrackHandler مدیریت صفحه مشتری
+// ─────────────────────────────────────────────
+// 🔍 پیگیری سفارش (با Rate Limit)
+// ─────────────────────────────────────────────
+
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/track.html")
 	if err != nil {
@@ -82,6 +161,16 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+		// ✅ بررسی محدودیت نرخ قبل از هر کاری
+		ip := clientIP(r)
+		if !allowTrackAttempt(ip) {
+			log.Printf("⚠️ محدودیت نرخ پیگیری برای IP: %s", ip)
+			tmpl.Execute(w, map[string]interface{}{
+				"Error": "تعداد تلاش‌ها بیش از حد مجاز است. لطفاً چند دقیقه بعد دوباره تلاش کنید.",
+			})
+			return
+		}
+
 		trackingCode := r.FormValue("tracking_code")
 		var order models.Order
 
@@ -104,7 +193,10 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// adminOrder ساختار اختصاصی برای نمایش در داشبورد ادمین
+// ─────────────────────────────────────────────
+// 👨‍💼 داشبورد ادمین
+// ─────────────────────────────────────────────
+
 type adminOrder struct {
 	ID             int
 	TrackingCode   string
@@ -115,7 +207,6 @@ type adminOrder struct {
 	AdminConfirmed bool
 }
 
-// checkAdminAuth احراز هویت ادمین (استفاده مشترک بین همه روت‌های ادمین)
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	adminUser := os.Getenv("ADMIN_USER")
 	adminPass := os.Getenv("ADMIN_PASS")
@@ -136,7 +227,6 @@ func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// AdminHandler مدیریت داشبورد ادمین
 func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
