@@ -13,17 +13,23 @@ func main() {
 	defer db.DB.Close()
 
 	// 🌐 روت‌های برنامه
-	
+
 	// ۱. صفحه اصلی (فروشگاه)
 	http.HandleFunc("/", api.ShopHandler)
-	
+
 	// ۲. صفحه پیگیری سفارش
 	http.HandleFunc("/track", api.TrackHandler)
-	
+
 	// ۳. داشبورد مدیریت
 	http.HandleFunc("/admin", api.AdminHandler)
-	
-	// ۴. وب‌هوک دریافت پیامک
+
+	// ۴. بکاپ دیتابیس (جدید)
+	http.HandleFunc("/admin/backup", api.BackupHandler)
+
+	// ۵. تایید دستی ادمین (جدید)
+	http.HandleFunc("/admin/confirm", api.AdminConfirmHandler)
+
+	// ۶. وب‌هوک دریافت پیامک
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
 
 	port := ":8080"
