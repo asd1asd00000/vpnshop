@@ -37,12 +37,16 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("📩 پیامک دریافتی: %s", req.Text)
+	// 🎯 پاک‌سازی `Enter`ها تا کل پیامک تبدیل به یک خط تمیز شود
+	flatText := strings.ReplaceAll(req.Text, "\n", " ")
+	flatText = strings.ReplaceAll(flatText, "\r", " ")
+	
+	log.Printf("📩 پیامک دریافتی: %s", flatText)
 
-	// ۱. تبدیل اعداد فارسی/عربی به انگلیسی
-	englishText := convertPersianNumbersToEnglish(req.Text)
+	// ۱. تبدیل اعداد فارسی/عربی به انگلیسی روی متنِ یک‌خطی شده
+	englishText := convertPersianNumbersToEnglish(flatText)
 
-	// ۲. استخراج مبلغ (ریال) - پشتیبانی از چند فرمت
+	// ۲. استخراج مبلغ (ریال) - با الگوهای قدرتمندِ جدید
 	amountRial := extractAmount(englishText)
 	if amountRial == 0 {
 		log.Println("❌ مبلغی در پیام یافت نشد")
@@ -92,20 +96,16 @@ func convertPersianNumbersToEnglish(text string) string {
 func extractAmount(text string) int {
 	// لیست پترن‌ها به ترتیب اولویت
 	patterns := []*regexp.Regexp{
-		// فرمت ۱: پیامک واقعی بانک ملی
-		// انتقال:102,540+
-		regexp.MustCompile(`انتقال[:\s]*([\d,]+)`),
+		// فرمت ۱: مقاوم‌ترین الگو برای کلمه انتقال (رد کردن نشانه‌ها و رسیدن به عدد)
+		regexp.MustCompile(`انتقال[^\d]*([\d,]+)`),
 
 		// فرمت ۲: فرمت بله/رسمی
-		// مبلغ: *1,007,120+* ریال
-		regexp.MustCompile(`مبلغ[\s:*]*([\d,]+)`),
+		regexp.MustCompile(`مبلغ[^\d]*([\d,]+)`),
 
-		// فرمت ۳: هر جایی که عدد با + باشه
-		// 102,540+
-		regexp.MustCompile(`([\d,]+)\+`),
+		// فرمت ۳: هر جایی که عدد با علامت + همراه باشه
+		regexp.MustCompile(`([\d,]+)[^\d]*\+`),
 
 		// فرمت ۴: مبلغ به ریال
-		// 1,000,000 ریال
 		regexp.MustCompile(`([\d,]+)\s*ریال`),
 	}
 
