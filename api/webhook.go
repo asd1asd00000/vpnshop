@@ -2,12 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
-	"io"
 
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
@@ -19,20 +19,6 @@ type SMSRequest struct {
 }
 
 const webhookSecret = "KHIHgu1451lhgugiu54DFG51FDLOI"
-bodyBytes, err := io.ReadAll(r.Body)
-if err != nil {
-    log.Printf("❌ خطا در خواندن body: %v", err)
-    http.Error(w, "خطا در خواندن داده‌ها", http.StatusBadRequest)
-    return
-}
-log.Printf("📦 body خام: [%s]", string(bodyBytes))
-
-var req SMSRequest
-if err := json.Unmarshal(bodyBytes, &req); err != nil {
-    log.Printf("❌ خطای JSON parse: %v", err)   // ← این خط رو تا حالا نداشتی
-    http.Error(w, "خطا در خواندن داده‌ها", http.StatusBadRequest)
-    return
-}
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -40,11 +26,22 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req SMSRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// === بخش اصلاح شده: خواندن کامل Body و لاگ کردن آن ===
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("❌ خطا در خواندن body: %v", err)
 		http.Error(w, "خطا در خواندن داده‌ها", http.StatusBadRequest)
 		return
 	}
+	log.Printf("📦 body خام: [%s]", string(bodyBytes))
+
+	var req SMSRequest
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		log.Printf("❌ خطای JSON parse: %v", err)
+		http.Error(w, "خطا در خواندن داده‌ها", http.StatusBadRequest)
+		return
+	}
+	// =======================================================
 
 	if req.Token != webhookSecret {
 		log.Println("⚠️ دسترسی غیرمجاز: توکن نامعتبر")
@@ -96,6 +93,10 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// ==========================================
+// توابع کمکی در ادامه قرار می‌گیرند
+// ==========================================
+
 // normalizeText تمام newlines و کاراکترهای اضافی رو به space تبدیل می‌کنه
 func normalizeText(text string) string {
 	// تبدیل \n و \r به space
@@ -139,19 +140,10 @@ func extractAmount(text string) int {
 		name string
 		re   *regexp.Regexp
 	}{
-		// فرمت ۱: انتقال:102,540+ (پیامک واقعی بانک ملی)
 		{"انتقال با :", regexp.MustCompile(`انتقال[:\s]*([\d,]+)`)},
-
-		// فرمت ۲: مبلغ: 1,000,000 ریال (فرمت بله)
 		{"مبلغ با ریال", regexp.MustCompile(`مبلغ[\s:*]*([\d,]+)`)},
-
-		// فرمت ۳: هر عددی که + داره (102,540+)
 		{"عدد با پلاس", regexp.MustCompile(`([\d,]+)\+`)},
-
-		// فرمت ۴: انتقال بدون دونقطه (انتقال 104520)
 		{"انتقال ساده", regexp.MustCompile(`انتقال\s+([\d,]+)`)},
-
-		// فرمت ۵: هر عدد بزرگتر از ۱۰۰۰ (fallback)
 		{"عدد بزرگ", regexp.MustCompile(`\b(\d{1,3}(?:,\d{3})+|\d{4,})\b`)},
 	}
 
