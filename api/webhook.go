@@ -17,7 +17,7 @@ type SMSRequest struct {
 	Token string `json:"token"`
 }
 
-const webhookSecret = "KHIHgu1451lhgugiu54DFG51FDLOI"
+const webhookSecret = "8372946150"
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -37,16 +37,17 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🎯 پاک‌سازی `Enter`ها تا کل پیامک تبدیل به یک خط تمیز شود
-	flatText := strings.ReplaceAll(req.Text, "\n", " ")
-	flatText = strings.ReplaceAll(flatText, "\r", " ")
-	
-	log.Printf("📩 پیامک دریافتی: %s", flatText)
+	log.Printf("📩 پیامک دریافتی (خام): [%s]", req.Text)
+	log.Printf("📏 طول پیامک: %d کاراکتر", len(req.Text))
 
-	// ۱. تبدیل اعداد فارسی/عربی به انگلیسی روی متنِ یک‌خطی شده
-	englishText := convertPersianNumbersToEnglish(flatText)
+	// ۱. نرمال‌سازی متن: تبدیل newlines به space برای جستجوی آسان‌تر
+	normalizedText := normalizeText(req.Text)
+	log.Printf("📩 پیامک نرمال‌شده: [%s]", normalizedText)
 
-	// ۲. استخراج مبلغ (ریال) - با الگوهای قدرتمندِ جدید
+	// ۲. تبدیل اعداد فارسی/عربی به انگلیسی
+	englishText := convertPersianNumbersToEnglish(normalizedText)
+
+	// ۳. استخراج مبلغ
 	amountRial := extractAmount(englishText)
 	if amountRial == 0 {
 		log.Println("❌ مبلغی در پیام یافت نشد")
@@ -54,11 +55,11 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۳. تبدیل ریال به تومان
+	// ۴. تبدیل ریال به تومان
 	amountToman := amountRial / 10
 	log.Printf("💰 ریال: %d | تومان: %d", amountRial, amountToman)
 
-	// ۴. بررسی در دیتابیس
+	// ۵. بررسی در دیتابیس
 	order := verifyPaymentInDB(amountToman)
 	if order == nil {
 		log.Printf("❌ فاکتوری برای %d تومان یافت نشد", amountToman)
@@ -68,7 +69,7 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("✅ سفارش %s تایید شد!", order.TrackingCode)
 
-	// ۵. ساخت کانفیگ
+	// ۶. ساخت کانفیگ
 	link, err := GenerateConfigFromOrder(*order)
 	if err != nil {
 		log.Printf("❌ خطا در ساخت کانفیگ: %v", err)
@@ -78,6 +79,28 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// normalizeText تمام newlines و کاراکترهای اضافی رو به space تبدیل می‌کنه
+func normalizeText(text string) string {
+	// تبدیل \n و \r به space
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\r", " ")
+	text = strings.ReplaceAll(text, "\t", " ")
+
+	// تبدیل نیم‌فاصله و کاراکترهای خاص به space
+	text = strings.ReplaceAll(text, "\u200c", " ") // نیم‌فاصله
+	text = strings.ReplaceAll(text, "\u200f", "")  // RTL mark
+	text = strings.ReplaceAll(text, "\u200e", "")  // LTR mark
+
+	// حذف ستاره‌ها (فرمت بله)
+	text = strings.ReplaceAll(text, "*", "")
+
+	// فشرده‌سازی space‌های متعدد به یک space
+	spaceRegex := regexp.MustCompile(`\s+`)
+	text = spaceRegex.ReplaceAllString(text, " ")
+
+	return strings.TrimSpace(text)
 }
 
 func convertPersianNumbersToEnglish(text string) string {
@@ -92,33 +115,44 @@ func convertPersianNumbersToEnglish(text string) string {
 	return text
 }
 
-// extractAmount از چند فرمت مختلف پشتیبانی می‌کنه
+// extractAmount با چندین پترن مختلف مبلغ رو استخراج می‌کنه
 func extractAmount(text string) int {
+	log.Printf("🔍 جستجوی مبلغ در: [%s]", text)
+
 	// لیست پترن‌ها به ترتیب اولویت
-	patterns := []*regexp.Regexp{
-		// فرمت ۱: مقاوم‌ترین الگو برای کلمه انتقال (رد کردن نشانه‌ها و رسیدن به عدد)
-		regexp.MustCompile(`انتقال[^\d]*([\d,]+)`),
+	patterns := []struct {
+		name string
+		re   *regexp.Regexp
+	}{
+		// فرمت ۱: انتقال:102,540+ (پیامک واقعی بانک ملی)
+		{"انتقال با :", regexp.MustCompile(`انتقال[:\s]*([\d,]+)`)},
 
-		// فرمت ۲: فرمت بله/رسمی
-		regexp.MustCompile(`مبلغ[^\d]*([\d,]+)`),
+		// فرمت ۲: مبلغ: 1,000,000 ریال (فرمت بله)
+		{"مبلغ با ریال", regexp.MustCompile(`مبلغ[\s:*]*([\d,]+)`)},
 
-		// فرمت ۳: هر جایی که عدد با علامت + همراه باشه
-		regexp.MustCompile(`([\d,]+)[^\d]*\+`),
+		// فرمت ۳: هر عددی که + داره (102,540+)
+		{"عدد با پلاس", regexp.MustCompile(`([\d,]+)\+`)},
 
-		// فرمت ۴: مبلغ به ریال
-		regexp.MustCompile(`([\d,]+)\s*ریال`),
+		// فرمت ۴: انتقال بدون دونقطه (انتقال 104520)
+		{"انتقال ساده", regexp.MustCompile(`انتقال\s+([\d,]+)`)},
+
+		// فرمت ۵: هر عدد بزرگتر از ۱۰۰۰ (fallback)
+		{"عدد بزرگ", regexp.MustCompile(`\b(\d{1,3}(?:,\d{3})+|\d{4,})\b`)},
 	}
 
-	for _, re := range patterns {
-		match := re.FindStringSubmatch(text)
+	for _, p := range patterns {
+		match := p.re.FindStringSubmatch(text)
 		if len(match) > 1 {
 			cleanStr := strings.ReplaceAll(match[1], ",", "")
 			val, err := strconv.Atoi(cleanStr)
 			if err == nil && val > 0 {
+				log.Printf("✅ پترن [%s] match شد: %d", p.name, val)
 				return val
 			}
 		}
 	}
+
+	log.Println("❌ هیچ پترنی match نشد")
 	return 0
 }
 
