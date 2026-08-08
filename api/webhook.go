@@ -17,7 +17,7 @@ type SMSRequest struct {
 	Token string `json:"token"`
 }
 
-const webhookSecret = "8372946150"
+const webhookSecret = "KHIHgu1451lhgugiu54DFG51FDLOI"
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
