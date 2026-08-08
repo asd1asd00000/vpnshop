@@ -18,6 +18,20 @@ type SMSRequest struct {
 }
 
 const webhookSecret = "KHIHgu1451lhgugiu54DFG51FDLOI"
+bodyBytes, err := io.ReadAll(r.Body)
+if err != nil {
+    log.Printf("❌ خطا در خواندن body: %v", err)
+    http.Error(w, "خطا در خواندن داده‌ها", http.StatusBadRequest)
+    return
+}
+log.Printf("📦 body خام: [%s]", string(bodyBytes))
+
+var req SMSRequest
+if err := json.Unmarshal(bodyBytes, &req); err != nil {
+    log.Printf("❌ خطای JSON parse: %v", err)   // ← این خط رو تا حالا نداشتی
+    http.Error(w, "خطا در خواندن داده‌ها", http.StatusBadRequest)
+    return
+}
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
