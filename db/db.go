@@ -30,12 +30,24 @@ func InitDB(dataSourceName string) {
 		unique_amount INTEGER UNIQUE NOT NULL,
 		status TEXT NOT NULL DEFAULT 'pending',
 		config_link TEXT,
+		admin_confirmed INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
 	_, err = DB.Exec(createTableQuery)
 	if err != nil {
 		log.Fatalf("خطا در ساخت جدول سفارشات: %v", err)
+	}
+
+	// ✅ مایگریشن: اگه ستون admin_confirmed روی دیتابیس قدیمی نیست، اضافه‌ش کن
+	var colCount int
+	err = DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('orders') WHERE name = 'admin_confirmed'`).Scan(&colCount)
+	if err == nil && colCount == 0 {
+		if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN admin_confirmed INTEGER NOT NULL DEFAULT 0`); err != nil {
+			log.Printf("❌ خطا در افزودن ستون admin_confirmed: %v", err)
+		} else {
+			log.Println("✅ ستون admin_confirmed به جدول orders اضافه شد.")
+		}
 	}
 
 	log.Println("دیتابیس متصل شد و جدول orders بررسی/ایجاد گردید.")
