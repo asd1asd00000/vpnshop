@@ -13,6 +13,11 @@ import (
 
 // AdminConfirmHandler تایید دستی ادمین رو ثبت می‌کنه
 func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
+	// 🔒 امنیت: فقط ادمین مجاز است
+	if !checkAdminAuth(w, r) {
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -42,12 +47,17 @@ func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// BackupHandler یه بکاپ سالم و یکپارچه از دیتابیس می‌گیره و دانلود می‌کنه
+// BackupHandler بکاپ کامل از دیتابیس می‌گیره و دانلود می‌کنه
 func BackupHandler(w http.ResponseWriter, r *http.Request) {
+	// 🔒 امنیت: فقط ادمین مجاز است
+	if !checkAdminAuth(w, r) {
+		return
+	}
+
 	timestamp := time.Now().Format("20060102_150405")
 	backupPath := fmt.Sprintf("/tmp/vpnshop_backup_%s.db", timestamp)
 
-	// VACUUM INTO یه کپی یکپارچه و سالم می‌گیره (حتی اگه همزمان سفارش جدید ثبت بشه)
+	// VACUUM INTO یه کپی یکپارچه و سالم می‌گیره
 	if _, err := db.DB.Exec(fmt.Sprintf("VACUUM INTO '%s'", backupPath)); err != nil {
 		log.Printf("❌ خطا در گرفتن بکاپ: %v", err)
 		http.Error(w, "خطا در گرفتن بکاپ", http.StatusInternalServerError)
@@ -57,7 +67,6 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="vpnshop_backup_%s.db"`, timestamp))
 	http.ServeFile(w, r, backupPath)
 
-	// فایل موقت رو پاک کن
 	os.Remove(backupPath)
 	log.Printf("📥 بکاپ دیتابیس دانلود شد")
 }
