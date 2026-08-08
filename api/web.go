@@ -6,8 +6,8 @@ import (
 	"html/template"
 	"math/rand"
 	"net/http"
-	"time"
 	"os"
+	"time"
 
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
@@ -30,8 +30,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		planID := r.FormValue("plan_id")
-		
-		// پیدا کردن پلن در دیتابیس متنی ما برای امنیت
+
 		var selectedPlan *models.Plan
 		for _, p := range plans {
 			if p.ID == planID {
@@ -45,17 +44,15 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// قیمت از فایل JSON خوانده می‌شود نه از HTML (امنیت مطلق)
 		basePrice := selectedPlan.Price
 
 		rand.Seed(time.Now().UnixNano())
 		uniqueAmount := basePrice + rand.Intn(999) + 1
 		trackingCode := fmt.Sprintf("VP%d", rand.Intn(900000)+100000)
 
-		// آیدی پلن (مثل 20GB-1M) را در دیتابیس ذخیره می‌کنیم
 		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
 			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
-		
+
 		if err != nil {
 			http.Error(w, "خطا در ثبت سفارش", http.StatusInternalServerError)
 			return
@@ -63,7 +60,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 
 		order := models.Order{
 			TrackingCode: trackingCode,
-			PlanName:     selectedPlan.Title, // برای نمایش زیبا به کاربر
+			PlanName:     selectedPlan.Title,
 			UniqueAmount: uniqueAmount,
 		}
 
@@ -90,7 +87,7 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 
 		query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '') 
 		          FROM orders WHERE tracking_code = ?`
-		
+
 		err := db.DB.QueryRow(query, trackingCode).Scan(
 			&order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
 		)
@@ -107,20 +104,41 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AdminHandler مدیریت داشبورد ادمین
-func AdminHandler(w http.ResponseWriter, r *http.Request) {
-	// 🔒 لایه امنیتی: خواندن یوزر و پسورد از متغیرهای محیطی
+// adminOrder ساختار اختصاصی برای نمایش در داشبورد ادمین
+type adminOrder struct {
+	ID             int
+	TrackingCode   string
+	PlanName       string
+	UniqueAmount   int
+	Status         string
+	ConfigLink     string
+	AdminConfirmed bool
+}
+
+// checkAdminAuth احراز هویت ادمین (استفاده مشترک بین همه روت‌های ادمین)
+func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	adminUser := os.Getenv("ADMIN_USER")
 	adminPass := os.Getenv("ADMIN_PASS")
-	
-	// اگر متغیرها تنظیم نشده بودند، مقادیر پیش‌فرض قرار بده
-	if adminUser == "" { adminUser = "admin" }
-	if adminPass == "" { adminPass = "123456" }
+
+	if adminUser == "" {
+		adminUser = "admin"
+	}
+	if adminPass == "" {
+		adminPass = "123456"
+	}
 
 	user, pass, ok := r.BasicAuth()
 	if !ok || user != adminUser || pass != adminPass {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted Admin Dashboard"`)
 		http.Error(w, "دسترسی غیرمجاز - لطفاً نام کاربری و رمز عبور را وارد کنید", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+// AdminHandler مدیریت داشبورد ادمین
+func AdminHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
 		return
 	}
 
@@ -130,18 +148,20 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.DB.Query(`SELECT id, tracking_code, plan_name, unique_amount, status, IFNULL(config_link, '') FROM orders ORDER BY id DESC`)
+	rows, err := db.DB.Query(`SELECT id, tracking_code, plan_name, unique_amount, status, IFNULL(config_link, ''), IFNULL(admin_confirmed, 0) FROM orders ORDER BY id DESC`)
 	if err != nil {
 		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	var orders []models.Order
+	var orders []adminOrder
 	for rows.Next() {
-		var o models.Order
-		err := rows.Scan(&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status, &o.ConfigLink)
+		var o adminOrder
+		var confirmed int
+		err := rows.Scan(&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status, &o.ConfigLink, &confirmed)
 		if err == nil {
+			o.AdminConfirmed = confirmed == 1
 			orders = append(orders, o)
 		}
 	}
