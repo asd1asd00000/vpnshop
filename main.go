@@ -23,13 +23,16 @@ func main() {
 	// ۳. داشبورد مدیریت
 	http.HandleFunc("/admin", api.AdminHandler)
 
-	// ۴. بکاپ دیتابیس (جدید)
+	// ۴. بکاپ دیتابیس
 	http.HandleFunc("/admin/backup", api.BackupHandler)
 
-	// ۵. تایید دستی ادمین (جدید)
+	// ۵. تایید دستی ادمین
 	http.HandleFunc("/admin/confirm", api.AdminConfirmHandler)
 
-	// ۶. وب‌هوک دریافت پیامک
+	// ۶. بازگردانی بکاپ (جدید)
+	http.HandleFunc("/admin/restore", api.RestoreHandler)
+
+	// ۷. وب‌هوک دریافت پیامک
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
 
 	port := ":8080"
