@@ -8,68 +8,101 @@
     <style>
         @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease;
+        }
+        .chevron { transition: transform 0.3s ease; }
+        .accordion-item.open .chevron { transform: rotate(180deg); }
+        .accordion-item.open .card-header { background-color: #eef2ff; }
     </style>
 </head>
-<body class="p-4 md:p-8">
-    <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div class="bg-gray-800 px-6 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-white">داشبورد مدیریت فاکتورها</h1>
-            <div class="flex items-center gap-3">
-                <a href="/admin/backup" 
-                   class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition flex items-center gap-2">
-                    📥 دانلود بکاپ دیتابیس
+<body class="p-3 md:p-8">
+    <div class="max-w-5xl mx-auto">
+
+        <!-- هدر -->
+        <div class="bg-gray-800 px-4 md:px-6 py-4 rounded-t-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <h1 class="text-lg md:text-xl font-bold text-white">داشبورد مدیریت فاکتورها</h1>
+            <div class="flex items-center gap-3 w-full md:w-auto">
+                <a href="/admin/backup"
+                   class="flex-1 md:flex-none text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition">
+                    📥 دانلود بکاپ
                 </a>
-                <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">VPNShop</span>
+                <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm whitespace-nowrap">VPNShop</span>
             </div>
         </div>
-        
-        <div class="p-6 overflow-x-auto">
-            <table class="w-full text-sm text-right text-gray-500">
-                <thead class="text-xs text-gray-700 uppercase bg-gray-100 rounded-t-lg">
-                    <tr>
-                        <th scope="col" class="px-6 py-4 rounded-tr-lg">شماره فاکتور</th>
-                        <th scope="col" class="px-6 py-4">کد پیگیری (سفارش)</th>
-                        <th scope="col" class="px-6 py-4">نام پلن</th>
-                        <th scope="col" class="px-6 py-4">مبلغ دریافتی (تومان)</th>
-                        <th scope="col" class="px-6 py-4">وضعیت</th>
-                        <th scope="col" class="px-6 py-4">تایید ادمین</th>
-                        <th scope="col" class="px-6 py-4 rounded-tl-lg">لینک کانفیگ استخراج شده</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range .Orders}}
-                    <tr class="bg-white border-b hover:bg-gray-50 transition duration-150">
-                        <td class="px-6 py-4 font-bold text-gray-900">#{{.ID}}</td>
-                        <td class="px-6 py-4 font-mono text-gray-700">{{.TrackingCode}}</td>
-                        <td class="px-6 py-4 text-blue-600">{{.PlanName}}</td>
-                        <td class="px-6 py-4 font-bold text-green-600">{{.UniqueAmount}}</td>
-                        <td class="px-6 py-4">
-                            {{if eq .Status "paid"}}
-                                <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200">پرداخت شده</span>
-                            {{else}}
-                                <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs border border-orange-200">در انتظار پرداخت</span>
-                            {{end}}
-                        </td>
-                        <td class="px-6 py-4 text-center">
-                            <input type="checkbox" 
-                                   class="w-5 h-5 accent-green-600 cursor-pointer"
-                                   {{if .AdminConfirmed}}checked{{end}}
-                                   onchange="confirmOrder({{.ID}}, this.checked)"
-                                   title="تایید دستی پرداخت توسط ادمین">
-                        </td>
-                        <td class="px-6 py-4" dir="ltr">
+
+        <!-- لیست فاکتورها -->
+        <div class="bg-white rounded-b-2xl shadow-xl p-3 md:p-6 space-y-3">
+
+            {{range .Orders}}
+            <div class="accordion-item border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+
+                <!-- سربرگ کارت (کلیک = باز/بسته) -->
+                <button type="button" onclick="toggleAccordion(this)"
+                        class="card-header w-full bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center justify-between gap-2 text-right transition">
+                    <div class="flex items-center gap-2 md:gap-4 flex-wrap">
+                        <span class="font-bold text-gray-900">#{{.ID}}</span>
+                        <span class="font-mono text-xs md:text-sm text-gray-500" dir="ltr">{{.TrackingCode}}</span>
+                        <span class="font-bold text-green-600 text-sm md:text-base">
+                            {{.UniqueAmount}} <span class="text-xs text-gray-400 font-normal">تومان</span>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {{if eq .Status "paid"}}
+                            <span class="bg-green-100 text-green-800 px-2 md:px-3 py-1 rounded-full text-xs font-bold border border-green-200 whitespace-nowrap">پرداخت شده</span>
+                        {{else}}
+                            <span class="bg-orange-100 text-orange-800 px-2 md:px-3 py-1 rounded-full text-xs border border-orange-200 whitespace-nowrap">در انتظار پرداخت</span>
+                        {{end}}
+                        <svg class="chevron w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </button>
+
+                <!-- محتوای بازشو -->
+                <div class="accordion-content bg-white">
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100">
+
+                        <div>
+                            <span class="block text-xs text-gray-400 mb-1">نام پلن</span>
+                            <span class="text-blue-600 font-bold">{{.PlanName}}</span>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs text-gray-400 mb-1">تایید ادمین</span>
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <input type="checkbox" class="w-5 h-5 accent-green-600 cursor-pointer"
+                                       {{if .AdminConfirmed}}checked{{end}}
+                                       onchange="confirmOrder({{.ID}}, this.checked)">
+                                <span class="text-sm text-gray-600">این پرداخت را دستی تایید می‌کنم</span>
+                            </label>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <span class="block text-xs text-gray-400 mb-1">لینک کانفیگ استخراج شده</span>
                             {{if .ConfigLink}}
-                                <input type="text" value="{{.ConfigLink}}" readonly onclick="this.select();" 
-                                class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 cursor-pointer hover:bg-gray-100 transition">
+                                <div class="flex gap-2" dir="ltr">
+                                    <input type="text" value="{{.ConfigLink}}" readonly id="link-{{.ID}}"
+                                           onclick="this.select();"
+                                           class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 cursor-pointer hover:bg-gray-100 transition font-mono">
+                                    <button type="button" onclick="copyLink({{.ID}}, this)"
+                                            class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
+                                        کپی
+                                    </button>
+                                </div>
                             {{else}}
-                                <span class="text-gray-400 italic font-sans">-</span>
+                                <span class="text-gray-400 italic text-sm">هنوز کانفیگی ساخته نشده</span>
                             {{end}}
-                        </td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-            
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            {{end}}
+
             {{if not .Orders}}
             <div class="text-center py-8 text-gray-500">
                 هیچ سفارشی در دیتابیس یافت نشد.
@@ -79,6 +112,40 @@
     </div>
 
     <script>
+        // باز و بسته کردن اکاردئون با انیمیشن
+        function toggleAccordion(btn) {
+            const item = btn.closest('.accordion-item');
+            const content = item.querySelector('.accordion-content');
+
+            if (item.classList.contains('open')) {
+                content.style.maxHeight = null;
+                item.classList.remove('open');
+            } else {
+                item.classList.add('open');
+                content.style.maxHeight = content.scrollHeight + 'px';
+            }
+        }
+
+        // کپی لینک کانفیگ
+        function copyLink(id, btn) {
+            const input = document.getElementById('link-' + id);
+            input.select();
+            input.setSelectionRange(0, 99999);
+            try {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(input.value);
+                } else {
+                    document.execCommand('copy');
+                }
+            } catch (e) {
+                document.execCommand('copy');
+            }
+            const old = btn.textContent;
+            btn.textContent = '✅ کپی شد';
+            setTimeout(() => btn.textContent = old, 1500);
+        }
+
+        // تایید دستی ادمین
         function confirmOrder(id, confirmed) {
             fetch('/admin/confirm', {
                 method: 'POST',
@@ -87,8 +154,6 @@
             }).then(res => {
                 if (res.ok) {
                     console.log('✅ تایید ادمین ثبت شد');
-                } else {
-                    console.error('❌ خطا در ثبت تایید');
                 }
             });
         }
