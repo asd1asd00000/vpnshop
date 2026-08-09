@@ -77,5 +77,25 @@
         </div>
         {{end}}
     </div>
+    <script>
+    function copyTrackingCode(btn) {
+        const code = document.getElementById('trackingCode').textContent.trim();
+
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(code);
+        } else {
+            const tmp = document.createElement('textarea');
+            tmp.value = code;
+            document.body.appendChild(tmp);
+            tmp.select();
+            document.execCommand('copy');
+            document.body.removeChild(tmp);
+        }
+
+        const old = btn.innerHTML;
+        btn.innerHTML = '✅ کپی شد';
+        setTimeout(() => btn.innerHTML = old, 1500);
+    }
+</script>
 </body>
 </html>
