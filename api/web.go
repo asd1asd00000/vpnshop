@@ -4,7 +4,6 @@ import (
 	crand "crypto/rand"
 	"database/sql"
 	"html/template"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -164,7 +163,7 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 		// ✅ بررسی محدودیت نرخ قبل از هر کاری
 		ip := clientIP(r)
 		if !allowTrackAttempt(ip) {
-			log.Printf("⚠️ محدودیت نرخ پیگیری برای IP: %s", ip)
+			db.LogEventf("ratelimit", "warning", "⚠️ محدودیت نرخ پیگیری برای IP: %s", ip)
 			tmpl.Execute(w, map[string]interface{}{
 				"Error": "تعداد تلاش‌ها بیش از حد مجاز است. لطفاً چند دقیقه بعد دوباره تلاش کنید.",
 			})
