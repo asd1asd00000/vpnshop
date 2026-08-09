@@ -9,19 +9,12 @@
         @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
 
-        .accordion-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.35s ease;
-        }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
         .chevron { transition: transform 0.3s ease; }
         .accordion-item.open .chevron { transform: rotate(180deg); }
         .accordion-item.open .card-header { background-color: #eef2ff; }
 
-        /* بج کاملاً تایید شده (سیستم + ادمین) */
         .badge-paid-full { background-color: #dcfce7; color: #166534; }
-
-        /* بج نصف سبز / نصف زرد (سیستم تایید کرده، ادمین هنوز نه) */
         .badge-paid-half {
             background: linear-gradient(to right, #dcfce7 50%, #fef9c3 50%);
             color: #3f3f46;
@@ -34,7 +27,7 @@
         <!-- هدر -->
         <div class="bg-gray-800 px-4 md:px-6 py-4 rounded-t-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
             <h1 class="text-lg md:text-xl font-bold text-white">داشبورد مدیریت فاکتورها</h1>
-            <div class="flex items-center gap-2 w-full md:w-auto">
+            <div class="flex items-center gap-2 w-full md:w-auto flex-wrap">
                 <a href="/admin/backup"
                    class="flex-1 md:flex-none text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
                     📥 بکاپ
@@ -42,6 +35,10 @@
                 <button type="button" onclick="document.getElementById('restoreFileInput').click()"
                         class="flex-1 md:flex-none bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
                     📤 ریستور
+                </button>
+                <button type="button" onclick="openLogs()"
+                        class="flex-1 md:flex-none bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
+                    📜 لاگ
                 </button>
                 <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm whitespace-nowrap">VPNShop</span>
             </div>
@@ -54,7 +51,7 @@
 
         <div class="bg-white rounded-b-2xl shadow-xl p-3 md:p-6">
 
-            <!-- راهنمای رنگ بج‌ها -->
+            <!-- راهنمای بج‌ها -->
             <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 mb-4 pb-3 border-b border-gray-100">
                 <span class="flex items-center gap-1">
                     <span class="w-3 h-3 rounded-full inline-block badge-paid-full border border-green-200"></span>
@@ -74,8 +71,6 @@
             <div class="space-y-3">
                 {{range .Orders}}
                 <div class="accordion-item border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-
-                    <!-- سربرگ کارت -->
                     <button type="button" onclick="toggleAccordion(this)"
                             class="card-header w-full bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center justify-between gap-2 text-right transition">
                         <div class="flex items-center gap-2 md:gap-4 flex-wrap">
@@ -101,15 +96,12 @@
                         </div>
                     </button>
 
-                    <!-- محتوای بازشو -->
                     <div class="accordion-content bg-white">
                         <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100">
-
                             <div>
                                 <span class="block text-xs text-gray-400 mb-1">نام پلن</span>
                                 <span class="text-blue-600 font-bold">{{.PlanName}}</span>
                             </div>
-
                             <div>
                                 <span class="block text-xs text-gray-400 mb-1">تایید ادمین</span>
                                 <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -119,7 +111,6 @@
                                     <span class="text-sm text-gray-600">این پرداخت را دستی تایید می‌کنم</span>
                                 </label>
                             </div>
-
                             <div class="md:col-span-2">
                                 <span class="block text-xs text-gray-400 mb-1">لینک کانفیگ استخراج شده</span>
                                 {{if .ConfigLink}}
@@ -136,27 +127,55 @@
                                     <span class="text-gray-400 italic text-sm">هنوز کانفیگی ساخته نشده</span>
                                 {{end}}
                             </div>
-
                         </div>
                     </div>
                 </div>
                 {{end}}
 
                 {{if not .Orders}}
-                <div class="text-center py-8 text-gray-500">
-                    هیچ سفارشی در دیتابیس یافت نشد.
-                </div>
+                <div class="text-center py-8 text-gray-500">هیچ سفارشی در دیتابیس یافت نشد.</div>
                 {{end}}
             </div>
         </div>
     </div>
 
+    <!-- 📜 پاپ‌آپ لاگ‌ها -->
+    <div id="logsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-60 p-3">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="bg-gray-800 px-4 md:px-6 py-3 flex items-center justify-between gap-2 flex-wrap">
+                <h2 class="text-white font-bold">📜 لاگ‌های سیستم</h2>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="loadLogs()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                        🔄 بروزرسانی
+                    </button>
+                    <!-- ✅ دکمه پاک کردن: فقط دسکتاپ -->
+                    <button type="button" onclick="clearLogs()"
+                            class="hidden md:inline-flex bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                        🗑️ پاک کردن لاگ‌ها
+                    </button>
+                    <button type="button" onclick="closeLogs()"
+                            class="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                        ✕ بستن
+                    </button>
+                </div>
+            </div>
+
+            <div id="logsBody" class="overflow-y-auto p-3 md:p-4 space-y-2 bg-gray-50 text-xs md:text-sm">
+                <div class="text-center text-gray-400 py-8">در حال بارگذاری...</div>
+            </div>
+
+            <div class="bg-gray-100 px-4 py-2 text-xs text-gray-500 border-t border-gray-200">
+                لاگ‌های عمومی ۷۲ ساعت | لاگ‌های مهم (تراکنش، کانفیگ، محدودیت نرخ) ۳۰ روز نگهداری می‌شوند.
+            </div>
+        </div>
+    </div>
+
     <script>
-        // باز و بسته کردن اکاردئون
+        // ── اکاردئون ──
         function toggleAccordion(btn) {
             const item = btn.closest('.accordion-item');
             const content = item.querySelector('.accordion-content');
-
             if (item.classList.contains('open')) {
                 content.style.maxHeight = null;
                 item.classList.remove('open');
@@ -166,26 +185,21 @@
             }
         }
 
-        // کپی لینک کانفیگ
+        // ── کپی لینک کانفیگ ──
         function copyLink(id, btn) {
             const input = document.getElementById('link-' + id);
             input.select();
             input.setSelectionRange(0, 99999);
             try {
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(input.value);
-                } else {
-                    document.execCommand('copy');
-                }
-            } catch (e) {
-                document.execCommand('copy');
-            }
+                if (navigator.clipboard) { navigator.clipboard.writeText(input.value); }
+                else { document.execCommand('copy'); }
+            } catch (e) { document.execCommand('copy'); }
             const old = btn.textContent;
             btn.textContent = '✅ کپی شد';
             setTimeout(() => btn.textContent = old, 1500);
         }
 
-        // تایید دستی ادمین + آپدیت زنده بج
+        // ── تایید ادمین + آپدیت بج ──
         function confirmOrder(id, confirmed) {
             fetch('/admin/confirm', {
                 method: 'POST',
@@ -207,13 +221,68 @@
             });
         }
 
-        // ریستور بکاپ با تایید
+        // ── ریستور ──
         function submitRestore(input) {
             if (!input.files.length) return;
-            if (confirm('⚠️ با این کار دیتابیس فعلی با فایل بکاپ جایگزین می‌شود!\n\nقبل از جایگزینی، یک بکاپ ایمنی خودکار گرفته می‌شود.\n\nادامه می‌دهید؟')) {
+            if (confirm('⚠️ با این کار دیتابیس فعلی با فایل بکاپ جایگزین می‌شود!\nقبل از جایگزینی، یک بکاپ ایمنی خودکار گرفته می‌شود.\nادامه می‌دهید؟')) {
                 input.form.submit();
             } else {
                 input.value = '';
+            }
+        }
+
+        // ── 📜 لاگ‌بین ──
+        function openLogs() {
+            const m = document.getElementById('logsModal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+            loadLogs();
+        }
+
+        function closeLogs() {
+            const m = document.getElementById('logsModal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        function loadLogs() {
+            fetch('/admin/logs').then(r => r.json()).then(logs => {
+                const body = document.getElementById('logsBody');
+                if (!logs || logs.length === 0) {
+                    body.innerHTML = '<div class="text-center text-gray-400 py-8">لاگی ثبت نشده است.</div>';
+                    return;
+                }
+                const colors = {
+                    success: 'border-green-300 bg-green-50 text-green-800',
+                    warning: 'border-yellow-300 bg-yellow-50 text-yellow-800',
+                    error:   'border-red-300 bg-red-50 text-red-800',
+                    info:    'border-gray-200 bg-white text-gray-600'
+                };
+                body.innerHTML = logs.map(l => {
+                    const c = colors[l.level] || colors.info;
+                    return `<div class="border rounded-lg px-3 py-2 ${c}">
+                        <span class="opacity-60 font-mono" dir="ltr">[${l.created_at}]</span>
+                        <span class="font-bold">[${l.category}]</span>
+                        ${escapeHtml(l.message)}
+                    </div>`;
+                }).join('');
+            }).catch(() => {
+                document.getElementById('logsBody').innerHTML =
+                    '<div class="text-center text-red-500 py-8">خطا در دریافت لاگ‌ها</div>';
+            });
+        }
+
+        function clearLogs() {
+            if (confirm('⚠️ مطمئنی که می‌خوای کل لاگ‌ها رو پاک کنی؟\nاین عمل قابل بازگشت نیست!')) {
+                fetch('/admin/logs/clear', { method: 'POST' }).then(res => {
+                    if (res.ok) loadLogs();
+                });
             }
         }
     </script>
