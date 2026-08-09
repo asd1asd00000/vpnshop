@@ -12,21 +12,25 @@ func main() {
 	db.InitDB("./vpnshop.db")
 	defer db.DB.Close()
 
-	// ✅ پاکسازی خودکار لاگ‌ها
 	db.StartLogCleanup()
 
+	// 🌐 مسیرهای عمومی
 	http.HandleFunc("/", api.ShopHandler)
 	http.HandleFunc("/track", api.TrackHandler)
-	http.HandleFunc("/admin", api.AdminHandler)
-	http.HandleFunc("/admin/backup", api.BackupHandler)
-	http.HandleFunc("/admin/confirm", api.AdminConfirmHandler)
-	http.HandleFunc("/admin/restore", api.RestoreHandler)
-	http.HandleFunc("/admin/logs", api.AdminLogsHandler)             // ✅ جدید
-	http.HandleFunc("/admin/logs/clear", api.AdminLogsClearHandler) // ✅ جدید
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
+
+	// 🔐 مسیرهای ادمین (با پیشوند مخفی از متغیر محیطی)
+	adminBase := api.AdminBasePath()
+	http.HandleFunc(adminBase, api.AdminHandler)
+	http.HandleFunc(adminBase+"/backup", api.BackupHandler)
+	http.HandleFunc(adminBase+"/confirm", api.AdminConfirmHandler)
+	http.HandleFunc(adminBase+"/restore", api.RestoreHandler)
+	http.HandleFunc(adminBase+"/logs", api.AdminLogsHandler)
+	http.HandleFunc(adminBase+"/logs/clear", api.AdminLogsClearHandler)
 
 	port := ":8080"
 	log.Printf("سرور VPNShop روی پورت %s در حال اجرا است...", port)
+	log.Printf("🔐 مسیر پنل ادمین: %s", adminBase)
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("خطای سرور: %v", err)
 	}
