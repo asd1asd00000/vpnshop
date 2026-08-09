@@ -88,7 +88,7 @@ func normalizeText(text string) string {
 
 func convertPersianNumbersToEnglish(text string) string {
 	persian := []string{"۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"}
-	arabic := []string{"٠", "", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"}
+	arabic := []string{"٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"}
 	english := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
 
 	for i := 0; i < 10; i++ {
