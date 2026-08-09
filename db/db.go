@@ -9,7 +9,6 @@ import (
 
 var DB *sql.DB
 
-// InitDB دیتابیس را مقداردهی و جدول را ایجاد می‌کند
 func InitDB(dataSourceName string) {
 	var err error
 	DB, err = sql.Open("sqlite3", dataSourceName)
@@ -39,16 +38,28 @@ func InitDB(dataSourceName string) {
 		log.Fatalf("خطا در ساخت جدول سفارشات: %v", err)
 	}
 
-	// ✅ مایگریشن: اگه ستون admin_confirmed روی دیتابیس قدیمی نیست، اضافه‌ش کن
+	// ✅ جدول لاگ‌ها
+	createLogsQuery := `
+	CREATE TABLE IF NOT EXISTS logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		category TEXT NOT NULL DEFAULT 'general',
+		level TEXT NOT NULL DEFAULT 'info',
+		message TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	_, err = DB.Exec(createLogsQuery)
+	if err != nil {
+		log.Fatalf("خطا در ساخت جدول لاگ‌ها: %v", err)
+	}
+
+	// مایگریشن ستون admin_confirmed برای دیتابیس قدیمی
 	var colCount int
 	err = DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('orders') WHERE name = 'admin_confirmed'`).Scan(&colCount)
 	if err == nil && colCount == 0 {
-		if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN admin_confirmed INTEGER NOT NULL DEFAULT 0`); err != nil {
-			log.Printf("❌ خطا در افزودن ستون admin_confirmed: %v", err)
-		} else {
-			log.Println("✅ ستون admin_confirmed به جدول orders اضافه شد.")
-		}
+		DB.Exec(`ALTER TABLE orders ADD COLUMN admin_confirmed INTEGER NOT NULL DEFAULT 0`)
+		log.Println("✅ ستون admin_confirmed اضافه شد.")
 	}
 
-	log.Println("دیتابیس متصل شد و جدول orders بررسی/ایجاد گردید.")
+	log.Println("دیتابیس متصل شد و جدول‌ها بررسی/ایجاد گردید.")
 }
