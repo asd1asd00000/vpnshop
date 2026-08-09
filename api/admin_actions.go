@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -12,7 +11,7 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
-// AdminConfirmHandler تایید دستی ادمین رو ثبت می‌کنه
+// AdminConfirmHandler تایید دستی ادمین
 func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -43,11 +42,11 @@ func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("🖱️ تایید ادمین برای فاکتور #%d: %v", req.ID, req.Confirmed)
+	db.LogEventf("general", "info", "🖱️ تایید ادمین برای فاکتور #%d: %v", req.ID, req.Confirmed)
 	w.WriteHeader(http.StatusOK)
 }
 
-// BackupHandler بکاپ کامل از دیتابیس می‌گیره و دانلود می‌کنه
+// BackupHandler بکاپ دیتابیس
 func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -57,7 +56,7 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	backupPath := fmt.Sprintf("/tmp/vpnshop_backup_%s.db", timestamp)
 
 	if _, err := db.DB.Exec(fmt.Sprintf("VACUUM INTO '%s'", backupPath)); err != nil {
-		log.Printf("❌ خطا در گرفتن بکاپ: %v", err)
+		db.LogEventf("general", "error", "❌ خطا در گرفتن بکاپ: %v", err)
 		http.Error(w, "خطا در گرفتن بکاپ", http.StatusInternalServerError)
 		return
 	}
@@ -66,10 +65,10 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, backupPath)
 
 	os.Remove(backupPath)
-	log.Printf("📥 بکاپ دیتابیس دانلود شد")
+	db.LogEvent("general", "info", "📥 بکاپ دیتابیس دانلود شد")
 }
 
-// RestoreHandler بکاپ آپلود شده رو جایگزین دیتابیس فعلی می‌کنه
+// RestoreHandler بازگردانی بکاپ
 func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -92,7 +91,6 @@ func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// ذخیره موقت در همون دایرکتوری (برای rename امن)
 	tmpPath := "./restore_tmp.db"
 	dst, err := os.Create(tmpPath)
 	if err != nil {
@@ -107,7 +105,6 @@ func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	// ✅ اعتبارسنجی: فایل باید SQLite باشه
 	data, err := os.ReadFile(tmpPath)
 	if err != nil || len(data) < 16 || string(data[:15]) != "SQLite format 3" {
 		os.Remove(tmpPath)
@@ -115,24 +112,76 @@ func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ✅ بکاپ ایمنی از دیتابیس فعلی (قبل از جایگزینی)
 	if cur, err := os.ReadFile("./vpnshop.db"); err == nil {
 		os.WriteFile("./vpnshop.db.before_restore", cur, 0644)
-		log.Println("🛡️ بکاپ ایمنی قبل از restore ساخته شد")
 	}
 
-	// بستن اتصال فعلی و جایگزینی فایل
 	db.DB.Close()
 
 	if err := os.Rename(tmpPath, "./vpnshop.db"); err != nil {
-		log.Printf("❌ خطا در جایگزینی دیتابیس: %v", err)
 		http.Error(w, "خطا در جایگزینی دیتابیس", http.StatusInternalServerError)
 		return
 	}
 
-	// باز کردن مجدد دیتابیس
 	db.InitDB("./vpnshop.db")
 
-	log.Println("♻️ دیتابیس با موفقیت از بکاپ بازگردانی شد")
+	db.LogEvent("general", "success", "♻️ دیتابیس با موفقیت از بکاپ بازگردانی شد")
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+// ─────────────────────────────────────────────
+// 📜 لاگ‌بین
+// ─────────────────────────────────────────────
+
+type logEntry struct {
+	ID        int    `json:"id"`
+	Category  string `json:"category"`
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"created_at"`
+}
+
+// AdminLogsHandler لاگ‌ها رو به صورت JSON برمی‌گردونه
+func AdminLogsHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+
+	rows, err := db.DB.Query(`SELECT id, category, level, message, created_at FROM logs ORDER BY id DESC LIMIT 500`)
+	if err != nil {
+		http.Error(w, "خطا در خواندن لاگ‌ها", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	logs := make([]logEntry, 0)
+	for rows.Next() {
+		var l logEntry
+		if err := rows.Scan(&l.ID, &l.Category, &l.Level, &l.Message, &l.CreatedAt); err == nil {
+			logs = append(logs, l)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(logs)
+}
+
+// AdminLogsClearHandler کل لاگ‌ها رو پاک می‌کنه
+func AdminLogsClearHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, err := db.DB.Exec(`DELETE FROM logs`); err != nil {
+		http.Error(w, "خطا در پاک کردن لاگ‌ها", http.StatusInternalServerError)
+		return
+	}
+
+	db.LogEvent("general", "warning", "🗑️ لاگ‌ها توسط ادمین پاک شدند")
+	w.WriteHeader(http.StatusOK)
 }
