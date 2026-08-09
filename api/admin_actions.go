@@ -11,7 +11,6 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
-// AdminConfirmHandler تایید دستی ادمین
 func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -46,7 +45,6 @@ func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// BackupHandler بکاپ دیتابیس
 func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -68,7 +66,6 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	db.LogEvent("general", "info", "📥 بکاپ دیتابیس دانلود شد")
 }
 
-// RestoreHandler بازگردانی بکاپ
 func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -126,12 +123,8 @@ func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 	db.InitDB("./vpnshop.db")
 
 	db.LogEvent("general", "success", "♻️ دیتابیس با موفقیت از بکاپ بازگردانی شد")
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	http.Redirect(w, r, AdminBasePath(), http.StatusSeeOther)
 }
-
-// ─────────────────────────────────────────────
-// 📜 لاگ‌بین
-// ─────────────────────────────────────────────
 
 type logEntry struct {
 	ID        int    `json:"id"`
@@ -141,7 +134,6 @@ type logEntry struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// AdminLogsHandler لاگ‌ها رو به صورت JSON برمی‌گردونه
 func AdminLogsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -166,7 +158,6 @@ func AdminLogsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(logs)
 }
 
-// AdminLogsClearHandler کل لاگ‌ها رو پاک می‌کنه
 func AdminLogsClearHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
