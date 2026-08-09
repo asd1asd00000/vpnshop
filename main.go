@@ -12,27 +12,17 @@ func main() {
 	db.InitDB("./vpnshop.db")
 	defer db.DB.Close()
 
-	// 🌐 روت‌های برنامه
+	// ✅ پاکسازی خودکار لاگ‌ها
+	db.StartLogCleanup()
 
-	// ۱. صفحه اصلی (فروشگاه)
 	http.HandleFunc("/", api.ShopHandler)
-
-	// ۲. صفحه پیگیری سفارش
 	http.HandleFunc("/track", api.TrackHandler)
-
-	// ۳. داشبورد مدیریت
 	http.HandleFunc("/admin", api.AdminHandler)
-
-	// ۴. بکاپ دیتابیس
 	http.HandleFunc("/admin/backup", api.BackupHandler)
-
-	// ۵. تایید دستی ادمین
 	http.HandleFunc("/admin/confirm", api.AdminConfirmHandler)
-
-	// ۶. بازگردانی بکاپ (جدید)
 	http.HandleFunc("/admin/restore", api.RestoreHandler)
-
-	// ۷. وب‌هوک دریافت پیامک
+	http.HandleFunc("/admin/logs", api.AdminLogsHandler)             // ✅ جدید
+	http.HandleFunc("/admin/logs/clear", api.AdminLogsClearHandler) // ✅ جدید
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
 
 	port := ":8080"
