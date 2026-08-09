@@ -16,9 +16,7 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// ─────────────────────────────────────────────
-// 🔒 محدودیت نرخ (ضد brute force)
-// ─────────────────────────────────────────────
+// ───────────── 🔒 محدودیت نرخ ─────────────
 
 var (
 	rateMu   sync.Mutex
@@ -26,11 +24,10 @@ var (
 )
 
 const (
-	rateLimitWindow = 1 * time.Minute // بازه زمانی
-	rateLimitMax    = 3               // حداکثر تلاش در بازه
+	rateLimitWindow = 1 * time.Minute
+	rateLimitMax    = 3
 )
 
-// clientIP آی‌پی واقعی کاربر رو برمی‌گردونه
 func clientIP(r *http.Request) string {
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 		return strings.TrimSpace(strings.Split(fwd, ",")[0])
@@ -42,7 +39,6 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// allowTrackAttempt بررسی می‌کنه آیا این IP مجاز به تلاش هست یا نه
 func allowTrackAttempt(ip string) bool {
 	rateMu.Lock()
 	defer rateMu.Unlock()
@@ -67,15 +63,11 @@ func allowTrackAttempt(ip string) bool {
 	return true
 }
 
-// ─────────────────────────────────────────────
-// 🎫 کد پیگیری امن و غیرقابل حدس
-// ─────────────────────────────────────────────
+// ───────────── 🎫 کد پیگیری امن ─────────────
 
-// generateTrackingCode یه کد مثل VPk3m8x2ab می‌سازه
-// ۳۶^۱۵ ≈ ۲۲۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰,۰۰۰ حالت! (غیرقابل پیش‌بینی)
 func generateTrackingCode() string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 15) // ✅ قبلاً 8 بود
+	b := make([]byte, 15)
 	if _, err := crand.Read(b); err != nil {
 		return "VP000000000000000"
 	}
@@ -85,9 +77,17 @@ func generateTrackingCode() string {
 	return "VP" + string(b)
 }
 
-// ─────────────────────────────────────────────
-// 🛒 فروشگاه
-// ─────────────────────────────────────────────
+// ───────────── 🔐 مسیر مخفی ادمین (از متغیر محیطی) ─────────────
+
+func AdminBasePath() string {
+	secret := os.Getenv("ADMIN_SECRET_PATH")
+	if secret == "" {
+		return "/admin"
+	}
+	return "/" + secret + "/admin"
+}
+
+// ───────────── 🛒 فروشگاه ─────────────
 
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/shop.html")
@@ -123,7 +123,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 
 		rand.Seed(time.Now().UnixNano())
 		uniqueAmount := basePrice + rand.Intn(999) + 1
-		trackingCode := generateTrackingCode() // ✅ کد امن جدید
+		trackingCode := generateTrackingCode()
 
 		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
 			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
@@ -143,9 +143,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ─────────────────────────────────────────────
-// 🔍 پیگیری سفارش (با Rate Limit)
-// ─────────────────────────────────────────────
+// ───────────── 🔍 پیگیری سفارش ─────────────
 
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/track.html")
@@ -160,7 +158,6 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		// ✅ بررسی محدودیت نرخ قبل از هر کاری
 		ip := clientIP(r)
 		if !allowTrackAttempt(ip) {
 			db.LogEventf("ratelimit", "warning", "⚠️ محدودیت نرخ پیگیری برای IP: %s", ip)
@@ -192,9 +189,7 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ─────────────────────────────────────────────
-// 👨‍💼 داشبورد ادمین
-// ─────────────────────────────────────────────
+// ───────────── 👨‍💼 داشبورد ادمین ─────────────
 
 type adminOrder struct {
 	ID             int
@@ -255,5 +250,5 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tmpl.Execute(w, map[string]interface{}{"Orders": orders})
+	tmpl.Execute(w, map[string]interface{}{"Orders": orders, "AdminBase": AdminBasePath()})
 }
