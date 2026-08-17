@@ -188,6 +188,53 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 		tmpl.Execute(w, map[string]interface{}{"Order": order})
 	}
 }
+// CheckOrderStatus وضعیت سفارش رو برمی‌گردونه (برای polling صفحه فاکتور)
+func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	trackingCode := r.URL.Query().Get("code")
+	if trackingCode == "" {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	var order models.Order
+	query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '') 
+	          FROM orders WHERE tracking_code = ?`
+
+	err := db.DB.QueryRow(query, trackingCode).Scan(
+		&order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
+	)
+
+	if err == sql.ErrNoRows {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status": "not_found"}`))
+		return
+	} else if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status": "error"}`))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if order.Status == "paid" && order.ConfigLink != "" {
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "paid",
+			"config_link": order.ConfigLink,
+		})
+	} else if order.Status == "paid" {
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "processing",
+		})
+	} else {
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "pending",
+		})
+	}
+}
 
 // ───────────── 👨‍💼 داشبورد ادمین ─────────────
 
