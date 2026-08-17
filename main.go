@@ -13,7 +13,7 @@ func main() {
 	defer db.DB.Close()
 
 	db.StartLogCleanup()
-
+http.HandleFunc("/api/order-status", api.CheckOrderStatus)
 	// 🌐 مسیرهای عمومی
 	http.HandleFunc("/", api.ShopHandler)
 	http.HandleFunc("/track", api.TrackHandler)
