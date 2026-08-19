@@ -17,7 +17,7 @@
         <div class="bg-gray-800 px-4 md:px-6 py-4 rounded-t-2xl flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <a href="{{.AdminBase}}" class="bg-gray-700 hover:bg-gray-600 text-white text-sm px-3 py-1.5 rounded-lg transition">
-                    ← بازگشت
+                    → بازگشت
                 </a>
                 <h1 class="text-lg md:text-xl font-bold text-white">⚙️ تنظیمات سیستم</h1>
             </div>
@@ -28,16 +28,14 @@
 
             <!-- بخش ۱: تنظیمات ادمین -->
             <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    👤 تنظیمات ورود ادمین
-                </h2>
+                <h2 class="text-lg font-bold text-gray-800 mb-4">👤 تنظیمات ورود ادمین</h2>
                 <form action="{{.AdminBase}}/settings/update-admin" method="POST" class="space-y-3" onsubmit="return confirmAdminChange()">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">نام کاربری</label>
                             <input type="text" name="admin_username" required
                                    value="{{.Config.Admin.Username}}"
-                                   placeholder="{{if not .Config.Admin.Username}}admin (پیش‌فرض){{else}}{{.Config.Admin.Username}}{{end}}"
+                                   placeholder="نام کاربری فعلی یا پیش‌فرض"
                                    class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
@@ -61,21 +59,18 @@
 
             <!-- بخش ۲: مدیریت پنل‌ها -->
             <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    🌐 مدیریت پنل‌های VPN
-                </h2>
+                <h2 class="text-lg font-bold text-gray-800 mb-4">🌐 مدیریت پنل‌های VPN</h2>
 
-                <!-- لیست پنل‌های موجود -->
                 {{if .Config.Panels}}
                 <div class="space-y-2 mb-4">
-                    {{range $idx, $p := .Config.Panels}}
+                    {{range $i, $p := .Config.Panels}}
                     <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
                         <div class="flex-1 min-w-0">
-                            <div class="font-bold text-gray-800 truncate">{{if $p.Name}}{{$p.Name}}{{else}}پنل{{end}}</div>
+                            <div class="font-bold text-gray-800 truncate">{{if $p.Name}}{{$p.Name}}{{else}}پنل{{$end}}</div>
                             <div class="text-xs text-gray-500 font-mono truncate" dir="ltr">{{$p.URL}}</div>
                             <div class="text-xs text-gray-400">کاربر: <span class="font-mono">{{$p.Username}}</span></div>
                         </div>
-                        <form action="{{$.AdminBase}}/settings/delete-panel" method="POST" class="ml-3" onsubmit="return confirm('آیا از حذف این پنل مطمئن هستید؟')">
+                        <form action="{{$.AdminBase}}/settings/delete-panel" method="POST" class="mr-3" onsubmit="return confirm('آیا از حذف این پنل مطمئن هستید؟')">
                             <input type="hidden" name="panel_id" value="{{$i}}">
                             <button type="submit" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
                                 🗑️ حذف
@@ -90,7 +85,6 @@
                 </div>
                 {{end}}
 
-                <!-- فرم افزودن پنل جدید -->
                 <details class="border border-gray-300 rounded-lg overflow-hidden">
                     <summary class="bg-gray-100 hover:bg-gray-200 px-4 py-2 cursor-pointer font-bold text-sm text-gray-700">
                         ➕ افزودن پنل جدید
@@ -125,21 +119,19 @@
                 </details>
             </section>
 
-            <!-- بخش ۳: بکاپ خودکار به ایمیل (placeholder) -->
+            <!-- بخش ۳: بکاپ ایمیل (به زودی) -->
             <section class="border border-gray-200 rounded-xl p-4 md:p-6 opacity-75">
-                <h2 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <h2 class="text-lg font-bold text-gray-800 mb-2">
                     📧 بکاپ خودکار به ایمیل
                     <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-0.5 rounded-full">به زودی</span>
                 </h2>
                 <p class="text-sm text-gray-500 mb-4">
-                    این قابلیت هنوز پیاده‌سازی نشده است. در آینده می‌توانید تنظیمات SMTP و آدرس ایمیل مقصد را اینجا وارد کنید تا بکاپ‌ها به صورت خودکار زیپ شده و با رمز عبور به ایمیل شما ارسال شوند.
+                    این قابلیت هنوز پیاده‌سازی نشده است. در آینده بکاپ‌ها به صورت خودکار زیپ شده و با رمز عبور به ایمیل شما ارسال می‌شوند.
                 </p>
-                <form action="{{.AdminBase}}/settings/email-backup" method="POST">
-                    <button type="submit" disabled
-                            class="bg-gray-400 text-white font-bold px-6 py-2 rounded-lg cursor-not-allowed">
-                        🔧 در حال توسعه
-                    </button>
-                </form>
+                <button type="button" disabled
+                        class="bg-gray-400 text-white font-bold px-6 py-2 rounded-lg cursor-not-allowed">
+                    🔧 در حال توسعه
+                </button>
             </section>
 
         </div>
