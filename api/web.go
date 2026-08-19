@@ -308,6 +308,19 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status, &o.ConfigLink, &confirmed)
 		if err == nil {
 			o.AdminConfirmed = confirmed == 1
+					if err == nil {
+			o.AdminConfirmed = confirmed == 1
+
+			// ✅ پارس JSON کانفیگ‌ها برای نمایش جداگانه
+			if o.ConfigLink != "" {
+				var items []ConfigItem
+				if jerr := json.Unmarshal([]byte(o.ConfigLink), &items); jerr == nil && len(items) > 0 {
+					o.Configs = items
+				}
+			}
+
+			orders = append(orders, o)
+		}
 			orders = append(orders, o)
 		}
 	}
