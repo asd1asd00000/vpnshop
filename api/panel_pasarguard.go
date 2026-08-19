@@ -149,6 +149,17 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 
 	baseURL := strings.TrimRight(panel.URL, "/")
 	groupIDs := getPasarguardGroupIDs(baseURL, token)
+		groupIDs := getPasarguardGroupIDs(baseURL, token)
+
+	payload := map[string]interface{}{
+		"username":                  username,
+		"data_limit":                volumeBytes,
+		"data_limit_reset_strategy": "no_reset",
+		"status":                    "active",
+	}
+	if len(groupIDs) > 0 {
+		payload["group_ids"] = groupIDs
+	}
 
 	// تبدیل GB به bytes
 	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
