@@ -10,12 +10,14 @@ import (
 // PanelConfig اطلاعات یک پنل VPN
 type PanelConfig struct {
 	Name     string `json:"name"`
-	Type     string `json:"type"`     // "guards" | "marzban"
+	Type     string `json:"type"` // "guards" | "marzban"
 	URL      string `json:"url"`
 	Username string `json:"username"`
 	Password string `json:"password"`
-	IsBackup bool   `json:"is_backup"` // اگه true، فقط به عنوان زاپاس استفاده میشه
-	BackupGB int    `json:"backup_gb"` // حجم زاپاس به گیگابایت (فقط وقتی IsBackup = true)
+	Role     string `json:"role"` // "main" | "backup" | "gift"
+
+	// فیلد قدیمی فقط برای مایگریشن
+	IsBackup bool `json:"is_backup,omitempty"`
 }
 
 type AdminConfig struct {
@@ -63,6 +65,17 @@ func LoadConfig() *AppConfig {
 	if err := json.Unmarshal(data, config); err != nil {
 		log.Printf("❌ خطا در خواندن config.json: %v", err)
 		return config
+	}
+
+	// 🔄 مایگریشن: پنل‌های قدیمی که Role ندارن
+	for i := range config.Panels {
+		if config.Panels[i].Role == "" {
+			if config.Panels[i].IsBackup {
+				config.Panels[i].Role = "backup"
+			} else {
+				config.Panels[i].Role = "main"
+			}
+		}
 	}
 
 	return config
