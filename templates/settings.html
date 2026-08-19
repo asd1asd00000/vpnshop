@@ -13,9 +13,12 @@
 <body class="p-3 md:p-8">
     <div class="max-w-4xl mx-auto">
 
+        <!-- هدر -->
         <div class="bg-gray-800 px-4 md:px-6 py-4 rounded-t-2xl flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <a href="{{.AdminBase}}" class="bg-gray-700 hover:bg-gray-600 text-white text-sm px-3 py-1.5 rounded-lg">→ بازگشت</a>
+                <a href="{{.AdminBase}}" class="bg-gray-700 hover:bg-gray-600 text-white text-sm px-3 py-1.5 rounded-lg transition">
+                    → بازگشت
+                </a>
                 <h1 class="text-lg md:text-xl font-bold text-white">⚙️ تنظیمات سیستم</h1>
             </div>
             <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">VPNShop</span>
@@ -31,20 +34,21 @@
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">نام کاربری</label>
                             <input type="text" name="admin_username" required value="{{.Config.Admin.Username}}"
-                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
+                                   placeholder="نام کاربری فعلی یا پیش‌فرض"
+                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">رمز عبور جدید</label>
                             <input type="password" name="admin_password" placeholder="خالی = بدون تغییر"
-                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
+                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
                     <div>
                         <label class="block text-sm text-gray-600 mb-1">تکرار رمز عبور</label>
                         <input type="password" name="admin_password_confirm" placeholder="تکرار رمز عبور جدید"
-                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
+                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500">
                     </div>
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg transition">
                         💾 ذخیره تغییرات
                     </button>
                 </form>
@@ -55,9 +59,11 @@
                 <h2 class="text-lg font-bold text-gray-800 mb-4">🌐 مدیریت پنل‌های VPN</h2>
 
                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
-                    💡 پنل‌ها به ترتیب لیست پردازش می‌شوند. پنل‌های زاپاس فقط به عنوان پشتیبان با حجم کم ساخته می‌شوند.
+                    💡 نقش هر پنل تعیین می‌کنه حجمش از کدوم فیلد پلن خونده بشه:
+                    <b>اصلی</b> = volume_gb | <b>زاپاس</b> = backup_gb | <b>هدیه</b> = gift_gb
                 </div>
 
+                <!-- لیست پنل‌های موجود -->
                 {{if .Config.Panels}}
                 <div class="space-y-2 mb-4">
                     {{range $i, $p := .Config.Panels}}
@@ -65,10 +71,12 @@
                         <div class="flex-1 min-w-0">
                             <div class="font-bold text-gray-800 truncate">
                                 {{if $p.Name}}{{$p.Name}}{{else}}پنل{{end}}
-                                {{if $p.IsBackup}}
-                                    <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-0.5 rounded-full mr-2">زاپاس {{$p.BackupGB}}GB</span>
+                                {{if eq $p.Role "gift"}}
+                                    <span class="bg-pink-200 text-pink-800 text-xs px-2 py-0.5 rounded-full mr-2">🎁 هدیه</span>
+                                {{else if eq $p.Role "backup"}}
+                                    <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-0.5 rounded-full mr-2">🛡️ زاپاس</span>
                                 {{else}}
-                                    <span class="bg-green-200 text-green-800 text-xs px-2 py-0.5 rounded-full mr-2">اصلی</span>
+                                    <span class="bg-green-200 text-green-800 text-xs px-2 py-0.5 rounded-full mr-2">⭐ اصلی</span>
                                 {{end}}
                                 <span class="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full mr-1">{{$p.Type}}</span>
                             </div>
@@ -77,7 +85,7 @@
                         </div>
                         <form action="{{$.AdminBase}}/settings/delete-panel" method="POST" class="mr-3" onsubmit="return confirm('آیا از حذف این پنل مطمئن هستید؟')">
                             <input type="hidden" name="panel_id" value="{{$i}}">
-                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
                                 🗑️ حذف
                             </button>
                         </form>
@@ -90,6 +98,7 @@
                 </div>
                 {{end}}
 
+                <!-- فرم افزودن پنل جدید -->
                 <details class="border border-gray-300 rounded-lg overflow-hidden">
                     <summary class="bg-gray-100 hover:bg-gray-200 px-4 py-2 cursor-pointer font-bold text-sm text-gray-700">
                         ➕ افزودن پنل جدید
@@ -97,17 +106,29 @@
                     <form action="{{.AdminBase}}/settings/add-panel" method="POST" class="p-4 space-y-3 bg-gray-50">
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">نام پنل (اختیاری)</label>
-                            <input type="text" name="panel_name" placeholder="مثال: پاسارگاد زاپاس"
+                            <input type="text" name="panel_name" placeholder="مثال: A / B / C"
                                    class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
                         </div>
-                        <div>
-                            <label class="block text-sm text-gray-600 mb-1">نوع پنل</label>
-                            <select name="panel_type" required
-                                    class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
-                                <option value="guards">Guards (پنل اصلی)</option>
-                                <option value="marzban">Marzban (پاسارگاد)</option>
-                            </select>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">نوع پنل</label>
+                                <select name="panel_type" required
+                                        class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
+                                    <option value="guards">Guards (گارد)</option>
+                                    <option value="marzban">Marzban (پاسارگاد)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">نقش پنل</label>
+                                <select name="panel_role" required
+                                        class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
+                                    <option value="main">⭐ اصلی — حجم کامل خرید</option>
+                                    <option value="backup">🛡️ زاپاس — حجم از backup_gb پلن</option>
+                                    <option value="gift">🎁 هدیه — حجم از gift_gb پلن</option>
+                                </select>
+                            </div>
                         </div>
+                        <p class="text-xs text-gray-500">حجم هر نقش در فایل <b>plans.json</b> تعریف می‌شود.</p>
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">آدرس پنل (URL)</label>
                             <input type="url" name="panel_url" required placeholder="https://panel.example.com"
@@ -125,31 +146,24 @@
                                        class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
                             </div>
                         </div>
-                        <hr class="border-gray-300">
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" id="is_backup" name="is_backup" value="true"
-                                   onchange="document.getElementById('backup_gb_div').style.display=this.checked?'block':'none'">
-                            <label for="is_backup" class="text-sm text-gray-700">این پنل به عنوان <b>زاپاس</b> استفاده شود</label>
-                        </div>
-                        <div id="backup_gb_div" style="display:none">
-                            <label class="block text-sm text-gray-600 mb-1">حجم زاپاس (گیگابایت)</label>
-                            <input type="number" name="panel_backup_gb" value="1" min="1" max="1000"
-                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
-                        </div>
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg">
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg transition">
                             ✅ افزودن پنل
                         </button>
                     </form>
                 </details>
             </section>
 
-            <!-- بخش ۳: بکاپ ایمیل -->
+            <!-- بخش ۳: بکاپ ایمیل (به زودی) -->
             <section class="border border-gray-200 rounded-xl p-4 md:p-6 opacity-75">
                 <h2 class="text-lg font-bold text-gray-800 mb-2">
                     📧 بکاپ خودکار به ایمیل
                     <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-0.5 rounded-full">به زودی</span>
                 </h2>
-                <button type="button" disabled class="bg-gray-400 text-white font-bold px-6 py-2 rounded-lg cursor-not-allowed">
+                <p class="text-sm text-gray-500 mb-4">
+                    این قابلیت هنوز پیاده‌سازی نشده است. در آینده بکاپ‌ها به صورت خودکار زیپ شده و با رمز عبور به ایمیل شما ارسال می‌شوند.
+                </p>
+                <button type="button" disabled
+                        class="bg-gray-400 text-white font-bold px-6 py-2 rounded-lg cursor-not-allowed">
                     🔧 در حال توسعه
                 </button>
             </section>
@@ -159,7 +173,7 @@
 
     <script>
         function confirmAdminChange() {
-            return confirm('⚠️ توجه!\n\nپس از ذخیره، باید با اطلاعات جدید وارد شوید.\n\nادامه می‌دهید؟');
+            return confirm('⚠️ توجه!\n\nپس از ذخیره، باید با اطلاعات جدید وارد داشبورد شوید.\n\nادامه می‌دهید؟');
         }
     </script>
 </body>
