@@ -100,7 +100,13 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	plans, _ := models.LoadPlans()
 
 	if r.Method == http.MethodGet {
-		tmpl.Execute(w, map[string]interface{}{"Plans": plans})
+		// 🎯 اسم پنل‌ها بر اساس نقش برای نمایش در صفحه خرید
+		cfg := db.GetConfig()
+		panelNames := map[string]string{}
+		for _, p := range cfg.Panels {
+			panelNames[p.Role] = p.Name
+		}
+		tmpl.Execute(w, map[string]interface{}{"Plans": plans, "PanelNames": panelNames})
 		return
 	}
 
