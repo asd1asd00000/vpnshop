@@ -17,7 +17,7 @@ type ConfigItem struct {
 	Link  string `json:"link"`
 }
 
-// GenerateConfigFromOrder از همه پنل‌ها کانفیگ می‌گیره و به صورت JSON برمی‌گردونه
+// GenerateConfigFromOrder با یک نام کاربری یکسان، از همه پنل‌ها کانفیگ می‌گیره
 func GenerateConfigFromOrder(order models.Order) (string, error) {
 	cfg := db.GetConfig()
 	if len(cfg.Panels) == 0 {
@@ -26,10 +26,42 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 
 	volumeGB, days := planToVolumeAndDays(order.PlanName)
 
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		// 🎯 یک نام کاربری یکسان برای همه پنل‌ها
+		username := generateUsername()
+		log.Printf("🎯 تلاش ساخت با نام کاربری یکسان: %s", username)
+
+		items, anyDup, err := createOnAllPanels(cfg.Panels, username, volumeGB, days)
+
+		if len(items) > 0 {
+			if len(items) == len(cfg.Panels) {
+				log.Printf("✅ همه پنل‌ها با نام %s موفق بودند", username)
+			} else {
+				log.Printf("⚠️ برخی پنل‌ها با نام %s موفق نبودند", username)
+			}
+			jsonData, _ := json.Marshal(items)
+			return string(jsonData), nil
+		}
+
+		lastErr = err
+		if anyDup {
+			log.Printf("⚠️ نام %s تکراری بود، تلاش بعدی...", username)
+			continue
+		}
+		return "", err
+	}
+
+	return "", fmt.Errorf("پس از چند تلاش، نام کاربری آزاد یافت نشد: %v", lastErr)
+}
+
+// createOnAllPanels با یک نام کاربری، روی همه پنل‌ها کاربر می‌سازه
+func createOnAllPanels(panels []db.PanelConfig, username string, volumeGB, days int) ([]ConfigItem, bool, error) {
 	var items []ConfigItem
 	var errors []string
+	anyDup := false
 
-	for _, panel := range cfg.Panels {
+	for _, panel := range panels {
 		panelVolume := volumeGB
 		if panel.IsBackup && panel.BackupGB > 0 {
 			panelVolume = panel.BackupGB
@@ -40,16 +72,19 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 
 		switch panel.Type {
 		case "guards":
-			link, err = CreateGuardsUser(panel, order, panelVolume, days)
+			link, err = CreateGuardsUser(panel, username, panelVolume, days)
 		case "marzban":
-			link, err = CreateMarzbanUser(panel, order.TrackingCode, panelVolume, days)
+			link, err = CreateMarzbanUser(panel, username, panelVolume, days)
 		default:
 			err = fmt.Errorf("نوع پنل ناشناخته: %s", panel.Type)
 		}
 
 		if err != nil {
-			log.Printf("❌ خطا در ساخت کانفیگ برای پنل %s: %v", panel.Name, err)
+			log.Printf("❌ خطا در پنل %s: %v", panel.Name, err)
 			errors = append(errors, fmt.Sprintf("%s: %v", panel.Name, err))
+			if isDuplicateError(err) {
+				anyDup = true
+			}
 			continue
 		}
 
@@ -71,16 +106,10 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 	}
 
 	if len(items) == 0 {
-		return "", fmt.Errorf("همه پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
+		return nil, anyDup, fmt.Errorf("همه پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
 	}
-
 	if len(errors) > 0 {
-		log.Printf("⚠️ برخی پنل‌ها موفق نبودند: %s", strings.Join(errors, " | "))
+		return items, anyDup, fmt.Errorf("برخی پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
 	}
-
-	jsonData, err := json.Marshal(items)
-	if err != nil {
-		return "", err
-	}
-	return string(jsonData), nil
+	return items, false, nil
 }
