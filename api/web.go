@@ -250,6 +250,19 @@ type adminOrder struct {
 }
 
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
+	// اولویت ۱: از config.json
+	cfg := db.GetConfig()
+	if cfg.Admin.Username != "" && cfg.Admin.Password != "" {
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != cfg.Admin.Username || pass != cfg.Admin.Password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted Admin Dashboard"`)
+			http.Error(w, "دسترسی غیرمجاز", http.StatusUnauthorized)
+			return false
+		}
+		return true
+	}
+
+	// اولویت ۲: از متغیرهای محیطی (fallback)
 	adminUser := os.Getenv("ADMIN_USER")
 	adminPass := os.Getenv("ADMIN_PASS")
 
@@ -263,7 +276,7 @@ func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	user, pass, ok := r.BasicAuth()
 	if !ok || user != adminUser || pass != adminPass {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted Admin Dashboard"`)
-		http.Error(w, "دسترسی غیرمجاز - لطفاً نام کاربری و رمز عبور را وارد کنید", http.StatusUnauthorized)
+		http.Error(w, "دسترسی غیرمجاز", http.StatusUnauthorized)
 		return false
 	}
 	return true
