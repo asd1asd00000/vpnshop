@@ -204,6 +204,18 @@
                 content.style.maxHeight = content.scrollHeight + 'px';
             }
         }
+                function copyInput(btn) {
+            const input = btn.parentElement.querySelector('input');
+            input.select();
+            input.setSelectionRange(0, 99999);
+            try {
+                if (navigator.clipboard) { navigator.clipboard.writeText(input.value); }
+                else { document.execCommand('copy'); }
+            } catch (e) { document.execCommand('copy'); }
+            const old = btn.textContent;
+            btn.textContent = '✅ کپی شد';
+            setTimeout(() => btn.textContent = old, 1500);
+        }
 
         function copyLink(id, btn) {
             const input = document.getElementById('link-' + id);
