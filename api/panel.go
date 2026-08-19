@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -9,21 +10,26 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// GenerateConfigFromOrder از همه پنل‌های فعال کانفیگ می‌گیره و ترکیب می‌کنه
+// ConfigItem یک کانفیگ جداگانه برای نمایش به مشتری
+type ConfigItem struct {
+	Title string `json:"title"`
+	Desc  string `json:"desc"`
+	Link  string `json:"link"`
+}
+
+// GenerateConfigFromOrder از همه پنل‌ها کانفیگ می‌گیره و به صورت JSON برمی‌گردونه
 func GenerateConfigFromOrder(order models.Order) (string, error) {
 	cfg := db.GetConfig()
-
 	if len(cfg.Panels) == 0 {
 		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
 	}
 
 	volumeGB, days := planToVolumeAndDays(order.PlanName)
 
-	var configParts []string
+	var items []ConfigItem
 	var errors []string
 
 	for _, panel := range cfg.Panels {
-		// تعیین حجم: اگه زاپاس باشه، از BackupGB استفاده کن
 		panelVolume := volumeGB
 		if panel.IsBackup && panel.BackupGB > 0 {
 			panelVolume = panel.BackupGB
@@ -36,7 +42,6 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 		case "guards":
 			link, err = CreateGuardsUser(panel, order, panelVolume, days)
 		case "marzban":
-			// برای Marzban از یه یوزرنیم یکسان بین همه پنل‌ها استفاده می‌کنیم
 			link, err = CreateMarzbanUser(panel, order.TrackingCode, panelVolume, days)
 		default:
 			err = fmt.Errorf("نوع پنل ناشناخته: %s", panel.Type)
@@ -48,30 +53,34 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 			continue
 		}
 
-		// فرمت‌بندی بر اساس نوع
-		var formatted string
-		switch panel.Type {
-		case "guards":
-			formatted = FormatGuardsConfig(panel, link, panelVolume)
-		case "marzban":
-			formatted = FormatMarzbanConfig(panel, link, panelVolume)
-		default:
-			formatted = link
+		panelName := panel.Name
+		if panelName == "" {
+			panelName = panel.Type
 		}
 
-		configParts = append(configParts, formatted)
+		var title, desc string
+		if panel.IsBackup {
+			title = fmt.Sprintf("🛡️ %s — کانفیگ زاپاس", panelName)
+			desc = fmt.Sprintf("حجم: %dGB | برای مواقع اضطراری", panelVolume)
+		} else {
+			title = fmt.Sprintf("🛡️ %s — کانفیگ اصلی", panelName)
+			desc = fmt.Sprintf("حجم: %dGB | مدت: %d روز", panelVolume, days)
+		}
+
+		items = append(items, ConfigItem{Title: title, Desc: desc, Link: link})
 	}
 
-	if len(configParts) == 0 {
+	if len(items) == 0 {
 		return "", fmt.Errorf("همه پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
 	}
-
-	// ترکیب همه کانفیگ‌ها با خط خالی
-	finalConfig := strings.Join(configParts, "\n\n")
 
 	if len(errors) > 0 {
 		log.Printf("⚠️ برخی پنل‌ها موفق نبودند: %s", strings.Join(errors, " | "))
 	}
 
-	return finalConfig, nil
+	jsonData, err := json.Marshal(items)
+	if err != nil {
+		return "", err
+	}
+	return string(jsonData), nil
 }
