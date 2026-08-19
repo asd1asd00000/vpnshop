@@ -66,7 +66,7 @@
                     {{range $i, $p := .Config.Panels}}
                     <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
                         <div class="flex-1 min-w-0">
-                            <div class="font-bold text-gray-800 truncate">{{if $p.Name}}{{$p.Name}}{{else}}پنل{{$end}}</div>
+                            <div class="font-bold text-gray-800 truncate">{{if $p.Name}}{{$p.Name}}{{else}}پنل{{end}}</div>
                             <div class="text-xs text-gray-500 font-mono truncate" dir="ltr">{{$p.URL}}</div>
                             <div class="text-xs text-gray-400">کاربر: <span class="font-mono">{{$p.Username}}</span></div>
                         </div>
