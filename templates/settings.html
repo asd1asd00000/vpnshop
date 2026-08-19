@@ -68,7 +68,7 @@
                 <!-- لیست پنل‌های موجود -->
                 {{if .Config.Panels}}
                 <div class="space-y-2 mb-4">
-                    {{range $i, $p := .Config.Panels}}
+                    {{range $idx, $p := .Config.Panels}}
                     <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
                         <div class="flex-1 min-w-0">
                             <div class="font-bold text-gray-800 truncate">{{if $p.Name}}{{$p.Name}}{{else}}پنل #{{add $i 1}}{{end}}</div>
