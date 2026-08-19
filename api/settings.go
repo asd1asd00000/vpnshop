@@ -82,29 +82,41 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := r.FormValue("panel_name")
+	panelType := r.FormValue("panel_type")
 	url := r.FormValue("panel_url")
 	username := r.FormValue("panel_username")
 	password := r.FormValue("panel_password")
+	isBackup := r.FormValue("is_backup") == "true"
+	backupGBStr := r.FormValue("panel_backup_gb")
+	backupGB := 1
+	if isBackup && backupGBStr != "" {
+		if v, err := strconv.Atoi(backupGBStr); err == nil && v > 0 {
+			backupGB = v
+		}
+	}
 
-	if url == "" || username == "" || password == "" {
-		http.Error(w, "تمام فیلدها اجباری هستند", http.StatusBadRequest)
+	if url == "" || username == "" || password == "" || panelType == "" {
+		http.Error(w, "فیلدهای اجباری را پر کنید", http.StatusBadRequest)
 		return
 	}
 
 	cfg := db.GetConfig()
 	cfg.Panels = append(cfg.Panels, db.PanelConfig{
 		Name:     name,
+		Type:     panelType,
 		URL:      url,
 		Username: username,
 		Password: password,
+		IsBackup: isBackup,
+		BackupGB: backupGB,
 	})
 
 	if err := db.SaveConfig(cfg); err != nil {
-		http.Error(w, "خطا در ذخیره پنل", http.StatusInternalServerError)
+		http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
 		return
 	}
 
-	db.LogEventf("general", "success", "✅ پنل جدید اضافه شد: %s", name)
+	db.LogEventf("general", "success", "✅ پنل جدید اضافه شد: %s (%s)", name, panelType)
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
 
