@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/asd1asd00000/vpnshop/models"
+	"github.com/asd1asd00000/vpnshop/db"
 )
 
 func init() {
