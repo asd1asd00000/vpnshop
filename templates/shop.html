@@ -115,6 +115,16 @@
                 {{end}}
                 <h3 class="text-xl font-bold text-gray-800 mb-2">{{.Title}}</h3>
                 <p class="text-3xl font-bold text-blue-600 mb-6">{{.Price}} <span class="text-sm text-gray-500 font-normal">تومان</span></p>
+                                <div class="text-right text-xs space-y-1 mb-4 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                    <div class="text-gray-700">🛡️ {{.VolumeGB}}GB اصلی + {{.Days}} روز</div>
+                    {{if .BackupGB}}
+                    <div class="text-gray-500">🛡️ {{.BackupGB}}GB زاپاس{{if index $.PanelNames "backup"}} از پنل {{index $.PanelNames "backup"}}{{end}}</div>
+                    {{end}}
+                    {{if .GiftGB}}
+                    <div class="text-gray-500">🎁 {{.GiftGB}}GB هدیه{{if index $.PanelNames "gift"}} از پنل {{index $.PanelNames "gift"}}{{end}}</div>
+                    {{if .GiftNote}}<div class="text-orange-500">⚠️ {{.GiftNote}}</div>{{end}}
+                    {{end}}
+                </div>
                 <form method="POST">
                     <input type="hidden" name="plan_id" value="{{.ID}}">
                     <button type="submit" class="w-full {{if .IsSpecial}}bg-blue-600 hover:bg-blue-700{{else}}bg-gray-800 hover:bg-gray-900{{end}} text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
