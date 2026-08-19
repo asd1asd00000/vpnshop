@@ -62,9 +62,9 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span class="font-bold">در حال بررسی پرداخت... لطفاً صبر کنید</span>
+                    <span class="font-bold" id="statusText">در حال بررسی پرداخت... لطفاً صبر کنید</span>
                 </div>
-                <p class="text-xs mt-2">این صفحه به صورت خودکار به‌روز می‌شود</p>
+                <p class="text-xs mt-2">این صفحه به صورت خودکار هر ۳ ثانیه به‌روز می‌شود</p>
             </div>
 
             <div class="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800 border border-yellow-200">
@@ -72,7 +72,7 @@
             </div>
         </div>
 
-        <!-- بخش نمایش کانفیگ (بعد از پرداخت موفق) -->
+        <!-- بخش نمایش کانفیگ‌ها (بعد از پرداخت موفق) -->
         <div id="configSection" class="hidden bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500 payment-success">
             <div class="mb-6">
                 <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -81,7 +81,7 @@
                     </svg>
                 </div>
                 <h2 class="text-2xl font-bold text-green-600 mb-2">✅ پرداخت با موفقیت تایید شد!</h2>
-                <p class="text-gray-600">کانفیگ شما آماده است. لینک زیر را کپی کرده و در برنامه VPN خود وارد کنید.</p>
+                <p class="text-gray-600">کانفیگ‌های شما آماده است. هر کدام را جداگانه کپی کرده و در برنامه VPN خود وارد کنید.</p>
             </div>
 
             <div id="configsList" class="space-y-4 mb-6 text-right"></div>
@@ -89,9 +89,9 @@
             <div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 border border-blue-200 mb-6">
                 <p class="font-bold mb-2">📌 راهنمای استفاده:</p>
                 <ol class="text-right list-decimal list-inside space-y-1 text-xs">
-                    <li>لینک بالا را کپی کنید</li>
-                    <li>در برنامه VPN خود (v2rayNG, Streisand, V2Box و...) گزینه "Add from Clipboard" را بزنید</li>
-                    <li>کانفیگ اضافه شده و آماده استفاده است</li>
+                    <li>هر لینک را جداگانه کپی کنید</li>
+                    <li>در برنامه VPN خود گزینه "Add from Clipboard" را بزنید</li>
+                    <li>کانفیگ‌های اضافه شده آماده استفاده هستند</li>
                 </ol>
             </div>
 
@@ -132,86 +132,98 @@
     <script>
         function copyTrackingCode(btn) {
             const code = document.getElementById('trackingCode').textContent.trim();
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(code);
-            } else {
-                const tmp = document.createElement('textarea');
-                tmp.value = code;
-                document.body.appendChild(tmp);
-                tmp.select();
-                document.execCommand('copy');
-                document.body.removeChild(tmp);
-            }
-            const old = btn.innerHTML;
-            btn.innerHTML = '✅ کپی شد';
-            setTimeout(() => btn.innerHTML = '📋 کپی', 1500);
+            copyToClipboard(code, btn, '📋 کپی');
         }
 
-        function copyConfigLink(btn) {
-            const link = document.getElementById('configLink').value;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(link);
+        function copyInput(btn) {
+            const input = btn.parentElement.querySelector('input');
+            copyToClipboard(input.value, btn, '📋 کپی');
+        }
+
+        function copyToClipboard(text, btn, originalText) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text);
             } else {
                 const tmp = document.createElement('textarea');
-                tmp.value = link;
+                tmp.value = text;
                 document.body.appendChild(tmp);
                 tmp.select();
-                document.execCommand('copy');
+                try { document.execCommand('copy'); } catch (e) {}
                 document.body.removeChild(tmp);
             }
             const old = btn.textContent;
             btn.textContent = '✅ کپی شد';
-            setTimeout(() => btn.textContent = '📋 کپی', 1500);
+            setTimeout(() => btn.textContent = originalText, 1500);
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
         }
 
         // ── بررسی خودکار وضعیت پرداخت ─
         {{if .CheckoutOrder}}
         const TRACKING_CODE = '{{.CheckoutOrder.TrackingCode}}';
         let checkInterval;
+        let checkCount = 0;
 
         function checkPaymentStatus() {
-            fetch('/api/order-status?code=' + TRACKING_CODE)
-                .then(r => r.json())
+            checkCount++;
+            console.log(`🔍 بررسی #${checkCount} برای کد: ${TRACKING_CODE}`);
+
+            fetch('/api/order-status?code=' + encodeURIComponent(TRACKING_CODE))
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
                 .then(data => {
-                    console.log('وضعیت:', data.status);
-                    
+                    console.log('📥 پاسخ سرور:', data);
+
                     if (data.status === 'paid' && data.config_link) {
-                        // پرداخت موفق + کانفیگ آماده
+                        console.log('✅ پرداخت موفق شد!');
                         clearInterval(checkInterval);
                         showConfig(data.config_link);
                     } else if (data.status === 'processing') {
-                        // پرداخت شده ولی کانفیگ هنوز ساخته نشده
-                        document.getElementById('checkingStatus').innerHTML = `
-                            <div class="flex items-center justify-center gap-2">
-                                <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span class="font-bold">در حال ساخت کانفیگ... لطفاً چند لحظه صبر کنید</span>
-                            </div>
-                        `;
+                        document.getElementById('statusText').textContent = 'در حال ساخت کانفیگ... چند لحظه صبر کنید';
+                    } else if (data.status === 'pending') {
+                        console.log('⏳ هنوز پرداخت نشده');
+                    } else {
+                        console.warn('❓ وضعیت ناشناخته:', data.status);
                     }
                 })
-                .catch(err => console.error('خطا در بررسی:', err));
+                .catch(err => {
+                    console.error('❌ خطا در بررسی:', err);
+                });
         }
 
         function showConfig(configLink) {
+            console.log('🎨 نمایش کانفیگ‌ها...');
+
             document.getElementById('checkingStatus').classList.add('hidden');
             document.getElementById('invoiceSection').classList.add('hidden');
             document.getElementById('configSection').classList.remove('hidden');
 
             const list = document.getElementById('configsList');
             let items = null;
+
             try {
                 const parsed = JSON.parse(configLink);
-                if (Array.isArray(parsed)) items = parsed;
-            } catch (e) {}
+                if (Array.isArray(parsed)) {
+                    items = parsed;
+                    console.log(`✅ ${items.length} کانفیگ پارس شد`);
+                } else {
+                    console.warn('⚠️ خروجی آرایه نیست:', parsed);
+                }
+            } catch (e) {
+                console.warn('⚠️ parse ناموفق، نمایش به صورت خام:', e);
+            }
 
             if (items && items.length > 0) {
                 list.innerHTML = items.map(item => `
-                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
-                        <div class="font-bold text-green-800 mb-1">${escapeHtml(item.title)}</div>
-                        <div class="text-xs text-green-600 mb-2">${escapeHtml(item.desc)}</div>
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200 text-right">
+                        <div class="font-bold text-green-800 mb-1 text-base">${escapeHtml(item.title)}</div>
+                        <div class="text-xs text-green-600 mb-3">${escapeHtml(item.desc)}</div>
                         <div class="flex gap-2" dir="ltr">
                             <input type="text" readonly value="${escapeHtml(item.link)}"
                                    class="bg-white border border-green-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 font-mono"
@@ -224,6 +236,7 @@
                     </div>
                 `).join('');
             } else {
+                // fallback: نمایش خام
                 list.innerHTML = `
                     <div class="bg-green-50 p-4 rounded-lg border border-green-200">
                         <div class="font-bold text-green-800 mb-2">🛡️ کانفیگ شما</div>
@@ -239,29 +252,6 @@
                     </div>`;
             }
 
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function copyInput(btn) {
-            const input = btn.parentElement.querySelector('input');
-            input.select();
-            input.setSelectionRange(0, 99999);
-            try {
-                if (navigator.clipboard) { navigator.clipboard.writeText(input.value); }
-                else { document.execCommand('copy'); }
-            } catch (e) { document.execCommand('copy'); }
-            const old = btn.textContent;
-            btn.textContent = '✅ کپی شد';
-            setTimeout(() => btn.textContent = '📋 کپی', 1500);
-        }
-
-        function escapeHtml(s) {
-            const div = document.createElement('div');
-            div.textContent = s;
-            return div.innerHTML;
-        }
-            
-            // اسکرول به بالا
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
