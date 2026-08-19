@@ -49,37 +49,76 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 }
 
 // getPasarguardGroupIDs شناسه گروه‌های پنل پاسارگاد
+// getPasarguardGroupIDs شناسه همه گروه‌های پنل پاسارگاد
 func getPasarguardGroupIDs(baseURL, token string) []int {
-	endpoints := []string{"/api/groups", "/api/user_groups", "/api/admin/groups"}
+	endpoints := []string{"/api/groups", "/api/user_groups", "/api/admin/groups", "/api/nodes/groups"}
+
+	client := &http.Client{Timeout: 5 * time.Second}
 
 	for _, ep := range endpoints {
 		req, _ := http.NewRequest("GET", baseURL+ep, nil)
 		req.Header.Add("Authorization", "Bearer "+token)
 		req.Header.Add("Accept", "application/json")
 
-		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			continue
+		}
 
-		if err == nil && resp.StatusCode == http.StatusOK {
-			defer resp.Body.Close()
-			var groups []map[string]interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&groups); err == nil {
-				var ids []int
-				for _, g := range groups {
-					if id, ok := g["id"].(float64); ok {
-						ids = append(ids, int(id))
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		ids := extractGroupIDs(bodyBytes)
+		if len(ids) > 0 {
+			log.Printf("🔍 [پاسارگاد] گروه‌های یافت شده از %s: %v", ep, ids)
+			return ids
+		}
+	}
+
+	log.Printf("⚠️ [پاسارگاد] گروهی یافت نشد")
+	return []int{}
+}
+
+// extractGroupIDs استخراج ID ها از فرمت‌های مختلف پاسخ
+func extractGroupIDs(body []byte) []int {
+	var ids []int
+
+	// فرمت ۱: آرایه مستقیم [{"id":1},...]
+	var arr []map[string]interface{}
+	if err := json.Unmarshal(body, &arr); err == nil {
+		for _, g := range arr {
+			if id, ok := g["id"].(float64); ok {
+				ids = append(ids, int(id))
+			}
+		}
+		if len(ids) > 0 {
+			return ids
+		}
+	}
+
+	// فرمت ۲: آبجکت پیچیده {"items":[...]} یا {"groups":[...]}
+	var wrapper map[string]interface{}
+	if err := json.Unmarshal(body, &wrapper); err == nil {
+		for _, key := range []string{"items", "groups", "data", "results"} {
+			if list, ok := wrapper[key].([]interface{}); ok {
+				for _, item := range list {
+					if m, ok := item.(map[string]interface{}); ok {
+						if id, ok := m["id"].(float64); ok {
+							ids = append(ids, int(id))
+						}
 					}
 				}
 				if len(ids) > 0 {
 					return ids
 				}
 			}
-		} else if resp != nil {
-			resp.Body.Close()
 		}
 	}
-	// fallback پیش‌فرض
-	return []int{1, 3}
+
+	return ids
 }
 
 // extractPasarguardSubURL استخراج لینک اشتراک از پاسخ پاسارگاد
