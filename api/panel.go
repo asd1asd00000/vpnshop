@@ -44,9 +44,20 @@ func isDuplicateError(err error) bool {
 }
 
 func GenerateConfigFromOrder(order models.Order) (string, error) {
-	panelURL := os.Getenv("PANEL_URL")
-	user := os.Getenv("PANEL_USER")
-	pass := os.Getenv("PANEL_PASS")
+	// اولویت ۱: از config.json (اولین پنل)
+	cfg := db.GetConfig()
+	var panelURL, user, pass string
+
+	if len(cfg.Panels) > 0 {
+		panelURL = cfg.Panels[0].URL
+		user = cfg.Panels[0].Username
+		pass = cfg.Panels[0].Password
+	} else {
+		// اولویت ۲: از متغیرهای محیطی (fallback)
+		panelURL = os.Getenv("PANEL_URL")
+		user = os.Getenv("PANEL_USER")
+		pass = os.Getenv("PANEL_PASS")
+	}
 
 	if panelURL == "" || user == "" || pass == "" {
 		return "", fmt.Errorf("متغیرهای محیطی پنل تنظیم نشده‌اند")
@@ -56,6 +67,8 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	// ... بقیه تابع بدون تغییر
 
 	// 🎯 خواندن حجم و انقضا از فایل JSON
 	plans, _ := models.LoadPlans()
