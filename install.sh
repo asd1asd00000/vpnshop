@@ -82,9 +82,7 @@ Restart=always
 RestartSec=5
 
 # Guard panel settings
-Environment="PANEL_URL=https://core.erfjab.com"
-Environment="PANEL_USER=Javatava"
-Environment="PANEL_PASS=3cet2&xhsA&X"
+
 
 # Admin dashboard credentials (set during installation)
 Environment="ADMIN_USER=$admin_user"
