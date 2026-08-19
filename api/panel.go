@@ -10,36 +10,50 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// ConfigItem یک کانفیگ جداگانه برای نمایش به مشتری
+// ConfigItem یک کانفیگ جداگانه برای نمایش
 type ConfigItem struct {
 	Title string `json:"title"`
 	Desc  string `json:"desc"`
 	Link  string `json:"link"`
 }
 
-// GenerateConfigFromOrder با یک نام کاربری یکسان، از همه پنل‌ها کانفیگ می‌گیره
+// planVolumes حجم‌های تعریف‌شده در پلن
+type planVolumes struct {
+	mainGB   int
+	backupGB int
+	giftGB   int
+	days     int
+	giftNote string
+}
+
 func GenerateConfigFromOrder(order models.Order) (string, error) {
 	cfg := db.GetConfig()
 	if len(cfg.Panels) == 0 {
 		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
 	}
 
-	volumeGB, days := planToVolumeAndDays(order.PlanName)
+	// 🎯 خواندن حجم‌ها از پلن
+	pv := planVolumes{mainGB: 20, days: 30}
+	plans, _ := models.LoadPlans()
+	for _, p := range plans {
+		if p.ID == order.PlanName {
+			pv.mainGB = p.VolumeGB
+			pv.days = p.Days
+			pv.backupGB = p.BackupGB
+			pv.giftGB = p.GiftGB
+			pv.giftNote = p.GiftNote
+			break
+		}
+	}
 
 	var lastErr error
 	for attempt := 0; attempt < 5; attempt++ {
-		// 🎯 یک نام کاربری یکسان برای همه پنل‌ها
 		username := generateUsername()
 		log.Printf("🎯 تلاش ساخت با نام کاربری یکسان: %s", username)
 
-		items, anyDup, err := createOnAllPanels(cfg.Panels, username, volumeGB, days)
+		items, anyDup, err := createOnAllPanels(cfg.Panels, username, pv)
 
 		if len(items) > 0 {
-			if len(items) == len(cfg.Panels) {
-				log.Printf("✅ همه پنل‌ها با نام %s موفق بودند", username)
-			} else {
-				log.Printf("⚠️ برخی پنل‌ها با نام %s موفق نبودند", username)
-			}
 			jsonData, _ := json.Marshal(items)
 			return string(jsonData), nil
 		}
@@ -55,16 +69,26 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 	return "", fmt.Errorf("پس از چند تلاش، نام کاربری آزاد یافت نشد: %v", lastErr)
 }
 
-// createOnAllPanels با یک نام کاربری، روی همه پنل‌ها کاربر می‌سازه
-func createOnAllPanels(panels []db.PanelConfig, username string, volumeGB, days int) ([]ConfigItem, bool, error) {
+func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes) ([]ConfigItem, bool, error) {
 	var items []ConfigItem
 	var errors []string
 	anyDup := false
 
 	for _, panel := range panels {
-		panelVolume := volumeGB
-		if panel.IsBackup && panel.BackupGB > 0 {
-			panelVolume = panel.BackupGB
+		// 🎯 تعیین حجم بر اساس نقش پنل (از پلن)
+		var panelVolume int
+		switch panel.Role {
+		case "backup":
+			panelVolume = pv.backupGB
+		case "gift":
+			panelVolume = pv.giftGB
+		default: // main
+			panelVolume = pv.mainGB
+		}
+
+		// اگه حجمی برای این نقش تعریف نشده، رد شو
+		if panelVolume <= 0 {
+			continue
 		}
 
 		var link string
@@ -72,9 +96,9 @@ func createOnAllPanels(panels []db.PanelConfig, username string, volumeGB, days 
 
 		switch panel.Type {
 		case "guards":
-			link, err = CreateGuardsUser(panel, username, panelVolume, days)
+			link, err = CreateGuardsUser(panel, username, panelVolume, pv.days)
 		case "marzban":
-			link, err = CreateMarzbanUser(panel, username, panelVolume, days)
+			link, err = CreateMarzbanUser(panel, username, panelVolume, pv.days)
 		default:
 			err = fmt.Errorf("نوع پنل ناشناخته: %s", panel.Type)
 		}
@@ -94,12 +118,16 @@ func createOnAllPanels(panels []db.PanelConfig, username string, volumeGB, days 
 		}
 
 		var title, desc string
-		if panel.IsBackup {
+		switch panel.Role {
+		case "backup":
 			title = fmt.Sprintf("🛡️ %s — کانفیگ زاپاس", panelName)
 			desc = fmt.Sprintf("حجم: %dGB | برای مواقع اضطراری", panelVolume)
-		} else {
+		case "gift":
+			title = fmt.Sprintf("🎁 %s — کانفیگ هدیه", panelName)
+			desc = fmt.Sprintf("حجم: %dGB | %s", panelVolume, pv.giftNote)
+		default:
 			title = fmt.Sprintf("🛡️ %s — کانفیگ اصلی", panelName)
-			desc = fmt.Sprintf("حجم: %dGB | مدت: %d روز", panelVolume, days)
+			desc = fmt.Sprintf("حجم: %dGB | مدت: %d روز", panelVolume, pv.days)
 		}
 
 		items = append(items, ConfigItem{Title: title, Desc: desc, Link: link})
