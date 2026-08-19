@@ -10,18 +10,19 @@ import (
 // PanelConfig اطلاعات یک پنل VPN
 type PanelConfig struct {
 	Name     string `json:"name"`
+	Type     string `json:"type"`     // "guards" | "marzban"
 	URL      string `json:"url"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	IsBackup bool   `json:"is_backup"` // اگه true، فقط به عنوان زاپاس استفاده میشه
+	BackupGB int    `json:"backup_gb"` // حجم زاپاس به گیگابایت (فقط وقتی IsBackup = true)
 }
 
-// AdminConfig اطلاعات ادمین داشبورد
 type AdminConfig struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// EmailBackupConfig تنظیمات بکاپ به ایمیل
 type EmailBackupConfig struct {
 	Enabled    bool   `json:"enabled"`
 	Email      string `json:"email"`
@@ -31,7 +32,6 @@ type EmailBackupConfig struct {
 	SMTPPass   string `json:"smtp_pass"`
 }
 
-// AppConfig ساختار کلی تنظیمات
 type AppConfig struct {
 	Admin       AdminConfig       `json:"admin"`
 	Panels      []PanelConfig     `json:"panels"`
@@ -44,12 +44,10 @@ var (
 	configPath = "./config.json"
 )
 
-// LoadConfig تنظیمات رو از فایل می‌خونه
 func LoadConfig() *AppConfig {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	// تنظیمات پیش‌فرض
 	config = &AppConfig{
 		Admin:       AdminConfig{},
 		Panels:      []PanelConfig{},
@@ -58,7 +56,7 @@ func LoadConfig() *AppConfig {
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		log.Println("ℹ️ فایل config.json وجود ندارد، از تنظیمات پیش‌فرض استفاده می‌شود")
+		log.Println("ℹ️ فایل config.json وجود ندارد")
 		return config
 	}
 
@@ -70,7 +68,6 @@ func LoadConfig() *AppConfig {
 	return config
 }
 
-// SaveConfig تنظیمات رو توی فایل ذخیره می‌کنه
 func SaveConfig(cfg *AppConfig) error {
 	configMu.Lock()
 	defer configMu.Unlock()
@@ -88,7 +85,6 @@ func SaveConfig(cfg *AppConfig) error {
 	return nil
 }
 
-// GetConfig تنظیمات فعلی رو برمی‌گردونه
 func GetConfig() *AppConfig {
 	configMu.RLock()
 	defer configMu.RUnlock()
