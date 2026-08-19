@@ -181,42 +181,23 @@ func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit i
 }
 
 // CreateGuardsUser ساخت کاربر در پنل Guards با تلاش روی چند نام کاربری
-func CreateGuardsUser(panel db.PanelConfig, order models.Order, volumeGB int, days int) (string, error) {
+// CreateGuardsUser ساخت کاربر در پنل Guards با نام کاربری مشخص
+func CreateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	token, err := getGuardsToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
 		return "", err
 	}
 
-	// تبدیل GB به bytes
 	limitUsage := int64(volumeGB) * 1073741824
-	// تبدیل days به timestamp
 	limitExpire := time.Now().AddDate(0, 0, days).Unix()
 
-	// ساخت نام کاربری پایه + fallback ها (base, base2, base3, ..., base9)
-	baseUsername := generateUsername()
-	candidates := []string{baseUsername}
-	for i := 2; i <= 9; i++ {
-		candidates = append(candidates, fmt.Sprintf("%s%d", baseUsername, i))
+	log.Printf("🔄 [Guards] تلاش برای ساخت کاربر: %s", username)
+	link, err := createGuardsSubscription(panel.URL, token, username, limitUsage, limitExpire)
+	if err != nil {
+		return "", err
 	}
-
-	for _, username := range candidates {
-		fmt.Printf("🔄 [Guards] تلاش برای ساخت کاربر: %s\n", username)
-
-		link, err := createGuardsSubscription(panel.URL, token, username, limitUsage, limitExpire)
-		if err == nil {
-			fmt.Printf("✅ [Guards] کاربر %s با موفقیت ساخته شد\n", username)
-			return link, nil
-		}
-
-		if isDuplicateError(err) {
-			fmt.Printf("⚠️ [Guards] کاربر %s تکراری بود، امتحان بعدی...\n", username)
-			continue
-		}
-
-		return "", fmt.Errorf("خطا در ساخت کاربر %s: %w", username, err)
-	}
-
-	return "", fmt.Errorf("تمام نام‌های کاربری در پنل Guards تکراری بودند")
+	log.Printf("✅ [Guards] کاربر %s با موفقیت ساخته شد", username)
+	return link, nil
 }
 
 // FormatGuardsConfig فرمت‌بندی خروجی برای نمایش به مشتری
