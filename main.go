@@ -12,14 +12,18 @@ func main() {
 	db.InitDB("./vpnshop.db")
 	defer db.DB.Close()
 
+	// بارگذاری تنظیمات
+	db.LoadConfig()
+
 	db.StartLogCleanup()
-http.HandleFunc("/api/order-status", api.CheckOrderStatus)
+
 	// 🌐 مسیرهای عمومی
 	http.HandleFunc("/", api.ShopHandler)
 	http.HandleFunc("/track", api.TrackHandler)
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
+	http.HandleFunc("/api/order-status", api.CheckOrderStatus)
 
-	// 🔐 مسیرهای ادمین (با پیشوند مخفی از متغیر محیطی)
+	// 🔐 مسیرهای ادمین
 	adminBase := api.AdminBasePath()
 	http.HandleFunc(adminBase, api.AdminHandler)
 	http.HandleFunc(adminBase+"/backup", api.BackupHandler)
@@ -27,6 +31,13 @@ http.HandleFunc("/api/order-status", api.CheckOrderStatus)
 	http.HandleFunc(adminBase+"/restore", api.RestoreHandler)
 	http.HandleFunc(adminBase+"/logs", api.AdminLogsHandler)
 	http.HandleFunc(adminBase+"/logs/clear", api.AdminLogsClearHandler)
+
+	// ⚙️ مسیرهای تنظیمات
+	http.HandleFunc(adminBase+"/settings", api.SettingsHandler)
+	http.HandleFunc(adminBase+"/settings/update-admin", api.UpdateAdminHandler)
+	http.HandleFunc(adminBase+"/settings/add-panel", api.AddPanelHandler)
+	http.HandleFunc(adminBase+"/settings/delete-panel", api.DeletePanelHandler)
+	http.HandleFunc(adminBase+"/settings/email-backup", api.EmailBackupHandler)
 
 	port := ":8080"
 	log.Printf("سرور VPNShop روی پورت %s در حال اجرا است...", port)
