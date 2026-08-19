@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 // getPasarguardToken احراز هویت در پنل پاسارگاد
 func getPasarguardToken(panelURL, username, password string) (string, error) {
 	baseURL := strings.TrimRight(panelURL, "/")
+
 	data := url.Values{}
 	data.Set("grant_type", "password")
 	data.Set("username", username)
@@ -28,27 +30,31 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 		return "", err
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Accept", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("پاسارگاد: خطا در اتصال: %v", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	log.Printf("🔍 [پاسارگاد] احراز هویت | URL: %s | Status: %d", baseURL+"/api/admin/token", resp.StatusCode)
+
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("پاسارگاد: احراز هویت ناموفق، کد: %d", resp.StatusCode)
+		return "", fmt.Errorf("پاسارگاد: احراز هویت ناموفق، کد: %d، پاسخ: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.Unmarshal(bodyBytes, &result)
 	if token, ok := result["access_token"].(string); ok {
 		return token, nil
 	}
 	return "", fmt.Errorf("پاسارگاد: توکن در پاسخ یافت نشد")
 }
 
-// getPasarguardGroupIDs شناسه گروه‌های پنل پاسارگاد
 // getPasarguardGroupIDs شناسه همه گروه‌های پنل پاسارگاد
 func getPasarguardGroupIDs(baseURL, token string) []int {
 	endpoints := []string{"/api/groups", "/api/user_groups", "/api/admin/groups", "/api/nodes/groups"}
@@ -78,7 +84,7 @@ func getPasarguardGroupIDs(baseURL, token string) []int {
 		}
 	}
 
-	log.Printf("⚠️ [پاسارگاد] گروهی یافت نشد")
+	log.Printf("⚠️ [پاسارگاد] هیچ گروهی یافت نشد، بدون group_ids ادامه می‌دهد")
 	return []int{}
 }
 
@@ -123,14 +129,12 @@ func extractGroupIDs(body []byte) []int {
 
 // extractPasarguardSubURL استخراج لینک اشتراک از پاسخ پاسارگاد
 func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string {
-	// روش ۱: subscription_url
 	if subURL, ok := data["subscription_url"].(string); ok && subURL != "" {
 		if strings.HasPrefix(subURL, "/") {
 			return baseURL + subURL
 		}
 		return subURL
 	}
-	// روش ۲: links آرایه
 	if links, ok := data["links"].([]interface{}); ok && len(links) > 0 {
 		if linkStr, ok := links[0].(string); ok {
 			return linkStr
@@ -139,8 +143,7 @@ func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string
 	return ""
 }
 
-// CreateMarzbanUser ساخت کاربر در پنل پاسارگاد (Marzban)
-// امضا: سازگار با dispatcher
+// CreateMarzbanUser ساخت کاربر در پنل پاسارگاد
 func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -149,17 +152,6 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 
 	baseURL := strings.TrimRight(panel.URL, "/")
 	groupIDs := getPasarguardGroupIDs(baseURL, token)
-		groupIDs := getPasarguardGroupIDs(baseURL, token)
-
-	payload := map[string]interface{}{
-		"username":                  username,
-		"data_limit":                volumeBytes,
-		"data_limit_reset_strategy": "no_reset",
-		"status":                    "active",
-	}
-	if len(groupIDs) > 0 {
-		payload["group_ids"] = groupIDs
-	}
 
 	// تبدیل GB به bytes
 	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
@@ -175,13 +167,17 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		"data_limit":                volumeBytes,
 		"data_limit_reset_strategy": "no_reset",
 		"status":                    "active",
-		"group_ids":                 groupIDs,
 		"proxies": map[string]interface{}{
 			"vmess":       map[string]interface{}{},
 			"vless":       map[string]interface{}{},
 			"trojan":      map[string]interface{}{},
 			"shadowsocks": map[string]interface{}{},
 		},
+	}
+
+	// فقط اگه گروهی پیدا شد، اضافه کن
+	if len(groupIDs) > 0 {
+		payload["group_ids"] = groupIDs
 	}
 
 	if expireTimestamp > 0 {
@@ -203,16 +199,18 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("پاسارگاد: ساخت کاربر ناموفق، کد: %d", resp.StatusCode)
+		return "", fmt.Errorf("پاسارگاد: ساخت کاربر ناموفق، کد: %d، پاسخ: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.Unmarshal(bodyBytes, &result)
 
-	// تلاش برای استخراج لینک از پاسخ POST
 	subLink := extractPasarguardSubURL(baseURL, result)
 	if subLink != "" {
+		log.Printf("✅ [پاسارگاد] کاربر %s با موفقیت ساخته شد", username)
 		return subLink, nil
 	}
 
@@ -226,6 +224,7 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		json.NewDecoder(respGet.Body).Decode(&getUser)
 		subLink = extractPasarguardSubURL(baseURL, getUser)
 		if subLink != "" {
+			log.Printf("✅ [پاسارگاد] کاربر %s با موفقیت ساخته شد (از GET)", username)
 			return subLink, nil
 		}
 	}
@@ -234,7 +233,6 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 }
 
 // UpdateMarzbanUser بروزرسانی کاربر موجود در پنل پاسارگاد
-// اگه کاربر موجود نبود، خودکار می‌سازه
 func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, days int) (string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -244,7 +242,6 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 	baseURL := strings.TrimRight(panel.URL, "/")
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// چک کن کاربر موجود هست؟
 	reqGet, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
 	reqGet.Header.Add("Authorization", "Bearer "+token)
 	respGet, err := client.Do(reqGet)
@@ -262,7 +259,6 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 	json.NewDecoder(respGet.Body).Decode(&user)
 	respGet.Body.Close()
 
-	// بروزرسانی مقادیر
 	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
 	user["data_limit"] = volumeBytes
 	if days > 0 {
@@ -287,7 +283,7 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 		return "", fmt.Errorf("پاسارگاد: بروزرسانی ناموفق، کد: %d", respPut.StatusCode)
 	}
 
-	// بعد از بروزرسانی، لینک اشتراک رو بگیر
+	// گرفتن لینک اشتراک بعد از بروزرسانی
 	reqGetLink, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
 	reqGetLink.Header.Add("Authorization", "Bearer "+token)
 	respGetLink, err := client.Do(reqGetLink)
