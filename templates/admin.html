@@ -258,6 +258,78 @@
             btn.textContent = '✅ کپی شد';
             setTimeout(() => btn.textContent = old, 1500);
         }
+                let pendingConfirmId = null;
+
+        function openManualConfirm(id, trackingCode) {
+            pendingConfirmId = id;
+            document.getElementById('confirmTrackingCode').textContent = trackingCode;
+            const btn = document.getElementById('confirmBtn');
+            btn.disabled = false;
+            btn.textContent = '✅ بله، تایید می‌کنم';
+            btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
+            
+            const m = document.getElementById('manualConfirmModal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+
+        function closeManualConfirm() {
+            const m = document.getElementById('manualConfirmModal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+            pendingConfirmId = null;
+        }
+
+        function doManualConfirm() {
+            if (!pendingConfirmId) return;
+            
+            const btn = document.getElementById('confirmBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ در حال پردازش...';
+            btn.className = 'flex-1 bg-gray-400 text-white font-bold py-2.5 rounded-lg cursor-not-allowed';
+
+            fetch(ADMIN_BASE + '/manual-confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: pendingConfirmId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    // نمایش پیام موفقیت و رفرش صفحه
+                    showNotification('✅ ' + data.message, 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    showNotification('❌ ' + data.error, 'error');
+                    btn.disabled = false;
+                    btn.textContent = '✅ بله، تایید می‌کنم';
+                    btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
+                }
+            })
+            .catch(err => {
+                showNotification('❌ خطا در اتصال به سرور', 'error');
+                btn.disabled = false;
+                btn.textContent = '✅ بله، تایید می‌کنم';
+                btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
+            });
+        }
+
+        function showNotification(message, type) {
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500'
+            };
+            const notif = document.createElement('div');
+            notif.className = `fixed top-4 left-1/2 transform -translate-x-1/2 ${colors[type] || 'bg-gray-700'} text-white px-6 py-3 rounded-lg shadow-2xl z-[100] font-bold`;
+            notif.style.transition = 'opacity 0.3s';
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            
+            setTimeout(() => {
+                notif.style.opacity = '0';
+                setTimeout(() => notif.remove(), 300);
+            }, 2500);
+        }
 
         function copyLink(id, btn) {
             const input = document.getElementById('link-' + id);
