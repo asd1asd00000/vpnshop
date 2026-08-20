@@ -258,6 +258,46 @@ type adminOrder struct {
 	PaymentMethod  string
 	Configs        []ConfigItem
 }
+// pageItem یک آیتم از نوار صفحه‌بندی
+type pageItem struct {
+	Page    int
+	Current bool
+	Dots    bool
+}
+
+// buildPagination لیست شماره صفحات با ... (مثل تصویر)
+func buildPagination(current, total int) []pageItem {
+	var items []pageItem
+
+	if total <= 7 {
+		for i := 1; i <= total; i++ {
+			items = append(items, pageItem{Page: i, Current: i == current})
+		}
+		return items
+	}
+
+	want := map[int]bool{1: true, total: true}
+	for i := current - 1; i <= current + 1; i++ {
+		if i >= 1 && i <= total {
+			want[i] = true
+		}
+	}
+	var pages []int
+	for p := range want {
+		pages = append(pages, p)
+	}
+	sort.Ints(pages)
+
+	prev := 0
+	for _, p := range pages {
+		if prev != 0 && p-prev > 1 {
+			items = append(items, pageItem{Dots: true})
+		}
+		items = append(items, pageItem{Page: p, Current: p == current})
+		prev = p
+	}
+	return items
+}
 
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	// اولویت ۱: از config.json
