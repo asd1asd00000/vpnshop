@@ -343,7 +343,27 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.DB.Query(`SELECT id, tracking_code, plan_name, unique_amount, status, IFNULL(config_link, ''), IFNULL(admin_confirmed, 0) FROM orders ORDER BY id DESC`)
+	// ── صفحه‌بندی ──
+	pageSize := 10
+	page := 1
+	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
+		page = p
+	}
+
+	var totalOrders int
+	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders`).Scan(&totalOrders); err != nil {
+		totalOrders = 0
+	}
+	totalPages := (totalOrders + pageSize - 1) / pageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	offset := (page - 1) * pageSize
+
+	rows, err := db.DB.Query(`SELECT id, tracking_code, plan_name, unique_amount, status, IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), IFNULL(payment_method, '') FROM orders ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
 		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
 		return
@@ -354,14 +374,11 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var o adminOrder
 		var confirmed int
-		err := rows.Scan(&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status, &o.ConfigLink, &confirmed)
-		if err != nil {
+		if err := rows.Scan(&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status, &o.ConfigLink, &confirmed, &o.PaymentMethod); err != nil {
 			continue
 		}
-
 		o.AdminConfirmed = confirmed == 1
 
-		// پارس JSON کانفیگ‌ها برای نمایش جداگانه
 		if o.ConfigLink != "" {
 			var items []ConfigItem
 			if jerr := json.Unmarshal([]byte(o.ConfigLink), &items); jerr == nil && len(items) > 0 {
@@ -372,5 +389,13 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		orders = append(orders, o)
 	}
 
-	tmpl.Execute(w, map[string]interface{}{"Orders": orders, "AdminBase": AdminBasePath()})
+	tmpl.Execute(w, map[string]interface{}{
+		"Orders":     orders,
+		"AdminBase":  AdminBasePath(),
+		"Page":       page,
+		"TotalPages": totalPages,
+		"PrevPage":   page - 1,
+		"NextPage":   page + 1,
+		"Pagination": buildPagination(page, totalPages),
+	})
 }
