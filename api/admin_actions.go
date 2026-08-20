@@ -14,7 +14,7 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// ───────────── تایید ادمین ─────────────
+// ───────────── تایید ادمین (چک‌باکس) ─────────────
 
 func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
@@ -48,7 +48,9 @@ func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	db.LogEventf("general", "info", "🖱️ تایید ادمین برای فاکتور #%d: %v", req.ID, req.Confirmed)
 	w.WriteHeader(http.StatusOK)
 }
-// ManualConfirmHandler تایید دستی پرداخت توسط ادمین + ساخت کانفیگ
+
+// ─────────────  تایید دستی پرداخت + ساخت کانفیگ ─────────────
+
 func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
