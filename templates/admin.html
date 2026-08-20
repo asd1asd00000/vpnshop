@@ -50,7 +50,7 @@
 
         <!-- فرم مخفی ریستور -->
         <form id="restoreForm" action="{{.AdminBase}}/restore" method="POST" enctype="multipart/form-data" class="hidden">
-            <input type="file" id="restoreFileInput" name="backup_file" accept=".db" onchange="submitRestore(this)">
+            <input type="file" id="restoreFileInput" name="backup_file" accept=".db,.zip" onchange="submitRestore(this)">
         </form>
 
         <div class="bg-white rounded-b-2xl shadow-xl p-3 md:p-6">
