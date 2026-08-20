@@ -180,6 +180,48 @@
                 <div class="text-center py-8 text-gray-500">هیچ سفارشی در دیتابیس یافت نشد.</div>
                 {{end}}
             </div>
+
+            <!-- 📄 نوار صفحه‌بندی -->
+            {{if gt .TotalPages 1}}
+            <div class="mt-6 flex items-center justify-center">
+                <div class="bg-gray-50 rounded-2xl shadow-lg px-3 py-2 flex items-center gap-1 md:gap-2 flex-wrap justify-center">
+
+                    {{if gt .Page 1}}
+                        <a href="{{.AdminBase}}?page={{.PrevPage}}"
+                           class="flex items-center gap-1 bg-white hover:bg-gray-100 text-gray-600 text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition">
+                            → قبلی
+                        </a>
+                    {{else}}
+                        <span class="flex items-center gap-1 bg-white text-gray-300 text-xs font-bold px-3 py-2 rounded-xl shadow-sm cursor-not-allowed">→ قبلی</span>
+                    {{end}}
+
+                    {{range .Pagination}}
+                        {{if .Dots}}
+                            <span class="text-gray-400 px-1 font-bold">…</span>
+                        {{else if .Current}}
+                            <span class="w-9 h-9 flex items-center justify-center rounded-full text-white text-sm font-bold bg-gradient-to-br from-blue-500 to-purple-600 shadow-md">
+                                {{.Page}}
+                            </span>
+                        {{else}}
+                            <a href="{{$.AdminBase}}?page={{.Page}}"
+                               class="w-9 h-9 flex items-center justify-center rounded-full bg-white hover:bg-gray-100 text-gray-600 text-sm font-bold shadow-sm transition">
+                                {{.Page}}
+                            </a>
+                        {{end}}
+                    {{end}}
+
+                    {{if lt .Page .TotalPages}}
+                        <a href="{{.AdminBase}}?page={{.NextPage}}"
+                           class="flex items-center gap-1 bg-white hover:bg-gray-100 text-gray-600 text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition">
+                            بعدی ←
+                        </a>
+                    {{else}}
+                        <span class="flex items-center gap-1 bg-white text-gray-300 text-xs font-bold px-3 py-2 rounded-xl shadow-sm cursor-not-allowed">بعدی ←</span>
+                    {{end}}
+
+                </div>
+            </div>
+            {{end}}
         </div>
     </div>
 
