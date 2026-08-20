@@ -47,6 +47,92 @@ func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	db.LogEventf("general", "info", "🖱️ تایید ادمین برای فاکتور #%d: %v", req.ID, req.Confirmed)
 	w.WriteHeader(http.StatusOK)
 }
+// ManualConfirmHandler تایید دستی پرداخت توسط ادمین + ساخت کانفیگ
+func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "درخواست نامعتبر",
+		})
+		return
+	}
+
+	// ۱. خواندن سفارش
+	var order models.Order
+	err := db.DB.QueryRow(`
+		SELECT id, tracking_code, plan_name, status 
+		FROM orders WHERE id = ?`, req.ID).Scan(
+		&order.ID, &order.TrackingCode, &order.PlanName, &order.Status,
+	)
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "سفارش یافت نشد",
+		})
+		return
+	}
+
+	// ۲. چک کن قبلاً تایید نشده باشه
+	if order.Status == "paid" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "این سفارش قبلاً تایید شده",
+		})
+		return
+	}
+
+	// ۳. ساخت کانفیگ
+	configLink, err := GenerateConfigFromOrder(order)
+	if err != nil {
+		db.LogEventf("config", "error", "❌ خطا در ساخت کانفیگ برای سفارش #%d: %v", req.ID, err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("خطا در ساخت کانفیگ: %v", err),
+		})
+		return
+	}
+
+	// ۴. بروزرسانی دیتابیس (status = paid + admin_confirmed = 1 + config_link)
+	_, err = db.DB.Exec(`
+		UPDATE orders 
+		SET status = 'paid', 
+		    admin_confirmed = 1, 
+		    config_link = ? 
+		WHERE id = ?`, configLink, req.ID)
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "خطا در بروزرسانی دیتابیس",
+		})
+		return
+	}
+
+	db.LogEventf("config", "success", "✅ تایید دستی پرداخت سفارش #%d توسط ادمین + ساخت کانفیگ", req.ID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "پرداخت تایید و کانفیگ ساخته شد",
+	})
+}
 
 // ─────────────  بکاپ کامل (ZIP) ─────────────
 
