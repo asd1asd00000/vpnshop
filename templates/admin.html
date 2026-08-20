@@ -93,7 +93,7 @@
                                 {{end}}
                             {{else}}
                                 <span id="badge-{{.ID}}" class="bg-orange-100 text-orange-800 px-2 md:px-3 py-1 rounded-full text-xs border border-orange-200 whitespace-nowrap">در انتظار پرداخت</span>
-                                <button type="button" onclick="openManualConfirm({{.ID}}, '{{.TrackingCode}}')"
+                                <button type="button" onclick="event.stopPropagation(); openManualConfirm({{.ID}}, '{{.TrackingCode}}')"
                                         class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-2 py-1 rounded-lg transition whitespace-nowrap"
                                         title="تایید دستی پرداخت + ساخت کانفیگ">
                                     ✅ تایید پرداخت
@@ -164,7 +164,7 @@
         </div>
     </div>
 
-    <!-- 📜 پاپ‌آپ لاگ‌ها -->
+    <!--  پاپ‌آپ لاگ‌ها -->
     <div id="logsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-60 p-3">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
             <div class="bg-gray-800 px-4 md:px-6 py-3 flex items-center justify-between gap-2 flex-wrap">
@@ -194,7 +194,8 @@
             </div>
         </div>
     </div>
-        <!-- 🎯 پاپ‌آپ تایید دستی پرداخت -->
+
+    <!-- 🎯 پاپ‌آپ تایید دستی پرداخت -->
     <div id="manualConfirmModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-60 p-3">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4">
@@ -202,9 +203,7 @@
             </div>
             <div class="p-6">
                 <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                    <p class="text-sm text-yellow-800">
-                        <b>⚠️ توجه:</b> با این کار:
-                    </p>
+                    <p class="text-sm text-yellow-800"><b>⚠️ توجه:</b> با این کار:</p>
                     <ul class="text-sm text-yellow-800 mt-2 list-disc list-inside space-y-1">
                         <li>وضعیت سفارش به «پرداخت شده» تغییر می‌کند</li>
                         <li>تایید ادمین خودکار فعال می‌شود</li>
@@ -215,9 +214,7 @@
                     <div class="text-xs text-gray-500 mb-1">کد پیگیری سفارش:</div>
                     <div class="font-mono text-gray-900 font-bold" dir="ltr" id="confirmTrackingCode">-</div>
                 </div>
-                <div class="text-sm text-gray-700 mb-6">
-                    آیا از تایید این پرداخت مطمئن هستید؟
-                </div>
+                <div class="text-sm text-gray-700 mb-6">آیا از تایید این پرداخت مطمئن هستید؟</div>
                 <div class="flex gap-3">
                     <button type="button" onclick="closeManualConfirm()"
                             class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 rounded-lg transition">
@@ -234,6 +231,7 @@
 
     <script>
         const ADMIN_BASE = '{{.AdminBase}}';
+        let pendingConfirmId = null;
 
         function toggleAccordion(btn) {
             const item = btn.closest('.accordion-item');
@@ -246,93 +244,9 @@
                 content.style.maxHeight = content.scrollHeight + 'px';
             }
         }
-                function copyInput(btn) {
+
+        function copyInput(btn) {
             const input = btn.parentElement.querySelector('input');
-            input.select();
-            input.setSelectionRange(0, 99999);
-            try {
-                if (navigator.clipboard) { navigator.clipboard.writeText(input.value); }
-                else { document.execCommand('copy'); }
-            } catch (e) { document.execCommand('copy'); }
-            const old = btn.textContent;
-            btn.textContent = '✅ کپی شد';
-            setTimeout(() => btn.textContent = old, 1500);
-        }
-                let pendingConfirmId = null;
-
-        function openManualConfirm(id, trackingCode) {
-            pendingConfirmId = id;
-            document.getElementById('confirmTrackingCode').textContent = trackingCode;
-            const btn = document.getElementById('confirmBtn');
-            btn.disabled = false;
-            btn.textContent = '✅ بله، تایید می‌کنم';
-            btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
-            
-            const m = document.getElementById('manualConfirmModal');
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-        }
-
-        function closeManualConfirm() {
-            const m = document.getElementById('manualConfirmModal');
-            m.classList.add('hidden');
-            m.classList.remove('flex');
-            pendingConfirmId = null;
-        }
-
-        function doManualConfirm() {
-            if (!pendingConfirmId) return;
-            
-            const btn = document.getElementById('confirmBtn');
-            btn.disabled = true;
-            btn.textContent = '⏳ در حال پردازش...';
-            btn.className = 'flex-1 bg-gray-400 text-white font-bold py-2.5 rounded-lg cursor-not-allowed';
-
-            fetch(ADMIN_BASE + '/manual-confirm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: pendingConfirmId })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    // نمایش پیام موفقیت و رفرش صفحه
-                    showNotification('✅ ' + data.message, 'success');
-                    setTimeout(() => window.location.reload(), 1500);
-                } else {
-                    showNotification('❌ ' + data.error, 'error');
-                    btn.disabled = false;
-                    btn.textContent = '✅ بله، تایید می‌کنم';
-                    btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
-                }
-            })
-            .catch(err => {
-                showNotification('❌ خطا در اتصال به سرور', 'error');
-                btn.disabled = false;
-                btn.textContent = '✅ بله، تایید می‌کنم';
-                btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
-            });
-        }
-
-        function showNotification(message, type) {
-            const colors = {
-                success: 'bg-green-500',
-                error: 'bg-red-500'
-            };
-            const notif = document.createElement('div');
-            notif.className = `fixed top-4 left-1/2 transform -translate-x-1/2 ${colors[type] || 'bg-gray-700'} text-white px-6 py-3 rounded-lg shadow-2xl z-[100] font-bold`;
-            notif.style.transition = 'opacity 0.3s';
-            notif.textContent = message;
-            document.body.appendChild(notif);
-            
-            setTimeout(() => {
-                notif.style.opacity = '0';
-                setTimeout(() => notif.remove(), 300);
-            }, 2500);
-        }
-
-        function copyLink(id, btn) {
-            const input = document.getElementById('link-' + id);
             input.select();
             input.setSelectionRange(0, 99999);
             try {
@@ -365,6 +279,77 @@
             });
         }
 
+        // ── تایید دستی پرداخت + ساخت کانفیگ ──
+
+        function openManualConfirm(id, trackingCode) {
+            pendingConfirmId = id;
+            document.getElementById('confirmTrackingCode').textContent = trackingCode;
+            const btn = document.getElementById('confirmBtn');
+            btn.disabled = false;
+            btn.textContent = '✅ بله، تایید می‌کنم';
+            btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
+
+            const m = document.getElementById('manualConfirmModal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+
+        function closeManualConfirm() {
+            const m = document.getElementById('manualConfirmModal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+            pendingConfirmId = null;
+        }
+
+        function doManualConfirm() {
+            if (!pendingConfirmId) return;
+
+            const btn = document.getElementById('confirmBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ در حال پردازش...';
+            btn.className = 'flex-1 bg-gray-400 text-white font-bold py-2.5 rounded-lg cursor-not-allowed';
+
+            fetch(ADMIN_BASE + '/manual-confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: pendingConfirmId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('✅ ' + data.message, 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    showNotification('❌ ' + (data.error || 'خطای ناشناخته'), 'error');
+                    btn.disabled = false;
+                    btn.textContent = '✅ بله، تایید می‌کنم';
+                    btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
+                }
+            })
+            .catch(err => {
+                showNotification('❌ خطا در اتصال به سرور', 'error');
+                btn.disabled = false;
+                btn.textContent = '✅ بله، تایید می‌کنم';
+                btn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition';
+            });
+        }
+
+        function showNotification(message, type) {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500' };
+            const notif = document.createElement('div');
+            notif.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 ' + (colors[type] || 'bg-gray-700') + ' text-white px-6 py-3 rounded-lg shadow-2xl z-[100] font-bold';
+            notif.style.transition = 'opacity 0.3s';
+            notif.textContent = message;
+            document.body.appendChild(notif);
+
+            setTimeout(() => {
+                notif.style.opacity = '0';
+                setTimeout(() => notif.remove(), 300);
+            }, 2500);
+        }
+
+        // ── ریستور ──
+
         function submitRestore(input) {
             if (!input.files.length) return;
             if (confirm('⚠️ با این کار دیتابیس و تنظیمات فعلی با فایل بکاپ جایگزین می‌شوند!\nقبل از جایگزینی، یک بکاپ ایمنی خودکار گرفته می‌شود.\nادامه می‌دهید؟')) {
@@ -373,6 +358,8 @@
                 input.value = '';
             }
         }
+
+        // ── لاگ‌ها ──
 
         function openLogs() {
             const m = document.getElementById('logsModal');
