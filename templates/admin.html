@@ -76,34 +76,44 @@
                 {{range .Orders}}
                 <div class="accordion-item border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 
-                    <!-- ✅ هدر: حالا div هست نه button (تا دکمه داخلی مجاز باشه) -->
+                    <!-- هدر کارت: دو ردیفه -->
                     <div onclick="toggleAccordion(this)" role="button" tabindex="0"
-                         class="card-header w-full bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center justify-between gap-2 text-right transition cursor-pointer">
-                        <div class="flex items-center gap-2 md:gap-4 flex-wrap">
-                            <span class="font-bold text-gray-900">#{{.ID}}</span>
-                            <span class="font-mono text-xs md:text-sm text-gray-500" dir="ltr">{{.TrackingCode}}</span>
-                            <span class="font-bold text-green-600 text-sm md:text-base">
-                                {{.UniqueAmount}} <span class="text-xs text-gray-400 font-normal">تومان</span>
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            {{if eq .Status "paid"}}
-                                {{if .AdminConfirmed}}
-                                    <span id="badge-{{.ID}}" class="badge-paid-full px-2 md:px-3 py-1 rounded-full text-xs font-bold border border-green-200 whitespace-nowrap">پرداخت شده ✔</span>
+                         class="card-header w-full bg-gray-50 hover:bg-gray-100 px-4 py-3 text-right transition cursor-pointer">
+
+                        <!-- ردیف ۱: شماره ردیف + وضعیت + دکمه تایید -->
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-bold text-gray-900">#{{.ID}}</span>
+                                {{if eq .Status "paid"}}
+                                    {{if .AdminConfirmed}}
+                                        <span id="badge-{{.ID}}" class="badge-paid-full px-2 md:px-3 py-1 rounded-full text-xs font-bold border border-green-200 whitespace-nowrap">پرداخت شده ✔</span>
+                                    {{else}}
+                                        <span id="badge-{{.ID}}" class="badge-paid-half px-2 md:px-3 py-1 rounded-full text-xs font-bold border border-yellow-300 whitespace-nowrap">پرداخت شده</span>
+                                    {{end}}
                                 {{else}}
-                                    <span id="badge-{{.ID}}" class="badge-paid-half px-2 md:px-3 py-1 rounded-full text-xs font-bold border border-yellow-300 whitespace-nowrap">پرداخت شده</span>
+                                    <span id="badge-{{.ID}}" class="bg-orange-100 text-orange-800 px-2 md:px-3 py-1 rounded-full text-xs border border-orange-200 whitespace-nowrap">در انتظار پرداخت</span>
+                                    <button type="button" onclick="event.stopPropagation(); openManualConfirm({{.ID}}, '{{.TrackingCode}}')"
+                                            class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-2 py-1 rounded-lg transition whitespace-nowrap"
+                                            title="تایید دستی پرداخت + ساخت کانفیگ">
+                                        ✅ تایید پرداخت
+                                    </button>
                                 {{end}}
-                            {{else}}
-                                <span id="badge-{{.ID}}" class="bg-orange-100 text-orange-800 px-2 md:px-3 py-1 rounded-full text-xs border border-orange-200 whitespace-nowrap">در انتظار پرداخت</span>
-                                <button type="button" onclick="event.stopPropagation(); openManualConfirm({{.ID}}, '{{.TrackingCode}}')"
-                                        class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-2 py-1 rounded-lg transition whitespace-nowrap"
-                                        title="تایید دستی پرداخت + ساخت کانفیگ">
-                                    ✅ تایید پرداخت
-                                </button>
-                            {{end}}
+                            </div>
                             <svg class="chevron w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
+                        </div>
+
+                        <!-- ردیف ۲: مبلغ (راست) + کد پیگیری قابل کپی (چپ) -->
+                        <div class="flex items-center justify-between gap-2 mt-2">
+                            <span class="font-bold text-green-600 text-sm md:text-base">
+                                {{.UniqueAmount}} <span class="text-xs text-gray-400 font-normal">تومان</span>
+                            </span>
+                            <span onclick="event.stopPropagation(); copyTracking('{{.TrackingCode}}', this)"
+                                  title="برای کپی کلیک کنید"
+                                  class="font-mono text-xs md:text-sm text-gray-500 hover:text-blue-600 transition cursor-pointer" dir="ltr">
+                                {{.TrackingCode}} <span class="text-gray-400">📋</span>
+                            </span>
                         </div>
                     </div>
 
@@ -244,6 +254,27 @@
             } else {
                 item.classList.add('open');
                 content.style.maxHeight = content.scrollHeight + 'px';
+            }
+        }
+
+        //  کپی کد پیگیری با کلیک
+        function copyTracking(code, el) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(code);
+            } else {
+                const tmp = document.createElement('textarea');
+                tmp.value = code;
+                document.body.appendChild(tmp);
+                tmp.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(tmp);
+            }
+            showNotification('✅ کد پیگیری کپی شد', 'success');
+            const icon = el.querySelector('span');
+            if (icon) {
+                const old = icon.textContent;
+                icon.textContent = '✔';
+                setTimeout(() => icon.textContent = old, 1500);
             }
         }
 
