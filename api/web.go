@@ -255,7 +255,8 @@ type adminOrder struct {
 	Status         string
 	ConfigLink     string
 	AdminConfirmed bool
-	Configs        []ConfigItem // ✅ جدید
+	PaymentMethod  string
+	Configs        []ConfigItem
 }
 
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
