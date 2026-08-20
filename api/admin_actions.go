@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/asd1asd00000/vpnshop/db"
+	"github.com/asd1asd00000/vpnshop/models"
 )
 
 // ───────────── تایید ادمین ─────────────
