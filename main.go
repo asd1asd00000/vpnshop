@@ -31,6 +31,7 @@ func main() {
 	http.HandleFunc(adminBase+"/restore", api.RestoreHandler)
 	http.HandleFunc(adminBase+"/logs", api.AdminLogsHandler)
 	http.HandleFunc(adminBase+"/logs/clear", api.AdminLogsClearHandler)
+	http.HandleFunc(adminBase+"/manual-confirm", api.ManualConfirmHandler)
 
 	// ⚙️ مسیرهای تنظیمات
 	http.HandleFunc(adminBase+"/settings", api.SettingsHandler)
