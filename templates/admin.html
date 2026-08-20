@@ -75,8 +75,10 @@
             <div class="space-y-3">
                 {{range .Orders}}
                 <div class="accordion-item border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                    <button type="button" onclick="toggleAccordion(this)"
-                            class="card-header w-full bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center justify-between gap-2 text-right transition">
+
+                    <!-- ✅ هدر: حالا div هست نه button (تا دکمه داخلی مجاز باشه) -->
+                    <div onclick="toggleAccordion(this)" role="button" tabindex="0"
+                         class="card-header w-full bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center justify-between gap-2 text-right transition cursor-pointer">
                         <div class="flex items-center gap-2 md:gap-4 flex-wrap">
                             <span class="font-bold text-gray-900">#{{.ID}}</span>
                             <span class="font-mono text-xs md:text-sm text-gray-500" dir="ltr">{{.TrackingCode}}</span>
@@ -103,7 +105,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </div>
-                    </button>
+                    </div>
 
                     <div class="accordion-content bg-white">
                         <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100">
@@ -164,7 +166,7 @@
         </div>
     </div>
 
-    <!--  پاپ‌آپ لاگ‌ها -->
+    <!-- 📜 پاپ‌آپ لاگ‌ها -->
     <div id="logsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-60 p-3">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
             <div class="bg-gray-800 px-4 md:px-6 py-3 flex items-center justify-between gap-2 flex-wrap">
@@ -233,8 +235,8 @@
         const ADMIN_BASE = '{{.AdminBase}}';
         let pendingConfirmId = null;
 
-        function toggleAccordion(btn) {
-            const item = btn.closest('.accordion-item');
+        function toggleAccordion(header) {
+            const item = header.closest('.accordion-item');
             const content = item.querySelector('.accordion-content');
             if (item.classList.contains('open')) {
                 content.style.maxHeight = null;
