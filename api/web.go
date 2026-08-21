@@ -380,11 +380,17 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		o.AdminConfirmed = confirmed == 1
 
+		// پارس JSON کانفیگ‌ها برای نمایش جداگانه
 		if o.ConfigLink != "" {
 			var items []ConfigItem
 			if jerr := json.Unmarshal([]byte(o.ConfigLink), &items); jerr == nil && len(items) > 0 {
 				o.Configs = items
 			}
+		}
+
+		// 🎯 ساخت متن تلگرام از کانفیگ‌ها
+		if len(o.Configs) > 0 {
+			o.TelegramText = buildTelegramText(o.Configs)
 		}
 
 		orders = append(orders, o)
