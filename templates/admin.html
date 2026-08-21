@@ -206,6 +206,16 @@
                                 </div>
                                 {{end}}
                             </div>
+                                                        <!-- 📝 یادداشت ادمین -->
+                            <div class="md:col-span-2 mt-3 pt-3 border-t border-gray-200">
+                                <label class="flex items-center gap-2 text-xs font-bold text-gray-600 mb-2">
+                                    📝 یادداشت / توضیحات ادمین
+                                </label>
+                                <textarea id="note-{{.ID}}" rows="2"
+                                          onchange="saveNote({{.ID}}, this.value)"
+                                          class="w-full bg-yellow-50 border border-yellow-200 text-gray-800 text-sm rounded-lg p-2.5 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition"
+                                          placeholder="توضیحات مربوط به این سفارش را اینجا بنویسید... (با تغییر خودکار ذخیره می‌شود)">{{.AdminNote}}</textarea>
+                            </div>
                         </div>
                     </div>
                 </div>
