@@ -257,6 +257,7 @@ type adminOrder struct {
 	AdminConfirmed bool
 	PaymentMethod  string
 	Configs        []ConfigItem
+	TelegramText string
 }
 // pageItem یک آیتم از نوار صفحه‌بندی
 type pageItem struct {
