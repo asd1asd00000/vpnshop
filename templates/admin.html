@@ -11,14 +11,16 @@
 
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
         .chevron { transition: transform 0.3s ease; }
-        .accordion-item.open .chevron { transform: rotate(180deg); }
-                .accordion-item.open {
+
+        /* 🎨 آکاردئون باز: بک‌گراند متمایز + سایه + کمی بالا */
+        .accordion-item { transition: all 0.3s ease; }
+        .accordion-item.open {
             background: linear-gradient(to bottom, #eef2ff 0%, #e0e7ff 100%);
             box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.2), 0 8px 10px -6px rgba(79, 70, 229, 0.1);
             border-color: #818cf8;
             transform: translateY(-2px);
-            transition: all 0.3s ease;
         }
+        .accordion-item.open .chevron { transform: rotate(180deg); }
         .accordion-item.open .card-header { background-color: #eef2ff; }
 
         .badge-paid-full { background-color: #dcfce7; color: #166534; }
@@ -126,11 +128,13 @@
 
                     <div class="accordion-content bg-white">
                         <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100">
+
                             <div>
                                 <span class="block text-xs text-gray-400 mb-1">نام پلن</span>
                                 <span class="text-blue-600 font-bold">{{.PlanName}}</span>
                             </div>
-                                                        <div>
+
+                            <div>
                                 <span class="block text-xs text-gray-400 mb-1">🕐 تاریخ ایجاد فاکتور</span>
                                 {{if .CreatedAtFmt}}
                                 <span class="text-gray-700 text-sm" dir="ltr">{{.CreatedAtFmt}}</span>
@@ -138,6 +142,7 @@
                                 <span class="text-gray-400 text-sm italic">نامشخص</span>
                                 {{end}}
                             </div>
+
                             <div>
                                 <span class="block text-xs text-gray-400 mb-1">💰 تاریخ پرداخت</span>
                                 {{if .PaidAtFmt}}
@@ -146,6 +151,7 @@
                                 <span class="text-gray-400 text-sm italic">هنوز پرداخت نشده</span>
                                 {{end}}
                             </div>
+
                             <div>
                                 <span class="block text-xs text-gray-400 mb-1">تایید ادمین</span>
                                 <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -162,6 +168,7 @@
                                     {{end}}
                                 {{end}}
                             </div>
+
                             <div class="md:col-span-2">
                                 <span class="block text-xs text-gray-400 mb-1">لینک‌های کانفیگ استخراج شده</span>
                                 {{if .Configs}}
@@ -206,7 +213,8 @@
                                 </div>
                                 {{end}}
                             </div>
-                                                        <!-- 📝 یادداشت ادمین -->
+
+                            <!-- 📝 یادداشت ادمین -->
                             <div class="md:col-span-2 mt-3 pt-3 border-t border-gray-200">
                                 <label class="flex items-center gap-2 text-xs font-bold text-gray-600 mb-2">
                                     📝 یادداشت / توضیحات ادمین
@@ -216,6 +224,7 @@
                                           class="w-full bg-yellow-50 border border-yellow-200 text-gray-800 text-sm rounded-lg p-2.5 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition"
                                           placeholder="توضیحات مربوط به این سفارش را اینجا بنویسید... (با تغییر خودکار ذخیره می‌شود)">{{.AdminNote}}</textarea>
                             </div>
+
                         </div>
                     </div>
                 </div>
@@ -351,30 +360,7 @@
             }
         }
 
-                // ── ذخیره یادداشت ادمین ──
-        let noteTimers = {};
-
-        function saveNote(id, note) {
-            // debounce: اگه کاربر سریع تایپ کرد، فقط آخرین ذخیره بشه
-            if (noteTimers[id]) clearTimeout(noteTimers[id]);
-            noteTimers[id] = setTimeout(() => {
-                fetch(ADMIN_BASE + '/note', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, note: note })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        showNotification('✅ یادداشت ذخیره شد', 'success');
-                    }
-                })
-                .catch(err => {
-                    showNotification('❌ خطا در ذخیره یادداشت', 'error');
-                });
-            }, 500); // 500ms بعد از آخرین تغییر
-        }
-        //  کپی کد پیگیری با کلیک
+        // 📋 کپی کد پیگیری با کلیک
         function copyTracking(code, el) {
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(code);
@@ -407,7 +393,8 @@
             btn.textContent = '✅ کپی شد';
             setTimeout(() => btn.textContent = old, 1500);
         }
-                function copyTelegram(id) {
+
+        function copyTelegram(id) {
             const ta = document.getElementById('tg-' + id);
             ta.select();
             ta.setSelectionRange(0, 99999);
@@ -437,6 +424,29 @@
                     }
                 }
             });
+        }
+
+        // ── 📝 ذخیره یادداشت ادمین (با debounce) ──
+        let noteTimers = {};
+
+        function saveNote(id, note) {
+            if (noteTimers[id]) clearTimeout(noteTimers[id]);
+            noteTimers[id] = setTimeout(() => {
+                fetch(ADMIN_BASE + '/note', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, note: note })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('✅ یادداشت ذخیره شد', 'success');
+                    }
+                })
+                .catch(err => {
+                    showNotification('❌ خطا در ذخیره یادداشت', 'error');
+                });
+            }, 500);
         }
 
         // ── تایید دستی پرداخت + ساخت کانفیگ ──
