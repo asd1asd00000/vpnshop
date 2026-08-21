@@ -117,6 +117,7 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		SET status = 'paid', 
 		    admin_confirmed = 1, 
 		    payment_method = 'admin',
+		    paid_at = datetime('now'),
 		    config_link = ? 
 		WHERE id = ?`, configLink, req.ID)
 
