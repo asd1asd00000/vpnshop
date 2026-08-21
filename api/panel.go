@@ -12,9 +12,12 @@ import (
 
 // ConfigItem یک کانفیگ جداگانه برای نمایش
 type ConfigItem struct {
-	Title string `json:"title"`
-	Desc  string `json:"desc"`
-	Link  string `json:"link"`
+	Title  string `json:"title"`
+	Desc   string `json:"desc"`
+	Link   string `json:"link"`
+	Role   string `json:"role"`   // main | backup | gift
+	Volume int    `json:"volume"` // حجم به GB
+	Note   string `json:"note"`   // توضیح هدیه
 }
 
 // planVolumes حجم‌های تعریف‌شده در پلن
