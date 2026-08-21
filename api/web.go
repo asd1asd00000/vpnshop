@@ -9,11 +9,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"sort"
-	"strconv"
 
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
@@ -197,6 +197,7 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 		tmpl.Execute(w, map[string]interface{}{"Order": order})
 	}
 }
+
 // CheckOrderStatus وضعیت سفارش رو برمی‌گردونه (برای polling صفحه فاکتور)
 func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -231,7 +232,7 @@ func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if order.Status == "paid" && order.ConfigLink != "" {
 		json.NewEncoder(w).Encode(map[string]string{
-			"status": "paid",
+			"status":      "paid",
 			"config_link": order.ConfigLink,
 		})
 	} else if order.Status == "paid" {
@@ -263,6 +264,7 @@ type adminOrder struct {
 	Configs        []ConfigItem
 	TelegramText   string
 }
+
 // pageItem یک آیتم از نوار صفحه‌بندی
 type pageItem struct {
 	Page    int
@@ -368,7 +370,13 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * pageSize
 
-	rows, err := db.DB.Query(`SELECT id, tracking_code, plan_name, unique_amount, status, IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), IFNULL(payment_method, '') FROM orders ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
+	// 🎯 کوئری شامل created_at و paid_at
+	rows, err := db.DB.Query(`
+		SELECT id, tracking_code, plan_name, unique_amount, status, 
+		       IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), 
+		       IFNULL(payment_method, ''),
+		       IFNULL(created_at, ''), IFNULL(paid_at, '')
+		FROM orders ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
 		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
 		return
@@ -379,7 +387,11 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var o adminOrder
 		var confirmed int
-		if err := rows.Scan(&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status, &o.ConfigLink, &confirmed, &o.PaymentMethod); err != nil {
+		// 🎯 Scan شامل 10 فیلد (2 فیلد جدید اضافه شد)
+		if err := rows.Scan(
+			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
+			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
+		); err != nil {
 			continue
 		}
 		o.AdminConfirmed = confirmed == 1
@@ -396,6 +408,10 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		if len(o.Configs) > 0 {
 			o.TelegramText = buildTelegramText(o.Configs)
 		}
+
+		// 🎯 فرمت‌بندی تاریخ‌ها به وقت تهران
+		o.CreatedAtFmt = db.FormatTehranUTC(o.CreatedAt)
+		o.PaidAtFmt = db.FormatTehranUTC(o.PaidAt)
 
 		orders = append(orders, o)
 	}
