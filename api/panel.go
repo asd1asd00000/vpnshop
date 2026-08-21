@@ -163,7 +163,7 @@ func buildTelegramText(items []ConfigItem) string {
 	var blocks []string
 	for _, it := range items {
 		var b strings.Builder
-		b.WriteString("`" + it.Link + "`\n\n")
+		b.WriteString(fmt.Sprintf("✅ `%s` ✅\n\n", it.Link))
 		switch it.Role {
 		case "backup":
 			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه-زاپاس ✅\n", it.Volume))
