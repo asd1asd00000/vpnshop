@@ -3,6 +3,7 @@ package db
 import (
 	"log"
 	"time"
+	"fmt"
 )
 
 var TehranTZ *time.Location
@@ -22,6 +23,7 @@ func TehranNow() time.Time {
 }
 
 // FormatTehranUTC زمان UTC ذخیره‌شده در SQLite رو به وقت تهران و فرمت شمسی/میلادی تبدیل می‌کنه
+// FormatTehranUTC زمان UTC رو به وقت تهران + تاریخ شمسی تبدیل می‌کنه
 func FormatTehranUTC(s string) string {
 	if s == "" {
 		return ""
@@ -43,8 +45,36 @@ func FormatTehranUTC(s string) string {
 	if err != nil {
 		return s
 	}
-	// UTC فرض میشه، به تهران تبدیل
-	return t.In(TehranTZ).Format("2006/01/02 - 15:04")
+	tt := t.In(TehranTZ)
+	jy, jm, jd := gregorianToJalali(tt.Year(), int(tt.Month()), tt.Day())
+	return fmt.Sprintf("%d/%02d/%02d - %02d:%02d", jy, jm, jd, tt.Hour(), tt.Minute())
+}
+
+// gregorianToJalali تبدیل میلادی به شمسی (الگوریتم استاندارد jalaali)
+func gregorianToJalali(gy, gm, gd int) (int, int, int) {
+	gdm := []int{0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334}
+	gy2 := gy
+	if gm > 2 {
+		gy2 = gy + 1
+	}
+	days := 355666 + 365*gy + (gy2+3)/4 - (gy2+99)/100 + (gy2+399)/400 + gd + gdm[gm-1]
+	jy := -1595 + 33*(days/12053)
+	days %= 12053
+	jy += 4 * (days / 1461)
+	days %= 1461
+	if days > 365 {
+		jy += (days - 1) / 365
+		days = (days - 1) % 365
+	}
+	var jm, jd int
+	if days < 186 {
+		jm = 1 + days/31
+		jd = 1 + days%31
+	} else {
+		jm = 7 + (days-186)/30
+		jd = 1 + (days-186)%30
+	}
+	return jy, jm, jd
 }
 
 // MigrateOrders ستون‌های جدید رو اضافه می‌کنه
