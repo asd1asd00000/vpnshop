@@ -16,8 +16,13 @@ type PanelConfig struct {
 	Password string `json:"password"`
 	Role     string `json:"role"` // "main" | "backup" | "gift"
 
-	// فیلد قدیمی فقط برای مایگریشن
-	IsBackup bool `json:"is_backup,omitempty"`
+	IsBackup bool `json:"is_backup,omitempty"` // legacy
+}
+
+// CardInfo یک شماره کارت برای واریز
+type CardInfo struct {
+	Number string `json:"number"`
+	Holder string `json:"holder"`
 }
 
 type AdminConfig struct {
@@ -37,6 +42,7 @@ type EmailBackupConfig struct {
 type AppConfig struct {
 	Admin       AdminConfig       `json:"admin"`
 	Panels      []PanelConfig     `json:"panels"`
+	Cards       []CardInfo        `json:"cards"`
 	EmailBackup EmailBackupConfig `json:"email_backup"`
 }
 
@@ -53,6 +59,7 @@ func LoadConfig() *AppConfig {
 	config = &AppConfig{
 		Admin:       AdminConfig{},
 		Panels:      []PanelConfig{},
+		Cards:       []CardInfo{},
 		EmailBackup: EmailBackupConfig{SMTPPort: 587},
 	}
 
@@ -67,7 +74,6 @@ func LoadConfig() *AppConfig {
 		return config
 	}
 
-	// 🔄 مایگریشن: پنل‌های قدیمی که Role ندارن
 	for i := range config.Panels {
 		if config.Panels[i].Role == "" {
 			if config.Panels[i].IsBackup {
