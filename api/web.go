@@ -19,7 +19,7 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// ─────────────  محدودیت نرخ ─────────────
+// ───────────── 🔒 محدودیت نرخ ─────────────
 
 var (
 	rateMu   sync.Mutex
@@ -66,7 +66,7 @@ func allowTrackAttempt(ip string) bool {
 	return true
 }
 
-// ─────────────  کد پیگیری امن ────────────
+// ───────────── 🎫 کد پیگیری امن ─────────────
 
 func generateTrackingCode() string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -80,7 +80,7 @@ func generateTrackingCode() string {
 	return "VP" + string(b)
 }
 
-// ───────────── 🔐 مسیر مخفی ادمین (از متغیر محیطی) ─────────────
+// ───────────── 🔐 مسیر مخفی ادمین ─────────────
 
 func AdminBasePath() string {
 	secret := os.Getenv("ADMIN_SECRET_PATH")
@@ -100,13 +100,10 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plans, _ := models.LoadPlans()
-
-	// 🎯 کارت‌های پرداخت از تنظیمات
 	cfg := db.GetConfig()
 	cards := cfg.Cards
 
 	if r.Method == http.MethodGet {
-		// 🎯 اسم پنل‌ها بر اساس نقش برای نمایش در صفحه خرید
 		panelNames := map[string]string{}
 		for _, p := range cfg.Panels {
 			panelNames[p.Role] = p.Name
@@ -132,7 +129,6 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		basePrice := selectedPlan.Price
-
 		rand.Seed(time.Now().UnixNano())
 		uniqueAmount := basePrice + rand.Intn(999) + 1
 		trackingCode := generateTrackingCode()
@@ -155,7 +151,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ─────────────  پیگیری سفارش ─────────────
+// ───────────── 🔍 پیگیری سفارش ─────────────
 
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/track.html")
@@ -201,7 +197,7 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// CheckOrderStatus وضعیت سفارش رو برمی‌گردونه (برای polling صفحه فاکتور)
+// CheckOrderStatus وضعیت سفارش رو برمی‌گردونه (برای polling)
 func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -269,14 +265,12 @@ type adminOrder struct {
 	AdminNote      string
 }
 
-// pageItem یک آیتم از نوار صفحه‌بندی
 type pageItem struct {
 	Page    int
 	Current bool
 	Dots    bool
 }
 
-// buildPagination لیست شماره صفحات با ... (مثل تصویر)
 func buildPagination(current, total int) []pageItem {
 	var items []pageItem
 
@@ -310,32 +304,13 @@ func buildPagination(current, total int) []pageItem {
 	return items
 }
 
+// checkAdminAuth بررسی session کوکی به جای BasicAuth
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	if c, err := r.Cookie("admin_session"); err == nil && validSession(c.Value) {
 		return true
 	}
 	http.Redirect(w, r, AdminBasePath()+"/login", http.StatusSeeOther)
 	return false
-}
-
-	// اولویت ۲: از متغیرهای محیطی (fallback)
-	adminUser := os.Getenv("ADMIN_USER")
-	adminPass := os.Getenv("ADMIN_PASS")
-
-	if adminUser == "" {
-		adminUser = "admin"
-	}
-	if adminPass == "" {
-		adminPass = "123456"
-	}
-
-	user, pass, ok := r.BasicAuth()
-	if !ok || user != adminUser || pass != adminPass {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted Admin Dashboard"`)
-		http.Error(w, "دسترسی غیرمجاز", http.StatusUnauthorized)
-		return false
-	}
-	return true
 }
 
 func AdminHandler(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +344,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * pageSize
 
-	// 🎯 کوئری شامل created_at، paid_at و admin_note
 	rows, err := db.DB.Query(`
 		SELECT id, tracking_code, plan_name, unique_amount, status, 
 		       IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), 
@@ -387,7 +361,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var o adminOrder
 		var confirmed int
-		// 🎯 Scan شامل ۱ فیلد
 		if err := rows.Scan(
 			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
 			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
@@ -397,7 +370,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		o.AdminConfirmed = confirmed == 1
 
-		// پارس JSON کانفیگ‌ها برای نمایش جداگانه
 		if o.ConfigLink != "" {
 			var items []ConfigItem
 			if jerr := json.Unmarshal([]byte(o.ConfigLink), &items); jerr == nil && len(items) > 0 {
@@ -405,12 +377,10 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// 🎯 ساخت متن تلگرام از کانفیگ‌ها
 		if len(o.Configs) > 0 {
 			o.TelegramText = buildTelegramText(o.Configs)
 		}
 
-		// 🎯 فرمت‌بندی تاریخ‌ها به وقت تهران (شمسی)
 		o.CreatedAtFmt = db.FormatTehranUTC(o.CreatedAt)
 		o.PaidAtFmt = db.FormatTehranUTC(o.PaidAt)
 
