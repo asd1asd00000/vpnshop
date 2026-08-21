@@ -144,3 +144,26 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 	}
 	return items, false, nil
 }
+// buildTelegramText متن آماده کپی برای تلگرام می‌سازه
+func buildTelegramText(items []ConfigItem) string {
+	var blocks []string
+	for _, it := range items {
+		var b strings.Builder
+		b.WriteString("`" + it.Link + "`\n\n")
+		switch it.Role {
+		case "backup":
+			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه-زاپاس ✅\n", it.Volume))
+			b.WriteString("اگه لینک اصلی مشکل پیدا کرد اطلاع بدین\n")
+			b.WriteString("تا مشکل حل بشه از این لینک استفاده کنید")
+		case "gift":
+			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه ✅\n", it.Volume))
+			if it.Note != "" {
+				b.WriteString(it.Note)
+			}
+		default: // main
+			b.WriteString(fmt.Sprintf("%d گیگ", it.Volume))
+		}
+		blocks = append(blocks, b.String())
+	}
+	return strings.Join(blocks, "\n---------------------------------------------------\n")
+}
