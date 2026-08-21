@@ -418,3 +418,36 @@ func AdminLogsClearHandler(w http.ResponseWriter, r *http.Request) {
 	db.LogEvent("general", "warning", "🗑️ لاگ‌ها توسط ادمین پاک شدند")
 	w.WriteHeader(http.StatusOK)
 }
+// ───────────── 📝 یادداشت ادمین ─────────────
+
+func AdminNoteHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID   int    `json:"id"`
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.DB.Exec(`UPDATE orders SET admin_note = ? WHERE id = ?`, req.Note, req.ID)
+	if err != nil {
+		http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
+		return
+	}
+
+	db.LogEventf("general", "info", "📝 یادداشت ادمین برای فاکتور #%d بروزرسانی شد", req.ID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "یادداشت ذخیره شد",
+	})
+}
