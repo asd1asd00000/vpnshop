@@ -133,7 +133,20 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 			desc = fmt.Sprintf("حجم: %dGB | مدت: %d روز", panelVolume, pv.days)
 		}
 
-		items = append(items, ConfigItem{Title: title, Desc: desc, Link: link})
+		// 🎯 ساخت ConfigItem با فیلدهای جدید (role, volume, note)
+		role := panel.Role
+		if role == "" {
+			role = "main"
+		}
+
+		items = append(items, ConfigItem{
+			Title:  title,
+			Desc:   desc,
+			Link:   link,
+			Role:   role,
+			Volume: panelVolume,
+			Note:   pv.giftNote,
+		})
 	}
 
 	if len(items) == 0 {
@@ -144,6 +157,7 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 	}
 	return items, false, nil
 }
+
 // buildTelegramText متن آماده کپی برای تلگرام می‌سازه
 func buildTelegramText(items []ConfigItem) string {
 	var blocks []string
