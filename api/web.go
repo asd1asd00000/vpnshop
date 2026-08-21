@@ -311,17 +311,12 @@ func buildPagination(current, total int) []pageItem {
 }
 
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
-	// اولویت ۱: از config.json
-	cfg := db.GetConfig()
-	if cfg.Admin.Username != "" && cfg.Admin.Password != "" {
-		user, pass, ok := r.BasicAuth()
-		if !ok || user != cfg.Admin.Username || pass != cfg.Admin.Password {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted Admin Dashboard"`)
-			http.Error(w, "دسترسی غیرمجاز", http.StatusUnauthorized)
-			return false
-		}
+	if c, err := r.Cookie("admin_session"); err == nil && validSession(c.Value) {
 		return true
 	}
+	http.Redirect(w, r, AdminBasePath()+"/login", http.StatusSeeOther)
+	return false
+}
 
 	// اولویت ۲: از متغیرهای محیطی (fallback)
 	adminUser := os.Getenv("ADMIN_USER")
