@@ -206,7 +206,9 @@
                         clearInterval(checkInterval);
                         showConfig(data.config_link);
                     } else if (data.status === 'processing') {
-                        document.getElementById('statusText').textContent = 'در حال ساخت کانفیگ... چند لحظه صبر کنید';
+                        const box = document.getElementById('checkingStatus');
+                        box.classList.add('checking-building');
+                        document.getElementById('statusText').textContent = '💚 پرداخت تایید شد! در حال ساخت کانفیگ‌ها...';
                     } else if (data.status === 'pending') {
                         console.log('⏳ هنوز پرداخت نشده');
                     } else {
