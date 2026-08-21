@@ -90,7 +90,7 @@ func AdminBasePath() string {
 	return "/" + secret + "/admin"
 }
 
-// ───────────── 🛒 فروشگاه ─────────────
+// ─────────────  فروشگاه ─────────────
 
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/shop.html")
@@ -101,14 +101,17 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 
 	plans, _ := models.LoadPlans()
 
+	// 🎯 کارت‌های پرداخت از تنظیمات
+	cfg := db.GetConfig()
+	cards := cfg.Cards
+
 	if r.Method == http.MethodGet {
 		// 🎯 اسم پنل‌ها بر اساس نقش برای نمایش در صفحه خرید
-		cfg := db.GetConfig()
 		panelNames := map[string]string{}
 		for _, p := range cfg.Panels {
 			panelNames[p.Role] = p.Name
 		}
-		tmpl.Execute(w, map[string]interface{}{"Plans": plans, "PanelNames": panelNames})
+		tmpl.Execute(w, map[string]interface{}{"Plans": plans, "PanelNames": panelNames, "Cards": cards})
 		return
 	}
 
@@ -148,11 +151,11 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			UniqueAmount: uniqueAmount,
 		}
 
-		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": plans})
+		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": plans, "Cards": cards})
 	}
 }
 
-// ───────────── 🔍 پیگیری سفارش ─────────────
+// ─────────────  پیگیری سفارش ─────────────
 
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/track.html")
@@ -246,7 +249,7 @@ func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ───────────── 👨‍💼 داشبورد ادمین ─────────────
+// ───────────── 👨‍ داشبورد ادمین ────────────
 
 type adminOrder struct {
 	ID             int
@@ -387,7 +390,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var o adminOrder
 		var confirmed int
-		// 🎯 Scan شامل 10 فیلد (2 فیلد جدید اضافه شد)
 		if err := rows.Scan(
 			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
 			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
@@ -409,7 +411,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 			o.TelegramText = buildTelegramText(o.Configs)
 		}
 
-		// 🎯 فرمت‌بندی تاریخ‌ها به وقت تهران
+		// 🎯 فرمت‌بندی تاریخ‌ها به وقت تهران (شمسی)
 		o.CreatedAtFmt = db.FormatTehranUTC(o.CreatedAt)
 		o.PaidAtFmt = db.FormatTehranUTC(o.PaidAt)
 
