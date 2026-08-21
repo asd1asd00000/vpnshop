@@ -40,7 +40,7 @@
         <div id="invoiceSection" class="bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500">
             <h2 class="text-2xl font-bold text-gray-800 mb-4">فاکتور شما ایجاد شد</h2>
             <p class="text-gray-600 mb-6">لطفاً مبلغ دقیق زیر را به شماره کارت اعلام شده واریز کنید. سیستم بلافاصله پس از واریز، کانفیگ شما را می‌سازد.</p>
-            
+
             <div class="bg-gray-50 p-6 rounded-lg mb-6 border border-gray-200">
                 <div class="mb-4">
                     <span class="block text-sm text-gray-500 mb-1">مبلغ دقیق قابل پرداخت:</span>
@@ -83,7 +83,7 @@
             </div>
         </div>
 
-        <!-- بخش نمایش کانفیگ‌ها (بعد از پرداخت موفق) -->
+        <!-- بخش نمایش کانفیگ‌ها -->
         <div id="configSection" class="hidden bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500 payment-success">
             <div class="mb-6">
                 <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -125,8 +125,9 @@
                 <span class="absolute top-0 right-1/2 transform translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold">پیشنهاد ویژه</span>
                 {{end}}
                 <h3 class="text-xl font-bold text-gray-800 mb-2">{{.Title}}</h3>
-                <p class="text-3xl font-bold text-blue-600 mb-6">{{.Price}} <span class="text-sm text-gray-500 font-normal">تومان</span></p>
-                                <div class="text-right text-xs space-y-1 mb-4 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                <p class="text-3xl font-bold text-blue-600 mb-4">{{.Price}} <span class="text-sm text-gray-500 font-normal">تومان</span></p>
+
+                <div class="text-right text-xs space-y-1 mb-4 bg-gray-50 rounded-lg p-3 border border-gray-100">
                     <div class="text-gray-700">🛡️ {{.VolumeGB}}GB اصلی + {{.Days}} روز</div>
                     {{if .BackupGB}}
                     <div class="text-gray-500">🛡️ {{.BackupGB}}GB زاپاس{{if index $.PanelNames "backup"}} از پنل {{index $.PanelNames "backup"}}{{end}}</div>
@@ -136,14 +137,15 @@
                     {{if .GiftNote}}<div class="text-orange-500">⚠️ {{.GiftNote}}</div>{{end}}
                     {{end}}
                 </div>
-                <form method="POST">
+
+                <form method="POST" onsubmit="var b=this.querySelector('button'); if(b.dataset.sending){return false;} b.dataset.sending='1'; b.disabled=true; b.textContent='⏳ در حال ایجاد فاکتور...'; return true;">
                     <input type="hidden" name="plan_id" value="{{.ID}}">
                     <button type="submit" class="w-full {{if .IsSpecial}}bg-blue-600 hover:bg-blue-700{{else}}bg-gray-800 hover:bg-gray-900{{end}} text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
                 </form>
             </div>
             {{end}}
         </div>
-        
+
         <div class="text-center mt-8">
             <a href="/track" class="text-blue-600 font-bold hover:underline">قبلاً خرید کرده‌ام (پیگیری سفارش)</a>
         </div>
@@ -183,11 +185,17 @@
             return div.innerHTML;
         }
 
-        // ── بررسی خودکار وضعیت پرداخت ─
+        // ── بررسی خودکار وضعیت پرداخت ──
         {{if .CheckoutOrder}}
         const TRACKING_CODE = '{{.CheckoutOrder.TrackingCode}}';
         let checkInterval;
         let checkCount = 0;
+
+        function setBuildingState() {
+            const box = document.getElementById('checkingStatus');
+            box.classList.add('checking-building');
+            document.getElementById('statusText').textContent = '💚 پرداخت تایید شد! در حال ساخت کانفیگ‌ها...';
+        }
 
         function checkPaymentStatus() {
             checkCount++;
@@ -204,11 +212,11 @@
                     if (data.status === 'paid' && data.config_link) {
                         console.log('✅ پرداخت موفق شد!');
                         clearInterval(checkInterval);
-                        showConfig(data.config_link);
+                        // 🟢 اول هاله سبز، بعد از ۲ ثانیه نمایش کانفیگ
+                        setBuildingState();
+                        setTimeout(() => showConfig(data.config_link), 2000);
                     } else if (data.status === 'processing') {
-                        const box = document.getElementById('checkingStatus');
-                        box.classList.add('checking-building');
-                        document.getElementById('statusText').textContent = '💚 پرداخت تایید شد! در حال ساخت کانفیگ‌ها...';
+                        setBuildingState();
                     } else if (data.status === 'pending') {
                         console.log('⏳ هنوز پرداخت نشده');
                     } else {
@@ -235,11 +243,9 @@
                 if (Array.isArray(parsed)) {
                     items = parsed;
                     console.log(`✅ ${items.length} کانفیگ پارس شد`);
-                } else {
-                    console.warn('⚠️ خروجی آرایه نیست:', parsed);
                 }
             } catch (e) {
-                console.warn('⚠️ parse ناموفق، نمایش به صورت خام:', e);
+                console.warn('⚠️ parse ناموفق، نمایش خام:', e);
             }
 
             if (items && items.length > 0) {
@@ -259,7 +265,6 @@
                     </div>
                 `).join('');
             } else {
-                // fallback: نمایش خام
                 list.innerHTML = `
                     <div class="bg-green-50 p-4 rounded-lg border border-green-200">
                         <div class="font-bold text-green-800 mb-2">🛡️ کانفیگ شما</div>
@@ -278,10 +283,7 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // شروع بررسی هر ۳ ثانیه
         checkInterval = setInterval(checkPaymentStatus, 3000);
-
-        // بررسی فوری اول
         checkPaymentStatus();
         {{end}}
     </script>
