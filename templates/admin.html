@@ -351,6 +351,16 @@
             btn.textContent = '✅ کپی شد';
             setTimeout(() => btn.textContent = old, 1500);
         }
+                function copyTelegram(id) {
+            const ta = document.getElementById('tg-' + id);
+            ta.select();
+            ta.setSelectionRange(0, 99999);
+            try {
+                if (navigator.clipboard) { navigator.clipboard.writeText(ta.value); }
+                else { document.execCommand('copy'); }
+            } catch (e) { document.execCommand('copy'); }
+            showNotification('✅ متن تلگرام کپی شد', 'success');
+        }
 
         function confirmOrder(id, confirmed) {
             fetch(ADMIN_BASE + '/confirm', {
