@@ -228,3 +228,29 @@ func DeleteCardHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
+// UpdateCleanupHandler تنظیم مهلت حذف سفارش‌های پرداخت‌نشده
+func UpdateCleanupHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	hours, err := strconv.Atoi(r.FormValue("order_expire_hours"))
+	if err != nil || hours <= 0 {
+		hours = 48
+	}
+
+	cfg := db.GetConfig()
+	cfg.Cleanup.OrderExpireHours = hours
+
+	if err := db.SaveConfig(cfg); err != nil {
+		http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
+		return
+	}
+
+	db.LogEventf("general", "success", "🕐 مهلت حذف سفارش‌های پرداخت‌نشده: %d ساعت", hours)
+	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
+}
