@@ -38,12 +38,16 @@ type EmailBackupConfig struct {
 	SMTPUser   string `json:"smtp_user"`
 	SMTPPass   string `json:"smtp_pass"`
 }
+type CleanupConfig struct {
+	OrderExpireHours int `json:"order_expire_hours"`
+}
 
 type AppConfig struct {
 	Admin       AdminConfig       `json:"admin"`
 	Panels      []PanelConfig     `json:"panels"`
 	Cards       []CardInfo        `json:"cards"`
 	EmailBackup EmailBackupConfig `json:"email_backup"`
+		Cleanup     CleanupConfig     `json:"cleanup"`
 }
 
 var (
@@ -82,6 +86,11 @@ func LoadConfig() *AppConfig {
 				config.Panels[i].Role = "main"
 			}
 		}
+	}
+
+	// مقدار پیش‌فرض زمان انقضای سفارش
+	if config.Cleanup.OrderExpireHours <= 0 {
+		config.Cleanup.OrderExpireHours = 48
 	}
 
 	return config
