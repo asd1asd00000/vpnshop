@@ -19,7 +19,7 @@ import (
 	"github.com/asd1asd00000/vpnshop/models"
 )
 
-// ───────────── 🔒 محدودیت نرخ ─────────────
+// ─────────────  محدودیت نرخ ─────────────
 
 var (
 	rateMu   sync.Mutex
@@ -66,7 +66,7 @@ func allowTrackAttempt(ip string) bool {
 	return true
 }
 
-// ───────────── 🎫 کد پیگیری امن ─────────────
+// ─────────────  کد پیگیری امن ────────────
 
 func generateTrackingCode() string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -90,7 +90,7 @@ func AdminBasePath() string {
 	return "/" + secret + "/admin"
 }
 
-// ─────────────  فروشگاه ─────────────
+// ───────────── 🛒 فروشگاه ─────────────
 
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/shop.html")
@@ -249,7 +249,7 @@ func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ───────────── 👨‍ داشبورد ادمین ────────────
+// ───────────── 👨‍💼 داشبورد ادمین ─────────────
 
 type adminOrder struct {
 	ID             int
@@ -374,13 +374,13 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * pageSize
 
-	// 🎯 کوئری شامل created_at و paid_at
+	// 🎯 کوئری شامل created_at، paid_at و admin_note
 	rows, err := db.DB.Query(`
 		SELECT id, tracking_code, plan_name, unique_amount, status, 
 		       IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), 
 		       IFNULL(payment_method, ''),
-		       IFNULL(created_at, ''), IFNULL(paid_at, '')
-			   IFNULL(admin_note, '')
+		       IFNULL(created_at, ''), IFNULL(paid_at, ''),
+		       IFNULL(admin_note, '')
 		FROM orders ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
 		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
@@ -392,6 +392,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var o adminOrder
 		var confirmed int
+		// 🎯 Scan شامل ۱ فیلد
 		if err := rows.Scan(
 			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
 			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
