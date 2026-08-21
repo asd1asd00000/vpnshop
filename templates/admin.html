@@ -12,6 +12,13 @@
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
         .chevron { transition: transform 0.3s ease; }
         .accordion-item.open .chevron { transform: rotate(180deg); }
+                .accordion-item.open {
+            background: linear-gradient(to bottom, #eef2ff 0%, #e0e7ff 100%);
+            box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.2), 0 8px 10px -6px rgba(79, 70, 229, 0.1);
+            border-color: #818cf8;
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
         .accordion-item.open .card-header { background-color: #eef2ff; }
 
         .badge-paid-full { background-color: #dcfce7; color: #166534; }
