@@ -232,22 +232,22 @@
 
                     {{range .Cards}}
 
-                    <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
+                    <div class="mb-3 bg-white border border-gray-200 rounded-lg p-4">
 
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="block text-lg md:text-2xl font-bold text-gray-800 font-mono tracking-widest"
+                        <div class="flex flex-col items-center gap-3">
+                            <span class="text-base md:text-2xl font-bold text-gray-800 font-mono tracking-wider text-center break-all"
                                   dir="ltr">
                                 {{.Number}}
                             </span>
                             <button type="button"
                                     data-card="{{.Number}}"
                                     onclick="copyCard(this)"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap transition">
+                                    class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded-lg transition">
                                 📋 کپی
                             </button>
                         </div>
 
-                        <span class="block text-sm text-gray-500 mt-1">
+                        <span class="block text-sm text-gray-500 mt-3 text-center">
                             به نام: {{.Holder}}
                         </span>
 
@@ -257,22 +257,22 @@
 
                 {{else}}
 
-                    <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
+                    <div class="mb-3 bg-white border border-gray-200 rounded-lg p-4">
 
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="block text-lg md:text-2xl font-bold text-gray-800 font-mono tracking-widest"
+                        <div class="flex flex-col items-center gap-3">
+                            <span class="text-base md:text-2xl font-bold text-gray-800 font-mono tracking-wider text-center break-all"
                                   dir="ltr">
                                 6037-9999-9999-9999
                             </span>
                             <button type="button"
                                     data-card="6037-9999-9999-9999"
                                     onclick="copyCard(this)"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap transition">
+                                    class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded-lg transition">
                                 📋 کپی
                             </button>
                         </div>
 
-                        <span class="block text-sm text-gray-500 mt-1">
+                        <span class="block text-sm text-gray-500 mt-3 text-center">
                             به نام: نام صاحب کارت
                         </span>
 
