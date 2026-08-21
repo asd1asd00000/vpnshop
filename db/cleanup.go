@@ -114,13 +114,19 @@ func StartOrderCleanup() {
 
 // cleanOldOrders حذف سفارش‌های پرداخت‌نشده قدیمی‌تر از 48 ساعت
 func cleanOldOrders() {
-	res, err := DB.Exec(`DELETE FROM orders WHERE status != 'paid' AND created_at IS NOT NULL AND created_at < datetime('now', '-48 hours')`)
+	hours := GetConfig().Cleanup.OrderExpireHours
+	if hours <= 0 {
+		hours = 48
+	}
+
+	query := fmt.Sprintf(`DELETE FROM orders WHERE status != 'paid' AND created_at IS NOT NULL AND created_at < datetime('now', '-%d hours')`, hours)
+	res, err := DB.Exec(query)
 	if err != nil {
 		log.Printf("❌ خطا در پاکسازی: %v", err)
 		return
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("🗑️ %d سفارش پرداخت‌نشده قدیمی‌تر از 48 ساعت حذف شد", n)
+		log.Printf("🗑️ %d سفارش پرداخت‌نشده قدیمی‌تر از %d ساعت حذف شد", n, hours)
 		LogEventf("general", "warning", "🗑️ %d سفارش پرداخت‌نشده قدیمی به صورت خودکار حذف شد", n)
 	}
 }
