@@ -89,6 +89,10 @@ func MigrateOrders() {
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT ''`); err == nil {
 		log.Println("✅ ستون payment_method به جدول orders اضافه شد")
 	}
+		// admin_note (جدید)
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN admin_note TEXT DEFAULT ''`); err == nil {
+		log.Println("✅ ستون admin_note به جدول orders اضافه شد")
+	}
 
 	// paid_at (جدید)
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN paid_at DATETIME`); err == nil {
