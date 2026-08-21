@@ -178,7 +178,7 @@ func buildTelegramText(items []ConfigItem) string {
         b.WriteString(it.Note)
     }
 		default: // main
-			b.WriteString(fmt.Sprintf("✅ *%d گیگ اشتراک اصلی شما* ✅", it.Volume))
+			b.WriteString(fmt.Sprintf("✅ **%d گیگ اشتراک اصلی شما** ✅", it.Volume))
 		}
 		blocks = append(blocks, b.String())
 	}
