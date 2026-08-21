@@ -49,9 +49,20 @@
                 </div>
                 <hr class="my-4 border-gray-200">
                 <div class="mb-4">
-                    <span class="block text-sm text-gray-500 mb-1">شماره کارت جهت واریز:</span>
-                    <span class="text-2xl font-bold text-gray-800 font-mono tracking-widest" dir="ltr">6037-9999-9999-9999</span>
-                    <span class="block text-sm text-gray-500 mt-1">به نام: نام صاحب کارت</span>
+                    <span class="block text-sm text-gray-500 mb-2">شماره کارت‌های جهت واریز:</span>
+                    {{if .Cards}}
+                        {{range .Cards}}
+                        <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
+                            <span class="block text-2xl font-bold text-gray-800 font-mono tracking-widest" dir="ltr">{{.Number}}</span>
+                            <span class="block text-sm text-gray-500 mt-1">به نام: {{.Holder}}</span>
+                        </div>
+                        {{end}}
+                    {{else}}
+                        <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
+                            <span class="block text-2xl font-bold text-gray-800 font-mono tracking-widest" dir="ltr">6037-9999-9999-9999</span>
+                            <span class="block text-sm text-gray-500 mt-1">به نام: نام صاحب کارت</span>
+                        </div>
+                    {{end}}
                 </div>
                 <hr class="my-4 border-gray-200">
                 <div>
