@@ -169,11 +169,14 @@ func buildTelegramText(items []ConfigItem) string {
 			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه-زاپاس ✅\n", it.Volume))
 			b.WriteString("اگه لینک اصلی مشکل پیدا کرد اطلاع بدین\n")
 			b.WriteString("تا مشکل حل بشه از این لینک استفاده کنید")
-		case "gift":
-			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه ✅\n", it.Volume))
-			if it.Note != "" {
-				b.WriteString(it.Note)
-			}
+       case "gift":
+    b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه ✅\n", it.Volume))
+    b.WriteString("از پنل آزمایشی\n")
+    b.WriteString("تست کنید ببینید در منطقه شما جواب میده ؟\n")
+    b.WriteString("پنل آزمایشی پشتیبانی نداره و حجم آن قابل انتقال نیست\n")
+    if it.Note != "" {
+        b.WriteString(it.Note)
+    }
 		default: // main
 			b.WriteString(fmt.Sprintf("%d گیگ", it.Volume))
 		}
