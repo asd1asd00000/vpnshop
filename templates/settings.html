@@ -153,7 +153,46 @@
                 </details>
             </section>
 
-            <!-- بخش ۳: بکاپ ایمیل (به زودی) -->
+            <!-- بخش ۳: شماره کارت‌های پرداخت -->
+            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-2">💳 شماره کارت‌های پرداخت</h2>
+                <p class="text-sm text-gray-500 mb-4">این کارت‌ها در صفحه فاکتور مشتری نمایش داده می‌شوند.</p>
+
+                {{if .Config.Cards}}
+                <div class="space-y-2 mb-4">
+                    {{range $i, $c := .Config.Cards}}
+                    <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div>
+                            <div class="font-mono font-bold text-gray-800" dir="ltr">{{$c.Number}}</div>
+                            <div class="text-xs text-gray-500">به نام: {{$c.Holder}}</div>
+                        </div>
+                        <form action="{{$.AdminBase}}/settings/delete-card" method="POST" onsubmit="return confirm('این کارت حذف شود؟')">
+                            <input type="hidden" name="card_id" value="{{$i}}">
+                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                                🗑️ حذف
+                            </button>
+                        </form>
+                    </div>
+                    {{end}}
+                </div>
+                {{else}}
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-800">
+                    ⚠️ کارتی ثبت نشده؛ در فاکتور، کارت پیش‌فرض نمایش داده می‌شود.
+                </div>
+                {{end}}
+
+                <form action="{{.AdminBase}}/settings/add-card" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input type="text" name="card_number" required placeholder="6037-9999-9999-9999" dir="ltr"
+                           class="border border-gray-300 rounded-lg p-2.5 text-sm font-mono">
+                    <input type="text" name="card_holder" required placeholder="نام صاحب کارت"
+                           class="border border-gray-300 rounded-lg p-2.5 text-sm">
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg transition">
+                        ➕ افزودن کارت
+                    </button>
+                </form>
+            </section>
+
+            <!-- بخش ۴: بکاپ ایمیل (به زودی) -->
             <section class="border border-gray-200 rounded-xl p-4 md:p-6 opacity-75">
                 <h2 class="text-lg font-bold text-gray-800 mb-2">
                     📧 بکاپ خودکار به ایمیل
