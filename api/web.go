@@ -380,6 +380,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		       IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), 
 		       IFNULL(payment_method, ''),
 		       IFNULL(created_at, ''), IFNULL(paid_at, '')
+			   IFNULL(admin_note, '')
 		FROM orders ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
 		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
@@ -394,6 +395,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(
 			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
 			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
+			&o.AdminNote,
 		); err != nil {
 			continue
 		}
