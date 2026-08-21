@@ -8,7 +8,7 @@
     "is_special": false,
     "backup_gb": 1,
     "gift_gb": 1,
-    "gift_note": "این پنل پشتیبانی ندارد"
+    "gift_note": "این پلن در دسترس نیست "
   },
   {
     "id": "20GB-1M",
@@ -18,18 +18,30 @@
     "days": 30,
     "is_special": true,
     "backup_gb": 1,
-    "gift_gb": 5,
-    "gift_note": "این پنل پشتیبانی ندارد"
+    "gift_gb": 4,
+    "gift_note": ""
   },
   {
-    "id": "100GB-1M",
-    "title": "100GB - 1 Month",
-    "price": 300000,
-    "volume_gb": 100,
-    "days": 30,
+    "id": "50GB-2M",
+    "title": "50GB - 2 Month",
+    "price": 500000,
+    "volume_gb": 50,
+    "days": 60,
     "is_special": false,
-    "backup_gb": 1,
+    "backup_gb": 2,
+    "gift_gb": 12,
+    "gift_note": ""
+  },
+  {
+    "id": "100GB-3M",
+    "title": "100GB - 3 Month",
+    "price": 900000,
+    "volume_gb": 100,
+    "days": 90,
+    "is_special": false,
+    "backup_gb": 4,
     "gift_gb": 25,
-    "gift_note": "این پنل پشتیبانی ندارد"
+    "gift_note": ""
   }
+  
 ]
