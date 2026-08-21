@@ -49,7 +49,41 @@ func AdminConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// ─────────────  تایید دستی پرداخت + ساخت کانفیگ ─────────────
+// ───────────── 📝 یادداشت ادمین ─────────────
+
+func AdminNoteHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID   int    `json:"id"`
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.DB.Exec(`UPDATE orders SET admin_note = ? WHERE id = ?`, req.Note, req.ID)
+	if err != nil {
+		http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
+		return
+	}
+
+	db.LogEventf("general", "info", "📝 یادداشت ادمین برای فاکتور #%d بروزرسانی شد", req.ID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "یادداشت ذخیره شد",
+	})
+}
+
+// ───────────── تایید دستی پرداخت + ساخت کانفیگ ─────────────
 
 func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
@@ -111,7 +145,7 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۴. بروزرسانی دیتابیس (status = paid + admin_confirmed = 1 + config_link)
+	// ۴. بروزرسانی دیتابیس (status = paid + admin_confirmed = 1 + payment_method + paid_at + config_link)
 	_, err = db.DB.Exec(`
 		UPDATE orders 
 		SET status = 'paid', 
@@ -139,7 +173,7 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ─────────────  بکاپ کامل (ZIP) ─────────────
+// ───────────── بکاپ کامل (ZIP) ─────────────
 
 func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
@@ -287,6 +321,7 @@ func restoreFromDB(tmpPath string) error {
 		return err
 	}
 	db.InitDB("./vpnshop.db")
+	db.MigrateOrders() // ✅ مایگریشن برای بکاپ‌های قدیمی
 	db.LogEvent("general", "success", "♻️ دیتابیس از بکاپ بازگردانی شد")
 	return nil
 }
@@ -345,6 +380,7 @@ func restoreFromZip(zipPath string) error {
 
 	db.InitDB("./vpnshop.db")
 	db.LoadConfig()
+	db.MigrateOrders() // ✅ مایگریشن برای بکاپ‌های قدیمی
 
 	db.LogEvent("general", "success", "♻️ بکاپ کامل (دیتابیس + تنظیمات) بازگردانی شد")
 	return nil
@@ -417,37 +453,4 @@ func AdminLogsClearHandler(w http.ResponseWriter, r *http.Request) {
 
 	db.LogEvent("general", "warning", "🗑️ لاگ‌ها توسط ادمین پاک شدند")
 	w.WriteHeader(http.StatusOK)
-}
-// ───────────── 📝 یادداشت ادمین ─────────────
-
-func AdminNoteHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkAdminAuth(w, r) {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req struct {
-		ID   int    `json:"id"`
-		Note string `json:"note"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-
-	_, err := db.DB.Exec(`UPDATE orders SET admin_note = ? WHERE id = ?`, req.Note, req.ID)
-	if err != nil {
-		http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
-		return
-	}
-
-	db.LogEventf("general", "info", "📝 یادداشت ادمین برای فاکتور #%d بروزرسانی شد", req.ID)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "یادداشت ذخیره شد",
-	})
 }
