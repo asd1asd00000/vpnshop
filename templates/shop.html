@@ -1,19 +1,44 @@
+
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>خرید کانفیگ | VPNShop</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
+    <!-- Flag Icons -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/flag-icons@7.3.2/css/flag-icons.min.css">
+
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <style>
         @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
-        body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
+
+        body {
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #f3f4f6;
+        }
 
         @keyframes pulse-green {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-            50% { box-shadow: 0 0 0 20px rgba(34, 197, 94, 0); }
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 20px rgba(34, 197, 94, 0);
+            }
         }
-        .payment-success { animation: pulse-green 2s infinite; }
+
+        .payment-success {
+            animation: pulse-green 2s infinite;
+        }
 
         /* 🟢 هاله سبز چشمک‌زن هنگام ساخت کانفیگ */
         .checking-building {
@@ -21,282 +46,928 @@
             border-color: #86efac !important;
             animation: pulse-green 1.5s infinite;
         }
+
         .checking-building,
         .checking-building #statusText,
-        .checking-building .text-blue-800 { color: #166534 !important; }
-        .checking-building svg { color: #16a34a !important; }
+        .checking-building .text-blue-800 {
+            color: #166534 !important;
+        }
+
+        .checking-building svg {
+            color: #16a34a !important;
+        }
+
+        /* اندازه پرچم‌ها */
+        .country-flag {
+            width: 34px;
+            height: 24px;
+            display: inline-block;
+            background-size: cover;
+            background-position: center;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+        }
+
+        /* افکت هاور روی پرچم */
+        .country-flag:hover {
+            transform: translateY(-3px) scale(1.08);
+            transition: all 0.2s ease;
+        }
     </style>
 </head>
+
 <body class="p-4 md:p-8">
-    <div class="max-w-3xl mx-auto">
 
-        <div class="text-center mb-10">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">فروشگاه VPNShop</h1>
-            <p class="text-gray-600">پلن مورد نظر خود را انتخاب کنید و به صورت آنی تحویل بگیرید.</p>
+<div class="max-w-3xl mx-auto">
+
+    <!-- ======================================== -->
+    <!-- بنر اصلی -->
+    <!-- ======================================== -->
+
+    <div class="bg-gradient-to-l from-blue-600 via-indigo-700 to-purple-700 rounded-2xl shadow-xl p-6 mb-8 text-white text-center">
+
+        <!-- عنوان -->
+        <h2 class="text-lg md:text-2xl font-bold mb-4 leading-relaxed">
+            🚀  فیلترشکن پرسرعت OKLAVPN   🚀
+        </h2>
+
+        <!-- سرویس‌ها -->
+        <div class="flex flex-wrap justify-center gap-2 md:gap-3 mb-5">
+
+            <!-- Instagram -->
+            <span class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-bold">
+                <i class="fa-brands fa-instagram text-lg"></i>
+                اینستاگرام
+            </span>
+
+            <!-- YouTube -->
+            <span class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-bold">
+                <i class="fa-brands fa-youtube text-lg"></i>
+                یوتیوب
+            </span>
+
+            <!-- Web -->
+            <span class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-bold">
+                <i class="fa-solid fa-globe text-lg"></i>
+                وب‌گردی
+            </span>
+
+            <!-- Trading -->
+            <span class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-bold">
+                <i class="fa-solid fa-chart-line text-lg"></i>
+                ترید
+            </span>
+
         </div>
 
-        {{if .CheckoutOrder}}
-        <!-- بخش فاکتور -->
-        <div id="invoiceSection" class="bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">فاکتور شما ایجاد شد</h2>
-            <p class="text-gray-600 mb-6">لطفاً مبلغ دقیق زیر را به شماره کارت اعلام شده واریز کنید. سیستم بلافاصله پس از واریز، کانفیگ شما را می‌سازد.</p>
+        <!-- توضیح لوکیشن -->
+        <p class="text-blue-100 text-sm mb-4">
+            🌍 لوکیشن‌های مختلف در سراسر جهان
+        </p>
 
-            <div class="bg-gray-50 p-6 rounded-lg mb-6 border border-gray-200">
-                <div class="mb-4">
-                    <span class="block text-sm text-gray-500 mb-1">مبلغ دقیق قابل پرداخت:</span>
-                    <span class="text-3xl font-bold text-green-600 tracking-wider">{{.CheckoutOrder.UniqueAmount}} تومان</span>
-                    <p class="text-xs text-red-500 mt-2 font-bold">⚠️ حتماً همین مبلغ دقیق (حتی ریال آخر) را واریز کنید تا سیستم خودکار تایید کند.</p>
-                </div>
-                <hr class="my-4 border-gray-200">
-                <div class="mb-4">
-                    <span class="block text-sm text-gray-500 mb-2">شماره کارت‌های جهت واریز:</span>
-                    {{if .Cards}}
-                        {{range .Cards}}
-                        <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
-                            <span class="block text-2xl font-bold text-gray-800 font-mono tracking-widest" dir="ltr">{{.Number}}</span>
-                            <span class="block text-sm text-gray-500 mt-1">به نام: {{.Holder}}</span>
-                        </div>
-                        {{end}}
-                    {{else}}
-                        <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
-                            <span class="block text-2xl font-bold text-gray-800 font-mono tracking-widest" dir="ltr">6037-9999-9999-9999</span>
-                            <span class="block text-sm text-gray-500 mt-1">به نام: نام صاحب کارت</span>
-                        </div>
-                    {{end}}
-                </div>
-                <hr class="my-4 border-gray-200">
-                <div>
-                    <span class="block text-sm text-gray-500 mb-1">کد پیگیری سفارش شما:</span>
-                    <div class="flex items-center justify-center gap-2 flex-wrap">
-                        <span id="trackingCode" dir="ltr" class="text-lg md:text-xl font-bold text-blue-600 font-mono bg-blue-50 px-4 py-2 rounded border border-blue-200">{{.CheckoutOrder.TrackingCode}}</span>
-                        <button type="button" onclick="copyTrackingCode(this)"
-                                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
-                            📋 کپی
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <!-- پرچم کشورها -->
+        <div class="flex flex-wrap justify-center items-center gap-3 mb-5" dir="ltr">
 
-            <!-- وضعیت در حال بررسی -->
-            <div id="checkingStatus" class="bg-blue-50 p-4 rounded-lg text-blue-800 border border-blue-200 mb-4">
-                <div class="flex items-center justify-center gap-2">
-                    <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span class="font-bold" id="statusText">در حال بررسی پرداخت... لطفاً صبر کنید</span>
-                </div>
-                <p class="text-xs mt-2">این صفحه به صورت خودکار هر ۳ ثانیه به‌روز می‌شود</p>
-            </div>
+            <!-- Netherlands -->
+            <span class="fi fi-nl country-flag"
+                  title="هلند"></span>
 
-            <div class="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800 border border-yellow-200">
-                پس از انجام کارت‌به‌کارت و دریافت پیامک کسر وجه، سیستم به صورت خودکار کانفیگ شما را نمایش می‌دهد.
-            </div>
+            <!-- Italy -->
+            <span class="fi fi-it country-flag"
+                  title="ایتالیا"></span>
+
+            <!-- Spain -->
+            <span class="fi fi-es country-flag"
+                  title="اسپانیا"></span>
+
+            <!-- United Kingdom -->
+            <span class="fi fi-gb country-flag"
+                  title="انگلیس"></span>
+
+            <!-- Switzerland -->
+            <span class="fi fi-ch country-flag"
+                  title="سوئیس"></span>
+
+            <!-- Finland -->
+            <span class="fi fi-fi country-flag"
+                  title="فنلاند"></span>
+
+            <!-- usa -->
+            <span class="fi fi-us country-flag"
+                  title="آمریکا"></span>
+
+            <!-- France -->
+            <span class="fi fi-fr country-flag"
+                  title="فرانسه"></span>
+
+            <!-- turky -->
+            <span class="fi fi-tr country-flag"
+                  title="ترکیه"></span>
+
+            <!-- germani -->
+            <span class="fi fi-de country-flag"
+                  title="آلمان"></span>
+
         </div>
 
-        <!-- بخش نمایش کانفیگ‌ها -->
-        <div id="configSection" class="hidden bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500 payment-success">
-            <div class="mb-6">
-                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                </div>
-                <h2 class="text-2xl font-bold text-green-600 mb-2">✅ پرداخت با موفقیت تایید شد!</h2>
-                <p class="text-gray-600">کانفیگ‌های شما آماده است. هر کدام را جداگانه کپی کرده و در برنامه VPN خود وارد کنید.</p>
-            </div>
+        <!-- تعداد سرورها -->
+        <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md rounded-full px-6 py-2.5 text-sm md:text-base font-bold shadow-lg">
 
-            <div id="configsList" class="space-y-4 mb-6 text-right"></div>
+            <i class="fa-solid fa-server"></i>
 
-            <div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 border border-blue-200 mb-6">
-                <p class="font-bold mb-2">📌 راهنمای استفاده:</p>
-                <ol class="text-right list-decimal list-inside space-y-1 text-xs">
-                    <li>هر لینک را جداگانه کپی کنید</li>
-                    <li>در برنامه VPN خود گزینه "Add from Clipboard" را بزنید</li>
-                    <li>کانفیگ‌های اضافه شده آماده استفاده هستند</li>
-                </ol>
-            </div>
+            ۵۰+ سرور پرسرعت
 
-            <div class="flex flex-col gap-3">
-                <a href="/track" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">
-                    🔍 پیگیری سفارش
-                </a>
-                <a href="/" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition text-center">
-                    🛒 می‌خواهم دوباره خرید کنم
-                </a>
-            </div>
         </div>
 
-        {{else}}
-        <!-- بخش انتخاب پلن‌ها -->
-        <div class="grid md:grid-cols-2 gap-6">
-            {{range .Plans}}
-            <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center {{if .IsSpecial}}border-2 border-blue-500 relative{{else}}border border-gray-100{{end}}">
-                {{if .IsSpecial}}
-                <span class="absolute top-0 right-1/2 transform translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold">پیشنهاد ویژه</span>
-                {{end}}
-                <h3 class="text-xl font-bold text-gray-800 mb-2">{{.Title}}</h3>
-                <p class="text-3xl font-bold text-blue-600 mb-4">{{.Price}} <span class="text-sm text-gray-500 font-normal">تومان</span></p>
-
-                <div class="text-right text-xs space-y-1 mb-4 bg-gray-50 rounded-lg p-3 border border-gray-100">
-                    <div class="text-gray-700">🛡️ {{.VolumeGB}}GB اصلی + {{.Days}} روز</div>
-                    {{if .BackupGB}}
-                    <div class="text-gray-500">🛡️ {{.BackupGB}}GB زاپاس{{if index $.PanelNames "backup"}} از پنل {{index $.PanelNames "backup"}}{{end}}</div>
-                    {{end}}
-                    {{if .GiftGB}}
-                    <div class="text-gray-500">🎁 {{.GiftGB}}GB هدیه{{if index $.PanelNames "gift"}} از پنل {{index $.PanelNames "gift"}}{{end}}</div>
-                    {{if .GiftNote}}<div class="text-orange-500">⚠️ {{.GiftNote}}</div>{{end}}
-                    {{end}}
-                </div>
-
-                <form method="POST" onsubmit="var b=this.querySelector('button'); if(b.dataset.sending){return false;} b.dataset.sending='1'; b.disabled=true; b.textContent='⏳ در حال ایجاد فاکتور...'; return true;">
-                    <input type="hidden" name="plan_id" value="{{.ID}}">
-                    <button type="submit" class="w-full {{if .IsSpecial}}bg-blue-600 hover:bg-blue-700{{else}}bg-gray-800 hover:bg-gray-900{{end}} text-white font-bold py-3 rounded-lg transition">خرید این پلن</button>
-                </form>
-            </div>
-            {{end}}
-        </div>
-
-        <div class="text-center mt-8">
-            <a href="/track" class="text-blue-600 font-bold hover:underline">قبلاً خرید کرده‌ام (پیگیری سفارش)</a>
-        </div>
-        {{end}}
     </div>
 
-    <script>
-        function copyTrackingCode(btn) {
-            const code = document.getElementById('trackingCode').textContent.trim();
-            copyToClipboard(code, btn, '📋 کپی');
-        }
 
-        function copyInput(btn) {
-            const input = btn.parentElement.querySelector('input');
-            copyToClipboard(input.value, btn, '📋 کپی');
-        }
+    {{if .CheckoutOrder}}
 
-        function copyToClipboard(text, btn, originalText) {
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text);
-            } else {
-                const tmp = document.createElement('textarea');
-                tmp.value = text;
-                document.body.appendChild(tmp);
-                tmp.select();
-                try { document.execCommand('copy'); } catch (e) {}
-                document.body.removeChild(tmp);
-            }
-            const old = btn.textContent;
-            btn.textContent = '✅ کپی شد';
-            setTimeout(() => btn.textContent = originalText, 1500);
-        }
+    <!-- ======================================== -->
+    <!-- بخش فاکتور -->
+    <!-- ======================================== -->
 
-        function escapeHtml(s) {
-            const div = document.createElement('div');
-            div.textContent = s;
-            return div.innerHTML;
-        }
+    <div id="invoiceSection"
+         class="bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500">
 
-        // ── بررسی خودکار وضعیت پرداخت ──
-        {{if .CheckoutOrder}}
-        const TRACKING_CODE = '{{.CheckoutOrder.TrackingCode}}';
-        let checkInterval;
-        let checkCount = 0;
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">
+            فاکتور شما ایجاد شد
+        </h2>
 
-        function setBuildingState() {
-            const box = document.getElementById('checkingStatus');
-            box.classList.add('checking-building');
-            document.getElementById('statusText').textContent = '💚 پرداخت تایید شد! در حال ساخت کانفیگ‌ها...';
-        }
+        <p class="text-gray-600 mb-6">
+            لطفاً مبلغ دقیق زیر را به شماره کارت اعلام شده واریز کنید.
+            سیستم بلافاصله پس از واریز، کانفیگ شما را می‌سازد.
+        </p>
 
-        function checkPaymentStatus() {
-            checkCount++;
-            console.log(`🔍 بررسی #${checkCount} برای کد: ${TRACKING_CODE}`);
+        <div class="bg-gray-50 p-6 rounded-lg mb-6 border border-gray-200">
 
-            fetch('/api/order-status?code=' + encodeURIComponent(TRACKING_CODE))
-                .then(r => {
-                    if (!r.ok) throw new Error('HTTP ' + r.status);
-                    return r.json();
-                })
-                .then(data => {
-                    console.log('📥 پاسخ سرور:', data);
+            <!-- مبلغ -->
+            <div class="mb-4">
 
-                    if (data.status === 'paid' && data.config_link) {
-                        console.log('✅ پرداخت موفق شد!');
-                        clearInterval(checkInterval);
-                        // 🟢 اول هاله سبز، بعد از ۲ ثانیه نمایش کانفیگ
-                        setBuildingState();
-                        setTimeout(() => showConfig(data.config_link), 2000);
-                    } else if (data.status === 'processing') {
-                        setBuildingState();
-                    } else if (data.status === 'pending') {
-                        console.log('⏳ هنوز پرداخت نشده');
-                    } else {
-                        console.warn('❓ وضعیت ناشناخته:', data.status);
-                    }
-                })
-                .catch(err => {
-                    console.error('❌ خطا در بررسی:', err);
-                });
-        }
+                <span class="block text-sm text-gray-500 mb-1">
+                    مبلغ دقیق قابل پرداخت:
+                </span>
 
-        function showConfig(configLink) {
-            console.log('🎨 نمایش کانفیگ‌ها...');
+                <span class="text-3xl font-bold text-green-600 tracking-wider">
+                    {{.CheckoutOrder.UniqueAmount}} تومان
+                </span>
 
-            document.getElementById('checkingStatus').classList.add('hidden');
-            document.getElementById('invoiceSection').classList.add('hidden');
-            document.getElementById('configSection').classList.remove('hidden');
+                <p class="text-xs text-red-500 mt-2 font-bold">
+                    ⚠️ حتماً همین مبلغ دقیق (حتی ریال آخر) را واریز کنید تا سیستم خودکار تایید کند.
+                </p>
 
-            const list = document.getElementById('configsList');
-            let items = null;
+            </div>
+
+            <hr class="my-4 border-gray-200">
+
+            <!-- کارت‌ها -->
+            <div class="mb-4">
+
+                <span class="block text-sm text-gray-500 mb-2">
+                    شماره کارت‌های جهت واریز:
+                </span>
+
+                {{if .Cards}}
+
+                    {{range .Cards}}
+
+                    <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
+
+                        <span class="block text-2xl font-bold text-gray-800 font-mono tracking-widest"
+                              dir="ltr">
+                            {{.Number}}
+                        </span>
+
+                        <span class="block text-sm text-gray-500 mt-1">
+                            به نام: {{.Holder}}
+                        </span>
+
+                    </div>
+
+                    {{end}}
+
+                {{else}}
+
+                    <div class="mb-3 bg-white border border-gray-200 rounded-lg p-3">
+
+                        <span class="block text-2xl font-bold text-gray-800 font-mono tracking-widest"
+                              dir="ltr">
+                            6037-9999-9999-9999
+                        </span>
+
+                        <span class="block text-sm text-gray-500 mt-1">
+                            به نام: نام صاحب کارت
+                        </span>
+
+                    </div>
+
+                {{end}}
+
+            </div>
+
+            <hr class="my-4 border-gray-200">
+
+            <!-- کد پیگیری -->
+            <div>
+
+                <span class="block text-sm text-gray-500 mb-1">
+                    کد پیگیری سفارش شما:
+                </span>
+
+                <div class="flex items-center justify-center gap-2 flex-wrap">
+
+                    <span id="trackingCode"
+                          dir="ltr"
+                          class="text-lg md:text-xl font-bold text-blue-600 font-mono bg-blue-50 px-4 py-2 rounded border border-blue-200">
+                        {{.CheckoutOrder.TrackingCode}}
+                    </span>
+
+                    <button type="button"
+                            onclick="copyTrackingCode(this)"
+                            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
+                        📋 کپی
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ======================================== -->
+        <!-- وضعیت پرداخت -->
+        <!-- ======================================== -->
+
+        <div id="checkingStatus"
+             class="bg-blue-50 p-4 rounded-lg text-blue-800 border border-blue-200 mb-4">
+
+            <div class="flex items-center justify-center gap-2">
+
+                <svg class="animate-spin h-5 w-5 text-blue-600"
+                     xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24">
+
+                    <circle class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4">
+                    </circle>
+
+                    <path class="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
+
+                </svg>
+
+                <span class="font-bold" id="statusText">
+                    در حال بررسی پرداخت... لطفاً صبر کنید
+                </span>
+
+            </div>
+
+            <p class="text-xs mt-2">
+                این صفحه به صورت خودکار هر ۳ ثانیه به‌روز می‌شود
+            </p>
+
+        </div>
+
+
+        <div class="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800 border border-yellow-200">
+
+            پس از انجام کارت‌به‌کارت و دریافت پیامک کسر وجه،
+            سیستم به صورت خودکار کانفیگ شما را نمایش می‌دهد.
+
+        </div>
+
+    </div>
+
+
+    <!-- ======================================== -->
+    <!-- نمایش کانفیگ -->
+    <!-- ======================================== -->
+
+    <div id="configSection"
+         class="hidden bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-green-500 payment-success">
+
+        <div class="mb-6">
+
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+
+                <svg class="w-8 h-8 text-green-600"
+                     fill="none"
+                     stroke="currentColor"
+                     viewBox="0 0 24 24">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M5 13l4 4L19 7">
+                    </path>
+
+                </svg>
+
+            </div>
+
+            <h2 class="text-2xl font-bold text-green-600 mb-2">
+                ✅ پرداخت با موفقیت تایید شد!
+            </h2>
+
+            <p class="text-gray-600">
+                کانفیگ‌های شما آماده است.
+                هر کدام را جداگانه کپی کرده و در برنامه VPN خود وارد کنید.
+            </p>
+
+        </div>
+
+
+        <div id="configsList"
+             class="space-y-4 mb-6 text-right">
+        </div>
+
+
+        <!-- راهنمای استفاده -->
+        <div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 border border-blue-200 mb-6">
+
+            <p class="font-bold mb-2">
+                📌 راهنمای استفاده:
+            </p>
+
+            <ol class="text-right list-decimal list-inside space-y-1 text-xs">
+
+                <li>
+                    هر لینک را جداگانه کپی کنید
+                </li>
+
+                <li>
+                    در برنامه VPN خود گزینه "Add from Clipboard" را بزنید
+                </li>
+
+                <li>
+                    کانفیگ‌های اضافه شده آماده استفاده هستند
+                </li>
+
+            </ol>
+
+        </div>
+
+
+        <!-- دکمه‌ها -->
+        <div class="flex flex-col gap-3">
+
+            <a href="/track"
+               class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">
+                🔍 پیگیری سفارش
+            </a>
+
+            <a href="/"
+               class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition text-center">
+                🛒 می‌خواهم دوباره خرید کنم
+            </a>
+
+        </div>
+
+    </div>
+
+
+    {{else}}
+
+    <!-- ======================================== -->
+    <!-- انتخاب پلن‌ها -->
+    <!-- ======================================== -->
+
+    <div class="grid md:grid-cols-2 gap-6">
+
+        {{range .Plans}}
+
+        <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center
+            {{if .IsSpecial}}
+                border-2 border-blue-500 relative
+            {{else}}
+                border border-gray-100
+            {{end}}">
+
+            {{if .IsSpecial}}
+
+            <span class="absolute top-0 right-1/2 transform translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+                پیشنهاد ویژه
+            </span>
+
+            {{end}}
+
+
+            <h3 class="text-xl font-bold text-gray-800 mb-2">
+                {{.Title}}
+            </h3>
+
+
+            <p class="text-3xl font-bold text-blue-600 mb-4">
+
+                {{.Price}}
+
+                <span class="text-sm text-gray-500 font-normal">
+                    تومان
+                </span>
+
+            </p>
+
+
+            <div class="text-right text-xs space-y-1 mb-4 bg-gray-50 rounded-lg p-3 border border-gray-100">
+
+                <div class="text-gray-700">
+                    🛡️ {{.VolumeGB}}GB اصلی + {{.Days}} روز
+                </div>
+
+
+                {{if .BackupGB}}
+
+                <div class="text-gray-500">
+                    🛡️ {{.BackupGB}}GB زاپاس
+                    {{if index $.PanelNames "backup"}}
+                        از پنل {{index $.PanelNames "backup"}}
+                    {{end}}
+                </div>
+
+                {{end}}
+
+
+                {{if .GiftGB}}
+
+                <div class="text-gray-500">
+                    🎁 {{.GiftGB}}GB هدیه
+                    {{if index $.PanelNames "gift"}}
+                        از پنل {{index $.PanelNames "gift"}}
+                    {{end}}
+                </div>
+
+                {{if .GiftNote}}
+
+                <div class="text-orange-500">
+                    ⚠️ {{.GiftNote}}
+                </div>
+
+                {{end}}
+
+                {{end}}
+
+            </div>
+
+
+            <form method="POST"
+                  onsubmit="var b=this.querySelector('button'); if(b.dataset.sending){return false;} b.dataset.sending='1'; b.disabled=true; b.textContent='⏳ در حال ایجاد فاکتور...'; return true;">
+
+                <input type="hidden"
+                       name="plan_id"
+                       value="{{.ID}}">
+
+                <button type="submit"
+                        class="w-full
+                        {{if .IsSpecial}}
+                            bg-blue-600 hover:bg-blue-700
+                        {{else}}
+                            bg-gray-800 hover:bg-gray-900
+                        {{end}}
+                        text-white font-bold py-3 rounded-lg transition">
+
+                    خرید این پلن
+
+                </button>
+
+            </form>
+
+        </div>
+
+        {{end}}
+
+    </div>
+
+
+    <!-- پیگیری سفارش -->
+    <div class="text-center mt-8">
+
+        <a href="/track"
+           class="text-blue-600 font-bold hover:underline">
+            قبلاً خرید کرده‌ام (پیگیری سفارش)
+        </a>
+
+    </div>
+
+    {{end}}
+
+</div>
+
+
+<script>
+
+    /* ======================================== */
+    /* کپی کد پیگیری */
+    /* ======================================== */
+
+    function copyTrackingCode(btn) {
+
+        const code =
+            document.getElementById('trackingCode').textContent.trim();
+
+        copyToClipboard(code, btn, '📋 کپی');
+    }
+
+
+    /* ======================================== */
+    /* کپی لینک کانفیگ */
+    /* ======================================== */
+
+    function copyInput(btn) {
+
+        const input =
+            btn.parentElement.querySelector('input');
+
+        copyToClipboard(input.value, btn, '📋 کپی');
+    }
+
+
+    /* ======================================== */
+    /* تابع عمومی کپی */
+    /* ======================================== */
+
+    function copyToClipboard(text, btn, originalText) {
+
+        if (navigator.clipboard && window.isSecureContext) {
+
+            navigator.clipboard.writeText(text);
+
+        } else {
+
+            const tmp =
+                document.createElement('textarea');
+
+            tmp.value = text;
+
+            document.body.appendChild(tmp);
+
+            tmp.select();
 
             try {
-                const parsed = JSON.parse(configLink);
-                if (Array.isArray(parsed)) {
-                    items = parsed;
-                    console.log(`✅ ${items.length} کانفیگ پارس شد`);
-                }
-            } catch (e) {
-                console.warn('⚠️ parse ناموفق، نمایش خام:', e);
-            }
+                document.execCommand('copy');
+            } catch (e) {}
 
-            if (items && items.length > 0) {
-                list.innerHTML = items.map(item => `
-                    <div class="bg-green-50 p-4 rounded-lg border border-green-200 text-right">
-                        <div class="font-bold text-green-800 mb-1 text-base">${escapeHtml(item.title)}</div>
-                        <div class="text-xs text-green-600 mb-3">${escapeHtml(item.desc)}</div>
-                        <div class="flex gap-2" dir="ltr">
-                            <input type="text" readonly value="${escapeHtml(item.link)}"
-                                   class="bg-white border border-green-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 font-mono"
-                                   onclick="this.select();">
-                            <button type="button" onclick="copyInput(this)"
-                                    class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
-                                📋 کپی
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                list.innerHTML = `
-                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
-                        <div class="font-bold text-green-800 mb-2">🛡️ کانفیگ شما</div>
-                        <div class="flex gap-2" dir="ltr">
-                            <input type="text" readonly value="${escapeHtml(configLink)}"
-                                   class="bg-white border border-green-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 font-mono"
-                                   onclick="this.select();">
-                            <button type="button" onclick="copyInput(this)"
-                                    class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
-                                📋 کپی
-                            </button>
-                        </div>
-                    </div>`;
-            }
-
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            document.body.removeChild(tmp);
         }
 
-        checkInterval = setInterval(checkPaymentStatus, 3000);
-        checkPaymentStatus();
-        {{end}}
-    </script>
+
+        const old =
+            btn.textContent;
+
+        btn.textContent =
+            '✅ کپی شد';
+
+        setTimeout(() => {
+
+            btn.textContent =
+                originalText;
+
+        }, 1500);
+
+    }
+
+
+    /* ======================================== */
+    /* جلوگیری از XSS */
+    /* ======================================== */
+
+    function escapeHtml(s) {
+
+        const div =
+            document.createElement('div');
+
+        div.textContent =
+            s;
+
+        return div.innerHTML;
+    }
+
+
+    /* ======================================== */
+    /* بررسی وضعیت پرداخت */
+    /* ======================================== */
+
+    {{if .CheckoutOrder}}
+
+    const TRACKING_CODE =
+        '{{.CheckoutOrder.TrackingCode}}';
+
+    let checkInterval;
+
+    let checkCount = 0;
+
+
+    /* ======================================== */
+    /* حالت ساخت کانفیگ */
+    /* ======================================== */
+
+    function setBuildingState() {
+
+        const box =
+            document.getElementById('checkingStatus');
+
+        box.classList.add('checking-building');
+
+        document.getElementById('statusText').textContent =
+            '💚 پرداخت تایید شد! در حال ساخت کانفیگ‌ها...';
+
+    }
+
+
+    /* ======================================== */
+    /* بررسی پرداخت */
+    /* ======================================== */
+
+    function checkPaymentStatus() {
+
+        checkCount++;
+
+        console.log(
+            `🔍 بررسی #${checkCount} برای کد: ${TRACKING_CODE}`
+        );
+
+
+        fetch(
+            '/api/order-status?code=' +
+            encodeURIComponent(TRACKING_CODE)
+        )
+
+        .then(r => {
+
+            if (!r.ok) {
+                throw new Error('HTTP ' + r.status);
+            }
+
+            return r.json();
+
+        })
+
+        .then(data => {
+
+            console.log(
+                '📥 پاسخ سرور:',
+                data
+            );
+
+
+            /* پرداخت تایید شده */
+            if (
+                data.status === 'paid' &&
+                data.config_link
+            ) {
+
+                console.log(
+                    '✅ پرداخت موفق شد!'
+                );
+
+                clearInterval(
+                    checkInterval
+                );
+
+
+                setBuildingState();
+
+
+                setTimeout(() => {
+
+                    showConfig(
+                        data.config_link
+                    );
+
+                }, 2000);
+
+
+            }
+
+            /* در حال ساخت */
+            else if (
+                data.status === 'processing'
+            ) {
+
+                setBuildingState();
+
+            }
+
+            /* هنوز پرداخت نشده */
+            else if (
+                data.status === 'pending'
+            ) {
+
+                console.log(
+                    '⏳ هنوز پرداخت نشده'
+                );
+
+            }
+
+            /* وضعیت ناشناخته */
+            else {
+
+                console.warn(
+                    '❓ وضعیت ناشناخته:',
+                    data.status
+                );
+
+            }
+
+        })
+
+        .catch(err => {
+
+            console.error(
+                '❌ خطا در بررسی:',
+                err
+            );
+
+        });
+
+    }
+
+
+    /* ======================================== */
+    /* نمایش کانفیگ */
+    /* ======================================== */
+
+    function showConfig(configLink) {
+
+        console.log(
+            '🎨 نمایش کانفیگ‌ها...'
+        );
+
+
+        document
+            .getElementById('checkingStatus')
+            .classList.add('hidden');
+
+
+        document
+            .getElementById('invoiceSection')
+            .classList.add('hidden');
+
+
+        document
+            .getElementById('configSection')
+            .classList.remove('hidden');
+
+
+        const list =
+            document.getElementById('configsList');
+
+
+        let items = null;
+
+
+        /* تلاش برای JSON */
+        try {
+
+            const parsed =
+                JSON.parse(configLink);
+
+            if (Array.isArray(parsed)) {
+
+                items =
+                    parsed;
+
+                console.log(
+                    `✅ ${items.length} کانفیگ پارس شد`
+                );
+
+            }
+
+        } catch (e) {
+
+            console.warn(
+                '⚠️ parse ناموفق، نمایش خام:',
+                e
+            );
+
+        }
+
+
+        /* ======================================== */
+        /* چند کانفیگ */
+        /* ======================================== */
+
+        if (
+            items &&
+            items.length > 0
+        ) {
+
+            list.innerHTML =
+                items.map(item => `
+
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200 text-right">
+
+                        <div class="font-bold text-green-800 mb-1 text-base">
+                            ${escapeHtml(item.title)}
+                        </div>
+
+                        <div class="text-xs text-green-600 mb-3">
+                            ${escapeHtml(item.desc)}
+                        </div>
+
+                        <div class="flex gap-2" dir="ltr">
+
+                            <input
+                                type="text"
+                                readonly
+                                value="${escapeHtml(item.link)}"
+                                class="bg-white border border-green-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 font-mono"
+                                onclick="this.select();"
+                            >
+
+                            <button
+                                type="button"
+                                onclick="copyInput(this)"
+                                class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
+
+                                📋 کپی
+
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                `).join('');
+
+
+        }
+
+        /* ======================================== */
+        /* یک کانفیگ */
+        /* ======================================== */
+
+        else {
+
+            list.innerHTML = `
+
+                <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+
+                    <div class="font-bold text-green-800 mb-2">
+                        🛡️ کانفیگ شما
+                    </div>
+
+                    <div class="flex gap-2" dir="ltr">
+
+                        <input
+                            type="text"
+                            readonly
+                            value="${escapeHtml(configLink)}"
+                            class="bg-white border border-green-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 font-mono"
+                            onclick="this.select();"
+                        >
+
+                        <button
+                            type="button"
+                            onclick="copyInput(this)"
+                            class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
+
+                            📋 کپی
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            `;
+
+        }
+
+
+        /* برگشت به بالای صفحه */
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+
+    }
+
+
+    /* ======================================== */
+    /* شروع بررسی خودکار */
+    /* ======================================== */
+
+    checkInterval =
+        setInterval(
+            checkPaymentStatus,
+            3000
+        );
+
+    checkPaymentStatus();
+
+    {{end}}
+
+</script>
+
 </body>
 </html>
+
