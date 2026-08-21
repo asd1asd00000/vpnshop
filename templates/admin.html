@@ -351,6 +351,29 @@
             }
         }
 
+                // ── ذخیره یادداشت ادمین ──
+        let noteTimers = {};
+
+        function saveNote(id, note) {
+            // debounce: اگه کاربر سریع تایپ کرد، فقط آخرین ذخیره بشه
+            if (noteTimers[id]) clearTimeout(noteTimers[id]);
+            noteTimers[id] = setTimeout(() => {
+                fetch(ADMIN_BASE + '/note', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, note: note })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('✅ یادداشت ذخیره شد', 'success');
+                    }
+                })
+                .catch(err => {
+                    showNotification('❌ خطا در ذخیره یادداشت', 'error');
+                });
+            }, 500); // 500ms بعد از آخرین تغییر
+        }
         //  کپی کد پیگیری با کلیک
         function copyTracking(code, el) {
             if (navigator.clipboard && window.isSecureContext) {
