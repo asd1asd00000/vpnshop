@@ -1,9 +1,9 @@
 package db
 
 import (
+	"fmt"
 	"log"
 	"time"
-	"fmt"
 )
 
 var TehranTZ *time.Location
@@ -12,7 +12,7 @@ func init() {
 	var err error
 	TehranTZ, err = time.LoadLocation("Asia/Tehran")
 	if err != nil {
-		// fallback: +3:30 fixed
+		// fallback: +3:30 ثابت
 		TehranTZ = time.FixedZone("Tehran", 12600)
 	}
 }
@@ -22,8 +22,7 @@ func TehranNow() time.Time {
 	return time.Now().In(TehranTZ)
 }
 
-// FormatTehranUTC زمان UTC ذخیره‌شده در SQLite رو به وقت تهران و فرمت شمسی/میلادی تبدیل می‌کنه
-// FormatTehranUTC زمان UTC رو به وقت تهران + تاریخ شمسی تبدیل می‌کنه
+// FormatTehranUTC زمان UTC ذخیره‌شده در SQLite رو به وقت تهران + تاریخ شمسی تبدیل می‌کنه
 func FormatTehranUTC(s string) string {
 	if s == "" {
 		return ""
@@ -77,32 +76,33 @@ func gregorianToJalali(gy, gm, gd int) (int, int, int) {
 	return jy, jm, jd
 }
 
-// MigrateOrders ستون‌های جدید رو اضافه می‌کنه
+// MigrateOrders ستون‌های جدید رو اگه نباشن اضافه می‌کنه (امن برای بکاپ قدیمی)
 func MigrateOrders() {
-	// created_at
+	// ستون created_at
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP`); err == nil {
 		log.Println("✅ ستون created_at به جدول orders اضافه شد")
 	}
 	DB.Exec(`UPDATE orders SET created_at = datetime('now') WHERE created_at IS NULL`)
 
-	// payment_method
+	// ستون payment_method
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT ''`); err == nil {
 		log.Println("✅ ستون payment_method به جدول orders اضافه شد")
 	}
-		// admin_note (جدید)
-	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN admin_note TEXT DEFAULT ''`); err == nil {
-		log.Println("✅ ستون admin_note به جدول orders اضافه شد")
-	}
 
-	// paid_at (جدید)
+	// ستون paid_at
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN paid_at DATETIME`); err == nil {
 		log.Println("✅ ستون paid_at به جدول orders اضافه شد")
 	}
 	// برای سفارش‌های paid قبلی، paid_at رو از created_at پر می‌کنیم (تخمین)
 	DB.Exec(`UPDATE orders SET paid_at = created_at WHERE status = 'paid' AND paid_at IS NULL`)
+
+	// ستون admin_note
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN admin_note TEXT DEFAULT ''`); err == nil {
+		log.Println("✅ ستون admin_note به جدول orders اضافه شد")
+	}
 }
 
-// StartOrderCleanup حذف خودکار + مایگریشن
+// StartOrderCleanup مایگریشن + حذف خودکار سفارش‌های پرداخت‌نشده
 func StartOrderCleanup() {
 	MigrateOrders()
 	cleanOldOrders()
@@ -116,7 +116,7 @@ func StartOrderCleanup() {
 	}()
 }
 
-// cleanOldOrders حذف سفارش‌های پرداخت‌نشده قدیمی‌تر از 48 ساعت
+// cleanOldOrders حذف سفارش‌های پرداخت‌نشده قدیمی‌تر از مهلت تنظیم‌شده
 func cleanOldOrders() {
 	hours := GetConfig().Cleanup.OrderExpireHours
 	if hours <= 0 {
