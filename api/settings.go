@@ -170,3 +170,61 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 		"message": "این قابلیت هنوز پیاده‌سازی نشده است",
 	})
 }
+// AddCardHandler افزودن شماره کارت
+func AddCardHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	number := strings.TrimSpace(r.FormValue("card_number"))
+	holder := strings.TrimSpace(r.FormValue("card_holder"))
+
+	if number == "" {
+		http.Error(w, "شماره کارت الزامی است", http.StatusBadRequest)
+		return
+	}
+
+	cfg := db.GetConfig()
+	cfg.Cards = append(cfg.Cards, db.CardInfo{Number: number, Holder: holder})
+
+	if err := db.SaveConfig(cfg); err != nil {
+		http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
+		return
+	}
+
+	db.LogEventf("general", "success", "💳 کارت جدید اضافه شد: %s", number)
+	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
+}
+
+// DeleteCardHandler حذف شماره کارت
+func DeleteCardHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idx, err := strconv.Atoi(r.FormValue("card_id"))
+	if err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	cfg := db.GetConfig()
+	if idx >= 0 && idx < len(cfg.Cards) {
+		cfg.Cards = append(cfg.Cards[:idx], cfg.Cards[idx+1:]...)
+		if err := db.SaveConfig(cfg); err != nil {
+			http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
+			return
+		}
+		db.LogEvent("general", "warning", "🗑️ یک کارت حذف شد")
+	}
+
+	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
+}
