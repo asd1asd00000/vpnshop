@@ -42,6 +42,7 @@ func main() {
 	http.HandleFunc(adminBase+"/settings/email-backup", api.EmailBackupHandler)
 	http.HandleFunc(adminBase+"/settings/add-card", api.AddCardHandler)
 	http.HandleFunc(adminBase+"/settings/delete-card", api.DeleteCardHandler)
+	http.HandleFunc(adminBase+"/settings/update-cleanup", api.UpdateCleanupHandler)
 
 	port := ":8080"
 	log.Printf("سرور VPNShop روی پورت %s در حال اجرا است...", port)
