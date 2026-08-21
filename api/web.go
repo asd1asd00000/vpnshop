@@ -266,6 +266,7 @@ type adminOrder struct {
 	PaidAtFmt      string
 	Configs        []ConfigItem
 	TelegramText   string
+	AdminNote      string
 }
 
 // pageItem یک آیتم از نوار صفحه‌بندی
