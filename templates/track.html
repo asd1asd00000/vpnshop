@@ -3,73 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>دریافت کانفیگ | VPNShop</title>
+    <title>پیگیری سفارش | VPNShop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-4 border-blue-600">
-        <h1 class="text-2xl font-bold text-gray-800 mb-6">دریافت کانفیگ خریداری شده</h1>
-        
-        <form method="POST" class="space-y-4">
-            <div>
-                <label class="block text-right text-sm font-medium text-gray-700 mb-1">کد پیگیری سفارش:</label>
-                <input type="text" name="tracking_code" placeholder="مثلاً TEST-BALE" required
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-left font-sans" dir="ltr">
+<body class="p-4 md:p-8">
+    <div class="max-w-3xl mx-auto">
+
+        <div class="bg-white p-8 rounded-2xl shadow-xl text-center border-t-4 border-blue-500">
+            <h1 class="text-2xl font-bold text-gray-800 mb-6">🔍 دریافت کانفیگ خریداری شده</h1>
+
+            {{if .Error}}
+            <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-6 font-bold">
+                ❌ {{.Error}}
             </div>
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200">
-                جستجو و دریافت لینک
-            </button>
-        </form>
+            {{end}}
 
-        {{if .Error}}
-        <div class="mt-6 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm">
-            {{.Error}}
-        </div>
-        {{end}}
+            <form method="POST" class="mb-6">
+                <label class="block text-right text-sm text-gray-600 mb-2">کد پیگیری سفارش:</label>
+                <input type="text" name="tracking_code" required placeholder="مثلاً VPabc123..."
+                       class="w-full border border-gray-300 rounded-lg p-3 text-center font-mono focus:ring-2 focus:ring-blue-500 mb-4">
+                <button type="submit"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">
+                    جستجو و دریافت لینک
+                </button>
+            </form>
 
-        {{if .Order}}
-            <div class="mt-8 border-t pt-6 text-right">
+            {{if .Order}}
+            <hr class="my-6 border-gray-200">
+
+            <div class="text-right">
                 <h2 class="text-lg font-bold text-green-600 mb-4">✅ سفارش شما یافت شد!</h2>
-                
-                <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2">
-                    <span class="text-sm text-gray-600">وضعیت پرداخت:</span>
-                    <span class="text-sm font-bold {{if eq .Order.Status "paid"}}text-green-600{{else}}text-orange-500{{end}}">
-                        {{if eq .Order.Status "paid"}}پرداخت شده{{else}}در انتظار پرداخت{{end}}
-                    </span>
+
+                <div class="bg-gray-50 rounded-lg p-4 mb-4 flex items-center justify-between">
+                    <span class="text-gray-600 text-sm">وضعیت پرداخت:</span>
+                    {{if eq .Order.Status "paid"}}
+                    <span class="text-green-600 font-bold">پرداخت شده</span>
+                    {{else}}
+                    <span class="text-orange-600 font-bold">در انتظار پرداخت</span>
+                    {{end}}
                 </div>
-                
-                {{if .Order.ConfigLink}}
-                <div class="mt-4 bg-blue-50 p-4 rounded-lg border border-blue-100 relative">
-                    <p class="text-xs text-blue-800 mb-2 font-bold">لینک اتصال شما (برای V2ray):</p>
-                    <textarea id="configLink" readonly class="w-full bg-white border border-blue-200 rounded text-sm text-gray-800 resize-none outline-none h-20 p-2 font-sans" dir="ltr">{{.Order.ConfigLink}}</textarea>
-                    
-                    <button onclick="copyLink()" class="mt-2 w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded transition text-sm">
-                        کپی کردن لینک
-                    </button>
-                </div>
-                <p id="copyMsg" class="text-xs text-green-600 text-center mt-2 hidden font-bold">لینک با موفقیت کپی شد!</p>
-                
-                <script>
-                    function copyLink() {
-                        var copyText = document.getElementById("configLink");
-                        copyText.select();
-                        copyText.setSelectionRange(0, 99999);
-                        navigator.clipboard.writeText(copyText.value);
-                        document.getElementById("copyMsg").classList.remove("hidden");
-                        setTimeout(() => document.getElementById("copyMsg").classList.add("hidden"), 3000);
-                    }
-                </script>
-                {{else if eq .Order.Status "paid"}}
-                <div class="mt-4 p-3 bg-yellow-50 text-yellow-700 rounded-lg text-sm border border-yellow-200">
-                    پرداخت تایید شده اما لینک در حال ساخت است. چند ثانیه دیگر صفحه را رفرش کنید.
-                </div>
+
+                {{if eq .Order.Status "paid"}}
+                    {{if .Order.ConfigLink}}
+                        <!-- 🎯 لیست کانفیگ‌ها (با JS رندر میشه) -->
+                        <div id="configsList" class="space-y-4"></div>
+                        <textarea id="rawConfig" class="hidden">{{.Order.ConfigLink}}</textarea>
+                    {{else}}
+                        <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4 text-sm">
+                            ⏳ کانفیگ شما در حال ساخته شدن است. لطفاً چند لحظه دیگر دوباره بررسی کنید.
+                        </div>
+                    {{end}}
+                {{else}}
+                    <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4 text-sm">
+                        ⚠️ پرداخت شما هنوز تایید نشده است. پس از واریز، کانفیگ به صورت خودکار اینجا نمایش داده می‌شود.
+                    </div>
                 {{end}}
             </div>
-        {{end}}
+            {{end}}
+        </div>
+
+        <div class="text-center mt-6">
+            <a href="/" class="text-blue-600 font-bold hover:underline">🛒 بازگشت به فروشگاه</a>
+        </div>
     </div>
+
+    <script>
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        function copyInput(btn) {
+            const input = btn.parentElement.querySelector('input');
+            input.select();
+            input.setSelectionRange(0, 99999);
+            try {
+                if (navigator.clipboard) { navigator.clipboard.writeText(input.value); }
+                else { document.execCommand('copy'); }
+            } catch (e) { document.execCommand('copy'); }
+            const old = btn.textContent;
+            btn.textContent = '✅ کپی شد';
+            setTimeout(() => btn.textContent = old, 1500);
+        }
+
+        // ── رندر کانفیگ‌ها به صورت کارت‌های جدا ──
+        const rawEl = document.getElementById('rawConfig');
+        if (rawEl) {
+            const list = document.getElementById('configsList');
+            let items = null;
+            try {
+                const parsed = JSON.parse(rawEl.value.trim());
+                if (Array.isArray(parsed)) items = parsed;
+            } catch (e) {}
+
+            if (items && items.length > 0) {
+                // 🎯 فرمت جدید: کارت جدا برای هر کانفیگ (مثل صفحه ادمین)
+                list.innerHTML = items.map(item => `
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200 text-right">
+                        <div class="font-bold text-green-800 mb-1 text-base">${escapeHtml(item.title)}</div>
+                        <div class="text-xs text-green-600 mb-3">${escapeHtml(item.desc)}</div>
+                        <div class="flex gap-2" dir="ltr">
+                            <input type="text" readonly value="${escapeHtml(item.link)}"
+                                   class="bg-white border border-green-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 font-mono"
+                                   onclick="this.select();">
+                            <button type="button" onclick="copyInput(this)"
+                                    class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
+                                📋 کپی
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                // فرمت قدیمی: متن خام
+                list.innerHTML = `
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <div class="font-bold text-green-800 mb-2">🛡️ کانفیگ شما</div>
+                        <div class="flex gap-2" dir="ltr">
+                            <input type="text" readonly value="${escapeHtml(rawEl.value.trim())}"
+                                   class="bg-white border border-green-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 font-mono"
+                                   onclick="this.select();">
+                            <button type="button" onclick="copyInput(this)"
+                                    class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
+                                📋 کپی
+                            </button>
+                        </div>
+                    </div>`;
+            }
+        }
+    </script>
 </body>
 </html>
