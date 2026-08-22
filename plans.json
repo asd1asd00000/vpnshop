@@ -16,7 +16,7 @@
     "price": 200000,
     "volume_gb": 20,
     "days": 30,
-    "is_special": true,
+    "is_special": false,
     "backup_gb": 1,
     "gift_gb": 4,
     "gift_note": ""
@@ -38,7 +38,7 @@
     "price": 900000,
     "volume_gb": 100,
     "days": 90,
-    "is_special": false,
+    "is_special": true,
     "backup_gb": 4,
     "gift_gb": 25,
     "gift_note": ""
