@@ -55,56 +55,102 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 	return "", fmt.Errorf("پاسارگاد: توکن در پاسخ یافت نشد")
 }
 
-// 🎯 getAllInbounds دریافت همه inbound ها برای Select All (جدید)
-// پاسخ Marzban معمولاً: {"vless": [{tag: "x", ...}, ...], "vmess": [...], ...}
+// 🎯 getAllInbounds دریافت همه inbound ها با تست endpoint های مختلف (Select All)
 func getAllInbounds(baseURL, token string) map[string][]string {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", baseURL+"/api/inbounds", nil)
-	if err != nil {
-		return nil
+
+	// endpoint های مختلف برای نسخه‌های مختلف Marzban/Marzneshin
+	endpoints := []string{
+		"/api/inbounds",
+		"/api/proxies",
+		"/api/admin/proxies",
+		"/api/admin/inbounds",
 	}
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Accept", "application/json")
 
-	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		if resp != nil {
-			resp.Body.Close()
+	for _, ep := range endpoints {
+		req, err := http.NewRequest("GET", baseURL+ep, nil)
+		if err != nil {
+			continue
 		}
-		log.Printf("⚠️ [پاسارگاد] دریافت inbounds ناموفق: %v (status: %v)", err, resp)
-		return nil
-	}
-	defer resp.Body.Close()
+		req.Header.Add("Authorization", "Bearer "+token)
+		req.Header.Add("Accept", "application/json")
 
-	body, _ := io.ReadAll(resp.Body)
-
-	// فرمت ۱: object {protocol: [inbound, ...]}
-	var protoMap map[string]interface{}
-	if err := json.Unmarshal(body, &protoMap); err == nil {
-		result := make(map[string][]string)
-		for proto, val := range protoMap {
-			list, ok := val.([]interface{})
-			if !ok {
-				continue
-			}
-			var tags []string
-			for _, item := range list {
-				if m, ok := item.(map[string]interface{}); ok {
-					if tag, ok := m["tag"].(string); ok && tag != "" {
-						tags = append(tags, tag)
-					}
-				}
-			}
-			if len(tags) > 0 {
-				result[proto] = tags
-			}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("🔍 [پاسارگاد] %s | خطا: %v", ep, err)
+			continue
 		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		// لاگ کامل برای debug
+		preview := string(body)
+		if len(preview) > 300 {
+			preview = preview[:300] + "..."
+		}
+		log.Printf("🔍 [پاسارگاد] %s | Status: %d | Body: %s", ep, resp.StatusCode, preview)
+
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+
+		// تلاش برای parse به شکل‌های مختلف
+		result := parseInboundResponse(body)
 		if len(result) > 0 {
 			total := 0
 			for _, tags := range result {
 				total += len(tags)
 			}
-			log.Printf("✅ [پاسارگاد] %d inbound در %d protocol پیدا شد (Select All)", total, len(result))
+			log.Printf("✅ [پاسارگاد] %d inbound از %s یافت شد (Select All)", total, ep)
+			return result
+		}
+	}
+
+	log.Printf("⚠️ [پاسارگاد] هیچ inbound یافت نشد، بدون inbounds ادامه می‌دهد")
+	return nil
+}
+
+// parseInboundResponse تلاش برای parse کردن پاسخ در فرمت‌های مختلف
+func parseInboundResponse(body []byte) map[string][]string {
+	result := make(map[string][]string)
+
+	// فرمت ۱: object {protocol: [inbound, ...]}
+	var protoMap map[string]interface{}
+	if err := json.Unmarshal(body, &protoMap); err == nil {
+		for proto, val := range protoMap {
+			// رد کردن فیلدهای غیرمرتبط
+			if proto == "detail" || proto == "error" || proto == "message" {
+				continue
+			}
+
+			// حالت A: آرایه از inbound ها
+			if list, ok := val.([]interface{}); ok {
+				var tags []string
+				for _, item := range list {
+					if m, ok := item.(map[string]interface{}); ok {
+						if tag, ok := m["tag"].(string); ok && tag != "" {
+							tags = append(tags, tag)
+						}
+					} else if s, ok := item.(string); ok && s != "" {
+						// حالت B: آرایه از رشته‌ها (فقط tag)
+						tags = append(tags, s)
+					}
+				}
+				if len(tags) > 0 {
+					result[proto] = tags
+				}
+				continue
+			}
+
+			// حالت C: object که داخلش tag هست (inbound تکی)
+			if m, ok := val.(map[string]interface{}); ok {
+				if tag, ok := m["tag"].(string); ok && tag != "" {
+					result[proto] = append(result[proto], tag)
+				}
+			}
+		}
+		if len(result) > 0 {
 			return result
 		}
 	}
@@ -112,26 +158,29 @@ func getAllInbounds(baseURL, token string) map[string][]string {
 	// فرمت ۲: آرایه flat [{tag, protocol}, ...]
 	var flatArr []map[string]interface{}
 	if err := json.Unmarshal(body, &flatArr); err == nil {
-		result := make(map[string][]string)
 		for _, item := range flatArr {
 			tag, _ := item["tag"].(string)
 			proto, _ := item["protocol"].(string)
+			if proto == "" {
+				proto, _ = item["type"].(string)
+			}
 			if tag == "" || proto == "" {
 				continue
 			}
 			result[proto] = append(result[proto], tag)
 		}
 		if len(result) > 0 {
-			total := 0
-			for _, tags := range result {
-				total += len(tags)
-			}
-			log.Printf("✅ [پاسارگاد] %d inbound در %d protocol پیدا شد (flat)", total, len(result))
 			return result
 		}
 	}
 
-	log.Printf("⚠️ [پاسارگاد] هیچ inbound یافت نشد")
+	// فرمت ۳: آرایه ساده از رشته‌ها [tag1, tag2, ...]
+	var stringArr []string
+	if err := json.Unmarshal(body, &stringArr); err == nil && len(stringArr) > 0 {
+		result["misc"] = stringArr
+		return result
+	}
+
 	return nil
 }
 
@@ -165,9 +214,11 @@ func getPasarguardGroupIDs(baseURL, token string) []int {
 	return []int{}
 }
 
+// extractGroupIDs استخراج ID ها از فرمت‌های مختلف پاسخ
 func extractGroupIDs(body []byte) []int {
 	var ids []int
 
+	// فرمت ۱: آرایه مستقیم [{"id":1},...]
 	var arr []map[string]interface{}
 	if err := json.Unmarshal(body, &arr); err == nil {
 		for _, g := range arr {
@@ -180,6 +231,7 @@ func extractGroupIDs(body []byte) []int {
 		}
 	}
 
+	// فرمت ۲: آبجکت پیچیده {"items":[...]} یا {"groups":[...]}
 	var wrapper map[string]interface{}
 	if err := json.Unmarshal(body, &wrapper); err == nil {
 		for _, key := range []string{"items", "groups", "data", "results"} {
@@ -197,9 +249,11 @@ func extractGroupIDs(body []byte) []int {
 			}
 		}
 	}
+
 	return ids
 }
 
+// extractPasarguardSubURL استخراج لینک اشتراک از پاسخ پاسارگاد
 func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string {
 	if subURL, ok := data["subscription_url"].(string); ok && subURL != "" {
 		if strings.HasPrefix(subURL, "/") {
@@ -239,7 +293,7 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		expireTimestamp = time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
 	}
 
-	// 🎯 پروتکل‌هایی که در inbound های یافت شده موجودن
+	// پروتکل‌های پیش‌فرض
 	proxies := map[string]interface{}{
 		"vmess":       map[string]interface{}{},
 		"vless":       map[string]interface{}{},
@@ -379,6 +433,7 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 		return "", fmt.Errorf("پاسارگاد: بروزرسانی ناموفق، کد: %d", respPut.StatusCode)
 	}
 
+	// گرفتن لینک اشتراک بعد از بروزرسانی
 	reqGetLink, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
 	reqGetLink.Header.Add("Authorization", "Bearer "+token)
 	respGetLink, err := client.Do(reqGetLink)
@@ -395,6 +450,7 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 	return "", nil
 }
 
+// GetMarzbanUserUsage دریافت حجم استفاده‌شده کاربر
 func GetMarzbanUserUsage(panel db.PanelConfig, targetUser string) (int64, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -424,6 +480,7 @@ func GetMarzbanUserUsage(panel db.PanelConfig, targetUser string) (int64, error)
 	return 0, fmt.Errorf("پاسارگاد: حجم استفاده‌شده یافت نشد")
 }
 
+// DisableMarzbanUsers غیرفعال کردن چند کاربر به صورت batch
 func DisableMarzbanUsers(panel db.PanelConfig, usernames []string) error {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -464,6 +521,7 @@ func DisableMarzbanUsers(panel db.PanelConfig, usernames []string) error {
 	return nil
 }
 
+// FormatMarzbanConfig فرمت‌بندی خروجی برای نمایش به مشتری
 func FormatMarzbanConfig(panel db.PanelConfig, link string, volumeGB int) string {
 	panelName := panel.Name
 	if panelName == "" {
