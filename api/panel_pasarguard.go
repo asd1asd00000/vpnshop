@@ -55,10 +55,89 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 	return "", fmt.Errorf("پاسارگاد: توکن در پاسخ یافت نشد")
 }
 
-// getPasarguardGroupIDs شناسه همه گروه‌های پنل پاسارگاد
+// 🎯 getAllInbounds دریافت همه inbound ها برای Select All (جدید)
+// پاسخ Marzban معمولاً: {"vless": [{tag: "x", ...}, ...], "vmess": [...], ...}
+func getAllInbounds(baseURL, token string) map[string][]string {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", baseURL+"/api/inbounds", nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		log.Printf("⚠️ [پاسارگاد] دریافت inbounds ناموفق: %v (status: %v)", err, resp)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	// فرمت ۱: object {protocol: [inbound, ...]}
+	var protoMap map[string]interface{}
+	if err := json.Unmarshal(body, &protoMap); err == nil {
+		result := make(map[string][]string)
+		for proto, val := range protoMap {
+			list, ok := val.([]interface{})
+			if !ok {
+				continue
+			}
+			var tags []string
+			for _, item := range list {
+				if m, ok := item.(map[string]interface{}); ok {
+					if tag, ok := m["tag"].(string); ok && tag != "" {
+						tags = append(tags, tag)
+					}
+				}
+			}
+			if len(tags) > 0 {
+				result[proto] = tags
+			}
+		}
+		if len(result) > 0 {
+			total := 0
+			for _, tags := range result {
+				total += len(tags)
+			}
+			log.Printf("✅ [پاسارگاد] %d inbound در %d protocol پیدا شد (Select All)", total, len(result))
+			return result
+		}
+	}
+
+	// فرمت ۲: آرایه flat [{tag, protocol}, ...]
+	var flatArr []map[string]interface{}
+	if err := json.Unmarshal(body, &flatArr); err == nil {
+		result := make(map[string][]string)
+		for _, item := range flatArr {
+			tag, _ := item["tag"].(string)
+			proto, _ := item["protocol"].(string)
+			if tag == "" || proto == "" {
+				continue
+			}
+			result[proto] = append(result[proto], tag)
+		}
+		if len(result) > 0 {
+			total := 0
+			for _, tags := range result {
+				total += len(tags)
+			}
+			log.Printf("✅ [پاسارگاد] %d inbound در %d protocol پیدا شد (flat)", total, len(result))
+			return result
+		}
+	}
+
+	log.Printf("⚠️ [پاسارگاد] هیچ inbound یافت نشد")
+	return nil
+}
+
+// getPasarguardGroupIDs (legacy) شناسه گروه‌ها — fallback برای نسخه‌های قدیمی
 func getPasarguardGroupIDs(baseURL, token string) []int {
 	endpoints := []string{"/api/groups", "/api/user_groups", "/api/admin/groups", "/api/nodes/groups"}
-
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	for _, ep := range endpoints {
@@ -83,16 +162,12 @@ func getPasarguardGroupIDs(baseURL, token string) []int {
 			return ids
 		}
 	}
-
-	log.Printf("⚠️ [پاسارگاد] هیچ گروهی یافت نشد، بدون group_ids ادامه می‌دهد")
 	return []int{}
 }
 
-// extractGroupIDs استخراج ID ها از فرمت‌های مختلف پاسخ
 func extractGroupIDs(body []byte) []int {
 	var ids []int
 
-	// فرمت ۱: آرایه مستقیم [{"id":1},...]
 	var arr []map[string]interface{}
 	if err := json.Unmarshal(body, &arr); err == nil {
 		for _, g := range arr {
@@ -105,7 +180,6 @@ func extractGroupIDs(body []byte) []int {
 		}
 	}
 
-	// فرمت ۲: آبجکت پیچیده {"items":[...]} یا {"groups":[...]}
 	var wrapper map[string]interface{}
 	if err := json.Unmarshal(body, &wrapper); err == nil {
 		for _, key := range []string{"items", "groups", "data", "results"} {
@@ -123,11 +197,9 @@ func extractGroupIDs(body []byte) []int {
 			}
 		}
 	}
-
 	return ids
 }
 
-// extractPasarguardSubURL استخراج لینک اشتراک از پاسخ پاسارگاد
 func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string {
 	if subURL, ok := data["subscription_url"].(string); ok && subURL != "" {
 		if strings.HasPrefix(subURL, "/") {
@@ -143,7 +215,7 @@ func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string
 	return ""
 }
 
-// CreateMarzbanUser ساخت کاربر در پنل پاسارگاد
+// CreateMarzbanUser ساخت کاربر در پنل پاسارگاد با Select All
 func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -151,15 +223,36 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 	}
 
 	baseURL := strings.TrimRight(panel.URL, "/")
+
+	// 🎯 Select All: گرفتن همه inbound ها
+	allInbounds := getAllInbounds(baseURL, token)
+
+	// fallback: گروه‌های قدیمی
 	groupIDs := getPasarguardGroupIDs(baseURL, token)
 
 	// تبدیل GB به bytes
 	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
 
-	// تبدیل روز به timestamp
+	// timestamp انقضا
 	var expireTimestamp int64
 	if days > 0 {
 		expireTimestamp = time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
+	}
+
+	// 🎯 پروتکل‌هایی که در inbound های یافت شده موجودن
+	proxies := map[string]interface{}{
+		"vmess":       map[string]interface{}{},
+		"vless":       map[string]interface{}{},
+		"trojan":      map[string]interface{}{},
+		"shadowsocks": map[string]interface{}{},
+	}
+
+	// اگه inbound ها پیدا شدن، فقط پروتکل‌های موجود رو فعال کن
+	if len(allInbounds) > 0 {
+		proxies = make(map[string]interface{})
+		for proto := range allInbounds {
+			proxies[proto] = map[string]interface{}{}
+		}
 	}
 
 	payload := map[string]interface{}{
@@ -167,15 +260,16 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		"data_limit":                volumeBytes,
 		"data_limit_reset_strategy": "no_reset",
 		"status":                    "active",
-		"proxies": map[string]interface{}{
-			"vmess":       map[string]interface{}{},
-			"vless":       map[string]interface{}{},
-			"trojan":      map[string]interface{}{},
-			"shadowsocks": map[string]interface{}{},
-		},
+		"proxies":                   proxies,
 	}
 
-	// فقط اگه گروهی پیدا شد، اضافه کن
+	// 🎯 Select All: همه inbound ها رو اضافه کن
+	if len(allInbounds) > 0 {
+		payload["inbounds"] = allInbounds
+		log.Printf("🎯 [پاسارگاد] Select All: همه inbound ها برای %s فعال شد", username)
+	}
+
+	// fallback: group_ids برای نسخه‌های قدیمی
 	if len(groupIDs) > 0 {
 		payload["group_ids"] = groupIDs
 	}
@@ -185,6 +279,8 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 	}
 
 	jsonData, _ := json.Marshal(payload)
+	log.Printf("🔍 [پاسارگاد] payload ساخت کاربر: %s", string(jsonData))
+
 	req, err := http.NewRequest("POST", baseURL+"/api/user", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
@@ -283,7 +379,6 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 		return "", fmt.Errorf("پاسارگاد: بروزرسانی ناموفق، کد: %d", respPut.StatusCode)
 	}
 
-	// گرفتن لینک اشتراک بعد از بروزرسانی
 	reqGetLink, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
 	reqGetLink.Header.Add("Authorization", "Bearer "+token)
 	respGetLink, err := client.Do(reqGetLink)
@@ -300,7 +395,6 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 	return "", nil
 }
 
-// GetMarzbanUserUsage دریافت حجم استفاده‌شده کاربر
 func GetMarzbanUserUsage(panel db.PanelConfig, targetUser string) (int64, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -330,7 +424,6 @@ func GetMarzbanUserUsage(panel db.PanelConfig, targetUser string) (int64, error)
 	return 0, fmt.Errorf("پاسارگاد: حجم استفاده‌شده یافت نشد")
 }
 
-// DisableMarzbanUsers غیرفعال کردن چند کاربر به صورت batch
 func DisableMarzbanUsers(panel db.PanelConfig, usernames []string) error {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -371,7 +464,6 @@ func DisableMarzbanUsers(panel db.PanelConfig, usernames []string) error {
 	return nil
 }
 
-// FormatMarzbanConfig فرمت‌بندی خروجی برای نمایش به مشتری
 func FormatMarzbanConfig(panel db.PanelConfig, link string, volumeGB int) string {
 	panelName := panel.Name
 	if panelName == "" {
