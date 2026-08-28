@@ -14,8 +14,6 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
-// ───────────── توابع داخلی پنل پاسارگاد (Marzban) ─────────────
-
 func getPasarguardToken(panelURL, username, password string) (string, error) {
 	baseURL := strings.TrimRight(panelURL, "/")
 
@@ -39,7 +37,6 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 	defer resp.Body.Close()
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
-
 	log.Printf("🔍 [پاسارگاد] احراز هویت | URL: %s | Status: %d", baseURL+"/api/admin/token", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
@@ -54,7 +51,105 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 	return "", fmt.Errorf("پاسارگاد: توکن در پاسخ یافت نشد")
 }
 
-// 🎯 getAllInbounds دریافت همه inbound ها با تست endpoint های مختلف (Select All)
+// 🎯 getPasarguardGroupIDs - چک کردن گروه‌ها با لاگ کامل
+// این تابع همیشه لاگ کامل می‌ده تا بفهمیم هر پنل چی داره
+func getPasarguardGroupIDs(baseURL, token string) []int {
+	endpoints := []string{
+		"/api/groups",
+		"/api/user_groups",
+		"/api/admin/groups",
+		"/api/node_groups",
+		"/api/nodes/groups",
+		"/api/admins/groups",
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	for _, ep := range endpoints {
+		req, _ := http.NewRequest("GET", baseURL+ep, nil)
+		req.Header.Add("Authorization", "Bearer "+token)
+		req.Header.Add("Accept", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("🔍 [پاسارگاد] %s | خطا: %v", ep, err)
+			continue
+		}
+
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		preview := string(bodyBytes)
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		log.Printf("🔍 [پاسارگاد] %s | Status: %d | Body: %s", ep, resp.StatusCode, preview)
+
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+
+		ids := extractGroupIDs(bodyBytes)
+		if len(ids) > 0 {
+			log.Printf("✅ [پاسارگاد] %d گروه از %s یافت شد", len(ids), ep)
+			return ids
+		}
+	}
+
+	log.Printf("⚠️ [پاسارگاد] هیچ گروهی از endpoints موجود یافت نشد")
+	return []int{}
+}
+
+func extractGroupIDs(body []byte) []int {
+	var ids []int
+
+	// فرمت ۱: آرایه مستقیم [{"id":1, "name":"..."},...]
+	var arr []map[string]interface{}
+	if err := json.Unmarshal(body, &arr); err == nil {
+		for _, g := range arr {
+			if id, ok := g["id"].(float64); ok {
+				ids = append(ids, int(id))
+			}
+		}
+		if len(ids) > 0 {
+			return ids
+		}
+	}
+
+	// فرمت ۲: آرایه ساده از اعداد [1, 2, 3]
+	var intArr []float64
+	if err := json.Unmarshal(body, &intArr); err == nil && len(intArr) > 0 {
+		for _, id := range intArr {
+			ids = append(ids, int(id))
+		}
+		if len(ids) > 0 {
+			return ids
+		}
+	}
+
+	// فرمت ۳: آبجکت پیچیده {"items":[...]} یا {"groups":[...]}
+	var wrapper map[string]interface{}
+	if err := json.Unmarshal(body, &wrapper); err == nil {
+		for _, key := range []string{"items", "groups", "data", "results"} {
+			if list, ok := wrapper[key].([]interface{}); ok {
+				for _, item := range list {
+					if m, ok := item.(map[string]interface{}); ok {
+						if id, ok := m["id"].(float64); ok {
+							ids = append(ids, int(id))
+						}
+					}
+				}
+				if len(ids) > 0 {
+					return ids
+				}
+			}
+		}
+	}
+
+	return ids
+}
+
+// 🎯 getAllInbounds - fallback برای پنل‌هایی که group ندارن
 func getAllInbounds(baseURL, token string) map[string][]string {
 	client := &http.Client{Timeout: 10 * time.Second}
 
@@ -98,7 +193,7 @@ func getAllInbounds(baseURL, token string) map[string][]string {
 			for _, tags := range result {
 				total += len(tags)
 			}
-			log.Printf("✅ [پاسارگاد] %d inbound از %s یافت شد (Select All)", total, ep)
+			log.Printf("✅ [پاسارگاد] %d inbound از %s یافت شد", total, ep)
 			return result
 		}
 	}
@@ -110,7 +205,6 @@ func getAllInbounds(baseURL, token string) map[string][]string {
 func parseInboundResponse(body []byte) map[string][]string {
 	result := make(map[string][]string)
 
-	// فرمت ۱: object {protocol: [inbound, ...]}
 	var protoMap map[string]interface{}
 	if err := json.Unmarshal(body, &protoMap); err == nil {
 		for proto, val := range protoMap {
@@ -144,7 +238,6 @@ func parseInboundResponse(body []byte) map[string][]string {
 		}
 	}
 
-	// فرمت ۲: آرایه flat [{tag, protocol}, ...]
 	var flatArr []map[string]interface{}
 	if err := json.Unmarshal(body, &flatArr); err == nil {
 		for _, item := range flatArr {
@@ -163,94 +256,17 @@ func parseInboundResponse(body []byte) map[string][]string {
 		}
 	}
 
-	// فرمت ۳: آرایه ساده از رشته‌ها [tag1, tag2, ...]
 	var stringArr []string
 	if err := json.Unmarshal(body, &stringArr); err == nil && len(stringArr) > 0 {
-		result["misc"] = stringArr
+		// 🎯 آرایه ساده رو در همه پروتکل‌های استاندارد قرار می‌ده
+		standardProtocols := []string{"vless", "vmess", "trojan", "shadowsocks"}
+		for _, proto := range standardProtocols {
+			result[proto] = append([]string{}, stringArr...)
+		}
 		return result
 	}
 
 	return nil
-}
-
-// 🎯 expandToStandardProtocols: اگه inbound ها در "misc" هستن (آرایه ساده)،
-// اون‌ها رو در همه ۴ پروتکل استاندارد قرار می‌ده تا Marzban اونهایی که موجوده رو انتخاب کنه
-func expandToStandardProtocols(inbounds map[string][]string) map[string][]string {
-	if _, hasMisc := inbounds["misc"]; !hasMisc {
-		return inbounds
-	}
-
-	// ساختار صحیح برای Marzban: همه inbound ها در همه پروتکل‌های استاندارد
-	result := make(map[string][]string)
-	standardProtocols := []string{"vless", "vmess", "trojan", "shadowsocks"}
-	for _, proto := range standardProtocols {
-		result[proto] = append([]string{}, inbounds["misc"]...)
-	}
-	return result
-}
-
-func getPasarguardGroupIDs(baseURL, token string) []int {
-	endpoints := []string{"/api/groups", "/api/user_groups", "/api/admin/groups", "/api/nodes/groups"}
-	client := &http.Client{Timeout: 5 * time.Second}
-
-	for _, ep := range endpoints {
-		req, _ := http.NewRequest("GET", baseURL+ep, nil)
-		req.Header.Add("Authorization", "Bearer "+token)
-		req.Header.Add("Accept", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			if resp != nil {
-				resp.Body.Close()
-			}
-			continue
-		}
-
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		ids := extractGroupIDs(bodyBytes)
-		if len(ids) > 0 {
-			log.Printf("🔍 [پاسارگاد] گروه‌های یافت شده از %s: %v", ep, ids)
-			return ids
-		}
-	}
-	return []int{}
-}
-
-func extractGroupIDs(body []byte) []int {
-	var ids []int
-
-	var arr []map[string]interface{}
-	if err := json.Unmarshal(body, &arr); err == nil {
-		for _, g := range arr {
-			if id, ok := g["id"].(float64); ok {
-				ids = append(ids, int(id))
-			}
-		}
-		if len(ids) > 0 {
-			return ids
-		}
-	}
-
-	var wrapper map[string]interface{}
-	if err := json.Unmarshal(body, &wrapper); err == nil {
-		for _, key := range []string{"items", "groups", "data", "results"} {
-			if list, ok := wrapper[key].([]interface{}); ok {
-				for _, item := range list {
-					if m, ok := item.(map[string]interface{}); ok {
-						if id, ok := m["id"].(float64); ok {
-							ids = append(ids, int(id))
-						}
-					}
-				}
-				if len(ids) > 0 {
-					return ids
-				}
-			}
-		}
-	}
-	return ids
 }
 
 func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string {
@@ -268,7 +284,7 @@ func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string
 	return ""
 }
 
-// CreateMarzbanUser ساخت کاربر با Select All
+// CreateMarzbanUser - اولویت با groups (روش استاندارد Marzban)
 func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -277,9 +293,18 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 
 	baseURL := strings.TrimRight(panel.URL, "/")
 
-	// 🎯 Select All: گرفتن همه inbound ها
-	rawInbounds := getAllInbounds(baseURL, token)
+	// 🎯 اولویت ۱: groups (روش استاندارد Marzban)
+	log.Printf("🔍 [پاسارگاد] بررسی گروه‌ها برای %s...", baseURL)
 	groupIDs := getPasarguardGroupIDs(baseURL, token)
+
+	// 🎯 اولویت ۲: inbounds (fallback - فقط اگه groups نبود)
+	var allInbounds map[string][]string
+	if len(groupIDs) == 0 {
+		log.Printf("🔍 [پاسارگاد] گروه یافت نشد، بررسی inbound ها...")
+		allInbounds = getAllInbounds(baseURL, token)
+	} else {
+		log.Printf("✅ [پاسارگاد] از %d گروه استفاده می‌شود (inbound چک نمی‌شود)", len(groupIDs))
+	}
 
 	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
 
@@ -293,36 +318,27 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		"data_limit":                volumeBytes,
 		"data_limit_reset_strategy": "no_reset",
 		"status":                    "active",
-	}
-
-	// 🎯 Select All: گسترش به پروتکل‌های استاندارد در صورت نیاز
-	if len(rawInbounds) > 0 {
-		expanded := expandToStandardProtocols(rawInbounds)
-		payload["inbounds"] = expanded
-
-		proxies := make(map[string]interface{})
-		for proto := range expanded {
-			proxies[proto] = map[string]interface{}{}
-		}
-		payload["proxies"] = proxies
-
-		total := 0
-		for _, tags := range expanded {
-			total += len(tags)
-		}
-		log.Printf("🎯 [پاسارگاد] Select All: %d inbound در %d پروتکل برای %s", total, len(expanded), username)
-	} else {
-		// fallback: پروتکل‌های پیش‌فرض
-		payload["proxies"] = map[string]interface{}{
+		"proxies": map[string]interface{}{
 			"vmess":       map[string]interface{}{},
 			"vless":       map[string]interface{}{},
 			"trojan":      map[string]interface{}{},
 			"shadowsocks": map[string]interface{}{},
-		}
+		},
 	}
 
+	// 🎯 فقط یکی از این دو رو اضافه کن:
 	if len(groupIDs) > 0 {
 		payload["group_ids"] = groupIDs
+		log.Printf("🎯 [پاسارگاد] payload با %d گروه برای %s", len(groupIDs), username)
+	} else if len(allInbounds) > 0 {
+		payload["inbounds"] = allInbounds
+		total := 0
+		for _, tags := range allInbounds {
+			total += len(tags)
+		}
+		log.Printf("🎯 [پاسارگاد] payload با %d inbound برای %s (fallback)", total, username)
+	} else {
+		log.Printf("⚠️ [پاسارگاد] payload بدون گروه و inbound برای %s", username)
 	}
 
 	if expireTimestamp > 0 {
@@ -330,7 +346,7 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 	}
 
 	jsonData, _ := json.Marshal(payload)
-	log.Printf("🔍 [پاسارگاد] payload ساخت کاربر: %s", string(jsonData))
+	log.Printf("🔍 [پاسارگاد] payload: %s", string(jsonData))
 
 	req, err := http.NewRequest("POST", baseURL+"/api/user", bytes.NewBuffer(jsonData))
 	if err != nil {
