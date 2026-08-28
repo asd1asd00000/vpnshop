@@ -56,8 +56,8 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 }
 
 // getPasarguardGroupIDs شناسه همه گروه‌های پنل پاسارگاد
+// در صورت خطای شبکه یا تایم‌اوت (که معمولاً موقتی است)، تا ۳ بار تلاش دوباره می‌شود
 func getPasarguardGroupIDs(baseURL, token string) []int {
-	// limit بزرگ اضافه شد تا اگه API صفحه‌بندی پیش‌فرض داره، همه گروه‌ها در یک درخواست بیان
 	endpoints := []string{
 		"/api/groups?limit=1000&offset=0",
 		"/api/user_groups?limit=1000&offset=0",
@@ -65,40 +65,69 @@ func getPasarguardGroupIDs(baseURL, token string) []int {
 		"/api/nodes/groups?limit=1000&offset=0",
 	}
 
-	// timeout افزایش یافت چون با افزایش تعداد گروه، حجم و زمان پاسخ هم بیشتر میشه
 	client := &http.Client{Timeout: 20 * time.Second}
 
+	const maxRetries = 3
+	const retryDelay = 1 * time.Second
+
 	for _, ep := range endpoints {
-		req, _ := http.NewRequest("GET", baseURL+ep, nil)
-		req.Header.Add("Authorization", "Bearer "+token)
-		req.Header.Add("Accept", "application/json")
+		var permanentFail bool
 
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("⚠️ [پاسارگاد] خطا در فراخوانی %s: %v", ep, err)
-			continue
-		}
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			req, _ := http.NewRequest("GET", baseURL+ep, nil)
+			req.Header.Add("Authorization", "Bearer "+token)
+			req.Header.Add("Accept", "application/json")
 
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("⚠️ [پاسارگاد] پاسخ ناموفق از %s | Status: %d | Body: %s",
-				ep, resp.StatusCode, truncateBody(bodyBytes, 300))
-			continue
-		}
-
-		ids, total := extractGroupIDsWithTotal(bodyBytes)
-		if len(ids) > 0 {
-			log.Printf("🔍 [پاسارگاد] گروه‌های یافت شده از %s: %v (total: %d)", ep, ids, total)
-			if total > len(ids) {
-				log.Printf("⚠️ [پاسارگاد] هشدار: تعداد کل گروه‌ها (%d) بیشتر از گروه‌های دریافتی (%d) است، احتمال pagination ناقص", total, len(ids))
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("⚠️ [پاسارگاد] خطا در فراخوانی %s (تلاش %d/%d): %v", ep, attempt, maxRetries, err)
+				if attempt < maxRetries {
+					time.Sleep(retryDelay)
+					continue
+				}
+				break
 			}
-			return ids
+
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			// خطای موقت سمت سرور یا rate limit → تلاش دوباره
+			if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
+				log.Printf("⚠️ [پاسارگاد] پاسخ ناموفق موقت از %s (تلاش %d/%d) | Status: %d | Body: %s",
+					ep, attempt, maxRetries, resp.StatusCode, truncateBody(bodyBytes, 300))
+				if attempt < maxRetries {
+					time.Sleep(retryDelay)
+					continue
+				}
+				break
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				// خطای دائمی (404, 403, 405, ...) → تلاش دوباره فایده‌ای ندارد، برو به endpoint بعدی
+				log.Printf("⚠️ [پاسارگاد] پاسخ ناموفق از %s | Status: %d | Body: %s",
+					ep, resp.StatusCode, truncateBody(bodyBytes, 300))
+				permanentFail = true
+				break
+			}
+
+			ids, total := extractGroupIDsWithTotal(bodyBytes)
+			if len(ids) > 0 {
+				log.Printf("🔍 [پاسارگاد] گروه‌های یافت شده از %s: %v (total: %d)", ep, ids, total)
+				if total > len(ids) {
+					log.Printf("⚠️ [پاسارگاد] هشدار: تعداد کل گروه‌ها (%d) بیشتر از گروه‌های دریافتی (%d) است، احتمال pagination ناقص", total, len(ids))
+				}
+				return ids
+			}
+
+			log.Printf("⚠️ [پاسارگاد] پاسخ %s موفق بود ولی هیچ groupID استخراج نشد | Body: %s",
+				ep, truncateBody(bodyBytes, 300))
+			permanentFail = true
+			break
 		}
 
-		log.Printf("⚠️ [پاسارگاد] پاسخ %s موفق بود ولی هیچ groupID استخراج نشد | Body: %s",
-			ep, truncateBody(bodyBytes, 300))
+		if permanentFail {
+			continue
+		}
 	}
 
 	log.Printf("⚠️ [پاسارگاد] هیچ گروهی یافت نشد، بدون group_ids ادامه می‌دهد")
