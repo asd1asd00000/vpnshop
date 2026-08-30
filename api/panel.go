@@ -18,7 +18,9 @@ type ConfigItem struct {
 	Role   string `json:"role"`   // main | backup | gift
 	Volume int    `json:"volume"` // حجم به GB
 	Note   string `json:"note"`   // توضیح هدیه
+    Username string `json:"username"`
 }
+
 
 // planVolumes حجم‌های تعریف‌شده در پلن
 type planVolumes struct {
