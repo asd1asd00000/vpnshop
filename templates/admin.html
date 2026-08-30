@@ -137,6 +137,14 @@
                                 <span class="block text-xs text-gray-400 mb-1">نام پلن</span>
                                 <span class="text-blue-600 font-bold">{{.PlanName}}</span>
                             </div>
+                                                        <div>
+                                <span class="block text-xs text-gray-400 mb-1">👤 نام کاربری</span>
+                                {{if .Username}}
+                                <span class="font-mono text-gray-800 text-sm font-bold" dir="ltr">{{.Username}}</span>
+                                {{else}}
+                                <span class="text-gray-400 text-sm italic">-</span>
+                                {{end}}
+                            </div>
 
                             <div>
                                 <span class="block text-xs text-gray-400 mb-1">🕐 تاریخ ایجاد فاکتور</span>
