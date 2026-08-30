@@ -148,6 +148,7 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 			Role:   role,
 			Volume: panelVolume,
 			Note:   pv.giftNote,
+			Username: username,
 		})
 	}
 
