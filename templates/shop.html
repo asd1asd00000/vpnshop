@@ -891,6 +891,11 @@
 
         }
 
+                    /* 👤 نمایش نام کاربری */
+            if (items && items.length > 0 && items[0].username) {
+                document.getElementById('usernameValue').textContent = items[0].username;
+                document.getElementById('usernameBox').classList.remove('hidden');
+            }
 
         /* ======================================== */
         /* چند کانفیگ */
