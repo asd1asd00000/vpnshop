@@ -263,6 +263,7 @@ type adminOrder struct {
 	Configs        []ConfigItem
 	TelegramText   string
 	AdminNote      string
+	Username       string
 }
 
 type pageItem struct {
