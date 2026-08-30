@@ -98,7 +98,7 @@ func clearGroupCache() {
 	groupCacheMu.Unlock()
 }
 
-// ClearGroupCacheHandler دکمه کلین کش در تنظیمات
+// ClearGroupCacheHandler دکمه کلین کش در تنظیمات (غیرهمزمان)
 func ClearGroupCacheHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -108,13 +108,21 @@ func ClearGroupCacheHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clearGroupCache()      // ۱) خالی کردن کش
-	refreshAllGroups()     // ۲) نوسازی فوری از پنل‌ها
+	// ۱) کش رو بلافاصله خالی کن
+	clearGroupCache()
 
-	db.LogEvent("general", "success", "🧹 کش گروه‌ها توسط ادمین پاک و بلافاصله نوسازی شد")
+	db.LogEvent("general", "success", "🧹 کش گروه‌ها پاک شد — نوسازی در پس‌زمینه شروع شد")
+	log.Printf("🧹 [کش گروه] نوسازی غیرهمزمان شروع شد (در پس‌زمینه)")
+
+	// ۲) نوسازی در goroutine (مرورگر منتظر نمی‌مونه)
+	go func() {
+		refreshAllGroups()
+		log.Printf("🧹 [کش گروه] نوسازی غیرهمزمان کامل شد")
+	}()
+
+	// ۳) بلافاصله redirect کن (کمتر از ۵۰ میلی‌ثانیه)
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
-
 // ───────────── 🔧 HTTP Transport سفارشی ─────────────
 
 func makeHTTPClient(timeout time.Duration) *http.Client {
