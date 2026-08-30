@@ -43,7 +43,6 @@ func StartGroupCache() {
 	}()
 }
 
-// refreshAllGroups برای همه پنل‌های marzban گروه‌ها رو نو می‌کنه
 func refreshAllGroups() {
 	cfg := db.GetConfig()
 	for _, panel := range cfg.Panels {
@@ -60,7 +59,6 @@ func refreshAllGroups() {
 	}
 }
 
-// fetchGroupsWithRetry تا ۳ بار با فاصله تلاش می‌کنه
 func fetchGroupsWithRetry(panel db.PanelConfig) []int {
 	baseURL := strings.TrimRight(panel.URL, "/")
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
@@ -85,7 +83,6 @@ func storeGroupCache(url string, ids []int) {
 	groupCacheMu.Unlock()
 }
 
-// getCachedGroups خواندن از کش در لحظه خرید
 func getCachedGroups(url string) []int {
 	groupCacheMu.Lock()
 	defer groupCacheMu.Unlock()
@@ -95,7 +92,7 @@ func getCachedGroups(url string) []int {
 	return nil
 }
 
-// ───────────── 🔧 HTTP Transport سفارشی (connection pooling) ─────────────
+// ───────────── 🔧 HTTP Transport سفارشی ─────────────
 
 func makeHTTPClient(timeout time.Duration) *http.Client {
 	transport := &http.Transport{
@@ -109,10 +106,7 @@ func makeHTTPClient(timeout time.Duration) *http.Client {
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
-	}
+	return &http.Client{Transport: transport, Timeout: timeout}
 }
 
 // ───────────── توابع داخلی پنل پاسارگاد (Marzban) ─────────────
@@ -155,7 +149,6 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 	return "", fmt.Errorf("پاسارگاد: توکن در پاسخ یافت نشد")
 }
 
-// getPasarguardGroupIDs شناسه همه گروه‌های پنل پاسارگاد
 func getPasarguardGroupIDs(baseURL, token string) []int {
 	endpoints := []string{
 		"/api/groups?limit=1000&offset=0",
@@ -189,9 +182,6 @@ func getPasarguardGroupIDs(baseURL, token string) []int {
 		ids, total := extractGroupIDsWithTotal(bodyBytes)
 		if len(ids) > 0 {
 			log.Printf("🔍 [پاسارگاد] گروه‌های یافت شده از %s: %v (total: %d)", ep, ids, total)
-			if total > len(ids) {
-				log.Printf("⚠️ [پاسارگاد] هشدار: تعداد کل گروه‌ها (%d) بیشتر از گروه‌های دریافتی (%d) است", total, len(ids))
-			}
 			return ids
 		}
 
@@ -199,7 +189,7 @@ func getPasarguardGroupIDs(baseURL, token string) []int {
 			ep, truncateBody(bodyBytes, 300))
 	}
 
-	log.Printf("⚠️ [پاسارگاد] هیچ گروهی یافت نشد، بدون group_ids ادامه می‌دهد")
+	log.Printf("⚠️ [پاسارگاد] هیچ گروهی یافت نشد")
 	return []int{}
 }
 
@@ -241,7 +231,6 @@ func extractGroupIDs(body []byte) []int {
 
 func extractGroupIDsWithTotal(body []byte) ([]int, int) {
 	ids := extractGroupIDs(body)
-
 	total := 0
 	var wrapper map[string]interface{}
 	if err := json.Unmarshal(body, &wrapper); err == nil {
@@ -275,63 +264,14 @@ func extractPasarguardSubURL(baseURL string, data map[string]interface{}) string
 	return ""
 }
 
-// CreateMarzbanUser ساخت کاربر با استفاده از کش
-func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
-	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
-	if err != nil {
-		return "", err
-	}
-
-	baseURL := strings.TrimRight(panel.URL, "/")
-
-	// 🎯 گروه‌ها از کش (نوسازی پس‌زمینه) — خرید منتظر پنل نمی‌مونه
-	groupIDs := getCachedGroups(panel.URL)
-	if len(groupIDs) == 0 {
-		// فقط اگه کش خالی بود (مثلاً بلافاصله بعد از ریستارت)، همون لحظه با retry بگیر
-		log.Printf("🧠 [کش گروه] کش خالی برای %s، گرفتن با retry...", panel.URL)
-		groupIDs = fetchGroupsWithRetry(panel)
-		if len(groupIDs) > 0 {
-			storeGroupCache(panel.URL, groupIDs)
-		}
-	} else {
-		log.Printf("🧠 [کش گروه] استفاده از کش: %d گروه برای %s", len(groupIDs), panel.URL)
-	}
-
-	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
-
-	var expireTimestamp int64
-	if days > 0 {
-		expireTimestamp = time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
-	}
-
-	payload := map[string]interface{}{
-		"username":                  username,
-		"data_limit":                volumeBytes,
-		"data_limit_reset_strategy": "no_reset",
-		"status":                    "active",
-		"proxies": map[string]interface{}{
-			"vmess":       map[string]interface{}{},
-			"vless":       map[string]interface{}{},
-			"trojan":      map[string]interface{}{},
-			"shadowsocks": map[string]interface{}{},
-		},
-	}
-
-	if len(groupIDs) > 0 {
-		payload["group_ids"] = groupIDs
-		log.Printf("🎯 [پاسارگاد] payload با %d گروه برای %s", len(groupIDs), username)
-	}
-
-	if expireTimestamp > 0 {
-		payload["expire"] = expireTimestamp
-	}
-
+// doCreateUser ارسال درخواست ساخت کاربر
+func doCreateUser(baseURL, token string, payload map[string]interface{}) (map[string]interface{}, error) {
 	jsonData, _ := json.Marshal(payload)
-	log.Printf("🔍 [پاسارگاد] payload: %s", string(jsonData))
+	log.Printf("🔍 [پاسارگاد] payload ساخت کاربر: %s", string(jsonData))
 
 	req, err := http.NewRequest("POST", baseURL+"/api/user", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("Content-Type", "application/json")
@@ -339,19 +279,23 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 	client := makeHTTPClient(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("پاسارگاد: ساخت کاربر ناموفق، کد: %d، پاسخ: %s", resp.StatusCode, string(bodyBytes))
+		return nil, fmt.Errorf("پاسارگاد: ساخت کاربر ناموفق، کد: %d، پاسخ: %s", resp.StatusCode, truncateBody(bodyBytes, 300))
 	}
 
 	var result map[string]interface{}
 	json.Unmarshal(bodyBytes, &result)
+	return result, nil
+}
 
+// finishCreate استخراج لینک اشتراک بعد از ساخت موفق
+func finishCreate(baseURL, token, username string, result map[string]interface{}) (string, error) {
 	subLink := extractPasarguardSubURL(baseURL, result)
 	if subLink != "" {
 		log.Printf("✅ [پاسارگاد] کاربر %s با موفقیت ساخته شد", username)
@@ -360,8 +304,8 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 
 	reqGet, _ := http.NewRequest("GET", baseURL+"/api/user/"+username, nil)
 	reqGet.Header.Add("Authorization", "Bearer "+token)
-	client2 := makeHTTPClient(10 * time.Second)
-	respGet, err := client2.Do(reqGet)
+	client := makeHTTPClient(10 * time.Second)
+	respGet, err := client.Do(reqGet)
 	if err == nil && respGet.StatusCode == http.StatusOK {
 		defer respGet.Body.Close()
 		var getUser map[string]interface{}
@@ -374,6 +318,82 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 	}
 
 	return "", fmt.Errorf("پاسارگاد: کاربر ساخته شد اما لینک اشتراک استخراج نشد")
+}
+
+// CreateMarzbanUser ساخت کاربر با کش + خودترمیمی (۳ تلاش)
+func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
+	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
+	if err != nil {
+		return "", err
+	}
+	baseURL := strings.TrimRight(panel.URL, "/")
+
+	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
+	var expireTimestamp int64
+	if days > 0 {
+		expireTimestamp = time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
+	}
+
+	buildPayload := func(groupIDs []int) map[string]interface{} {
+		payload := map[string]interface{}{
+			"username":                  username,
+			"data_limit":                volumeBytes,
+			"data_limit_reset_strategy": "no_reset",
+			"status":                    "active",
+			"proxies": map[string]interface{}{
+				"vmess":       map[string]interface{}{},
+				"vless":       map[string]interface{}{},
+				"trojan":      map[string]interface{}{},
+				"shadowsocks": map[string]interface{}{},
+			},
+		}
+		if len(groupIDs) > 0 {
+			payload["group_ids"] = groupIDs
+		}
+		if expireTimestamp > 0 {
+			payload["expire"] = expireTimestamp
+		}
+		return payload
+	}
+
+	// 🎯 ۱) گروه‌ها از کش
+	groupIDs := getCachedGroups(panel.URL)
+
+	// 🎯 ) اگه کش خالی بود، همین الان بگیر
+	if len(groupIDs) == 0 {
+		groupIDs = fetchGroupsWithRetry(panel)
+		if len(groupIDs) > 0 {
+			storeGroupCache(panel.URL, groupIDs)
+		}
+	}
+
+	// 🎯 تلاش ۱: با گروه‌های کش
+	if len(groupIDs) > 0 {
+		result, err := doCreateUser(baseURL, token, buildPayload(groupIDs))
+		if err == nil {
+			return finishCreate(baseURL, token, username, result)
+		}
+		log.Printf("⚠️ [پاسارگاد] ساخت با گروه‌های کش ناموفق (%v) — احتمالاً گروهی حذف شده، نوسازی کش...", err)
+
+		// 🎯 تلاش : با گروه‌های تازه (خودترمیمی کش کهنه)
+		fresh := fetchGroupsWithRetry(panel)
+		if len(fresh) > 0 {
+			storeGroupCache(panel.URL, fresh)
+			result, err = doCreateUser(baseURL, token, buildPayload(fresh))
+			if err == nil {
+				return finishCreate(baseURL, token, username, result)
+			}
+			log.Printf("⚠️ [پاسارگاد] ساخت با گروه‌های تازه هم ناموفق (%v)", err)
+		}
+	}
+
+	// 🎯 تلاش ۳: بدون group_ids (تضمین ساخت اشتراک)
+	log.Printf("⚠️ [پاسارگاد] تلاش نهایی بدون group_ids برای %s", username)
+	result, err := doCreateUser(baseURL, token, buildPayload(nil))
+	if err != nil {
+		return "", err
+	}
+	return finishCreate(baseURL, token, username, result)
 }
 
 func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, days int) (string, error) {
