@@ -17,6 +17,7 @@ func main() {
 
 	db.StartLogCleanup()
     db.StartOrderCleanup()
+		api.StartGroupCache()
 
 	// 🌐 مسیرهای عمومی
 	http.HandleFunc("/", api.ShopHandler)
