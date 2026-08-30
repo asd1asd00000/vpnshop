@@ -134,6 +134,83 @@ func getPasarguardGroupIDs(baseURL, token string) []int {
 	log.Printf("⚠️ [پاسارگاد] هیچ گروهی یافت نشد، بدون group_ids ادامه می‌دهد")
 	return []int{}
 }
+// ───────────── 🧠 کش گروه‌ها با نوسازی پس‌زمینه ─────────────
+
+type groupCacheEntry struct {
+	ids       []int
+	fetchedAt time.Time
+}
+
+var (
+	groupCacheMu sync.Mutex
+	groupCache   = map[string]groupCacheEntry{} // key: آدرس پنل
+)
+
+// 🎯 زمان نوسازی کش: هر ۱ ساعت
+const groupRefreshInterval = 1 * time.Hour
+
+// StartGroupCache نوسازی متناوب گروه‌ها (مستقل از خرید)
+func StartGroupCache() {
+	go func() {
+		refreshAllGroups() // بار اول، همین الان
+		ticker := time.NewTicker(groupRefreshInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			refreshAllGroups()
+		}
+	}()
+}
+
+// refreshAllGroups برای همه پنل‌های marzban گروه‌ها رو نو می‌کنه
+func refreshAllGroups() {
+	cfg := db.GetConfig()
+	for _, panel := range cfg.Panels {
+		if panel.Type != "marzban" {
+			continue
+		}
+		ids := fetchGroupsWithRetry(panel)
+		if len(ids) > 0 {
+			storeGroupCache(panel.URL, ids)
+			log.Printf("🧠 [کش گروه] %s → %d گروه ذخیره شد", panel.URL, len(ids))
+		} else {
+			log.Printf("⚠️ [کش گروه] %s → نوسازی ناموفق، cache قبلی نگه داشته شد", panel.URL)
+		}
+	}
+}
+
+// fetchGroupsWithRetry تا ۳ بار با فاصله تلاش می‌کنه
+func fetchGroupsWithRetry(panel db.PanelConfig) []int {
+	baseURL := strings.TrimRight(panel.URL, "/")
+	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
+	if err != nil {
+		return nil
+	}
+	for attempt := 1; attempt <= 3; attempt++ {
+		ids := getPasarguardGroupIDs(baseURL, token)
+		if len(ids) > 0 {
+			return ids
+		}
+		log.Printf("⚠️ [کش گروه] تلاش %d برای %s ناموفق", attempt, panel.URL)
+		time.Sleep(time.Duration(attempt) * time.Second)
+	}
+	return nil
+}
+
+func storeGroupCache(url string, ids []int) {
+	groupCacheMu.Lock()
+	groupCache[url] = groupCacheEntry{ids: ids, fetchedAt: time.Now()}
+	groupCacheMu.Unlock()
+}
+
+// getCachedGroups خواندن از کش در لحظه خرید
+func getCachedGroups(url string) []int {
+	groupCacheMu.Lock()
+	defer groupCacheMu.Unlock()
+	if e, ok := groupCache[url]; ok {
+		return e.ids
+	}
+	return nil
+}
 
 // extractGroupIDs استخراج ID ها از فرمت‌های مختلف پاسخ
 func extractGroupIDs(body []byte) []int {
