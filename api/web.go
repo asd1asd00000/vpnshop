@@ -305,7 +305,7 @@ func buildPagination(current, total int) []pageItem {
 	return items
 }
 
-// checkAdminAuth بررسی session کوکی به جای BasicAuth
+// checkAdminAuth بررسی session کوکی
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	if c, err := r.Cookie("admin_session"); err == nil && validSession(c.Value) {
 		return true
@@ -380,9 +380,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 
 		if len(o.Configs) > 0 {
 			o.TelegramText = buildTelegramText(o.Configs)
-		}
-				if len(o.Configs) > 0 {
-			o.TelegramText = buildTelegramText(o.Configs)
+			// 🎯 نام کاربری از اولین کانفیگ
 			o.Username = o.Configs[0].Username
 		}
 
