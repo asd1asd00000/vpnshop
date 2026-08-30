@@ -351,7 +351,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		       IFNULL(payment_method, ''),
 		       IFNULL(created_at, ''), IFNULL(paid_at, ''),
 		       IFNULL(admin_note, '')
-		FROM orders ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
+		FROM orders WHERE IFNULL(archived, 0) = 0 ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
 		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
 		return
