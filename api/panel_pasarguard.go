@@ -297,8 +297,17 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		return "", err
 	}
 
-	baseURL := strings.TrimRight(panel.URL, "/")
-	groupIDs := getPasarguardGroupIDs(baseURL, token)
+		baseURL := strings.TrimRight(panel.URL, "/")
+
+	// 🎯 گروه‌ها از کش (نوسازی پس‌زمینه) — خرید منتظر پنل نمی‌مونه
+	groupIDs := getCachedGroups(panel.URL)
+	if len(groupIDs) == 0 {
+		// فقط اگه کش خالی بود (مثلاً بلافاصله بعد از ریستارت)، همون لحظه با retry بگیر
+		groupIDs = fetchGroupsWithRetry(panel)
+		if len(groupIDs) > 0 {
+			storeGroupCache(panel.URL, groupIDs)
+		}
+	}
 
 	// تبدیل GB به bytes
 	volumeBytes := int64(volumeGB) * 1024 * 1024 * 1024
