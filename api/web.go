@@ -333,7 +333,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var totalOrders int
-	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders`).Scan(&totalOrders); err != nil {
+		if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE IFNULL(archived, 0) = 0`).Scan(&totalOrders); err != nil {
 		totalOrders = 0
 	}
 	totalPages := (totalOrders + pageSize - 1) / pageSize
