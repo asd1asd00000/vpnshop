@@ -381,6 +381,10 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		if len(o.Configs) > 0 {
 			o.TelegramText = buildTelegramText(o.Configs)
 		}
+				if len(o.Configs) > 0 {
+			o.TelegramText = buildTelegramText(o.Configs)
+			o.Username = o.Configs[0].Username
+		}
 
 		o.CreatedAtFmt = db.FormatTehranUTC(o.CreatedAt)
 		o.PaidAtFmt = db.FormatTehranUTC(o.PaidAt)
