@@ -91,6 +91,29 @@ func getCachedGroups(url string) []int {
 	}
 	return nil
 }
+// clearGroupCache خالی کردن کامل کش
+func clearGroupCache() {
+	groupCacheMu.Lock()
+	groupCache = map[string]groupCacheEntry{}
+	groupCacheMu.Unlock()
+}
+
+// ClearGroupCacheHandler دکمه کلین کش در تنظیمات
+func ClearGroupCacheHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clearGroupCache()      // ۱) خالی کردن کش
+	refreshAllGroups()     // ۲) نوسازی فوری از پنل‌ها
+
+	db.LogEvent("general", "success", "🧹 کش گروه‌ها توسط ادمین پاک و بلافاصله نوسازی شد")
+	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
+}
 
 // ───────────── 🔧 HTTP Transport سفارشی ─────────────
 
