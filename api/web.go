@@ -133,8 +133,8 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		uniqueAmount := basePrice + rand.Intn(999) + 1
 		trackingCode := generateTrackingCode()
 
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
-			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
+		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, status) 
+			VALUES (?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, selectedPlan.Days)
 
 		if err != nil {
 			http.Error(w, "خطا در ثبت سفارش", http.StatusInternalServerError)
