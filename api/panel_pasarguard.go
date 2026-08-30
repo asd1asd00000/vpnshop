@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"sync"
 
 	"github.com/asd1asd00000/vpnshop/db"
 )
