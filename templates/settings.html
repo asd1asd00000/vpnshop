@@ -222,6 +222,20 @@
                     </button>
                 </form>
             </section>
+                        <!-- بخش: کش گروه‌های پنل‌ها -->
+            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-2">🧹 کش گروه‌های پنل‌ها</h2>
+                <p class="text-sm text-gray-500 mb-4">
+                    گروه‌های پنل‌های Marzban هر ۱ ساعت به صورت خودکار نوسازی می‌شوند.
+                    اگر گروهی اضافه یا حذف کردید و می‌خواهید <b>بلافاصله</b> اعمال شود، این دکمه را بزنید.
+                </p>
+                <form action="{{.AdminBase}}/settings/clear-cache" method="POST">
+                    <button type="submit"
+                            class="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2 rounded-lg transition">
+                        🧹 پاک کردن و نوسازی کش
+                    </button>
+                </form>
+            </section>
         </div>
     </div>
 
