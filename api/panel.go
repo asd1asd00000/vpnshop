@@ -12,15 +12,14 @@ import (
 
 // ConfigItem یک کانفیگ جداگانه برای نمایش
 type ConfigItem struct {
-	Title  string `json:"title"`
-	Desc   string `json:"desc"`
-	Link   string `json:"link"`
-	Role   string `json:"role"`   // main | backup | gift
-	Volume int    `json:"volume"` // حجم به GB
-	Note   string `json:"note"`   // توضیح هدیه
-    Username string `json:"username"`
+	Title    string `json:"title"`
+	Desc     string `json:"desc"`
+	Link     string `json:"link"`
+	Role     string `json:"role"`     // main | backup | gift
+	Volume   int    `json:"volume"`   // حجم به GB
+	Note     string `json:"note"`     // توضیح هدیه
+	Username string `json:"username"` // 🎯 نام کاربری
 }
-
 
 // planVolumes حجم‌های تعریف‌شده در پلن
 type planVolumes struct {
@@ -135,19 +134,19 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 			desc = fmt.Sprintf("حجم: %dGB | مدت: %d روز", panelVolume, pv.days)
 		}
 
-		// 🎯 ساخت ConfigItem با فیلدهای جدید (role, volume, note)
+		// 🎯 ساخت ConfigItem با فیلدهای جدید (role, volume, note, username)
 		role := panel.Role
 		if role == "" {
 			role = "main"
 		}
 
 		items = append(items, ConfigItem{
-			Title:  title,
-			Desc:   desc,
-			Link:   link,
-			Role:   role,
-			Volume: panelVolume,
-			Note:   pv.giftNote,
+			Title:    title,
+			Desc:     desc,
+			Link:     link,
+			Role:     role,
+			Volume:   panelVolume,
+			Note:     pv.giftNote,
 			Username: username,
 		})
 	}
@@ -165,18 +164,35 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 func buildTelegramText(items []ConfigItem) string {
 	// 1. ساخت بخش هدر (لوگو و آدرس)
 	var header strings.Builder
-	// از ایموجی سپر 🛡️ به عنوان نماد لوگو استفاده کردیم
-	header.WriteString("🛡️ **Oklavpn** 🛡️\n") 
+	header.WriteString("🛡️ **Oklavpn** 🛡️\n")
 	header.WriteString("👉 https://t.me/oklavpn\n")
+
+	// 🎯 اضافه کردن نام کاربری و مدت اعتبار به هدر
+	if len(items) > 0 && items[0].Username != "" {
+		header.WriteString("\n")
+		header.WriteString(fmt.Sprintf("👤 نام کاربری: `%s`\n", items[0].Username))
+
+		// استخراج مدت اعتبار از کانفیگ اصلی (main)
+		for _, it := range items {
+			if it.Role == "main" {
+				// از Description که شامل "مدت: X روز" هست استفاده می‌کنیم
+				if strings.Contains(it.Desc, "روز") {
+					header.WriteString(fmt.Sprintf("📅 اعتبار: %s\n", strings.TrimSpace(it.Desc)))
+				}
+				break
+			}
+		}
+	}
+
 	header.WriteString("----------------------------------------\n\n")
 
 	var blocks []string
-	
-	// 2. حلقه اصلی شما
+
+	// 2. حلقه اصلی
 	for _, it := range items {
 		var b strings.Builder
 		b.WriteString("`" + it.Link + "`\n\n")
-		
+
 		switch it.Role {
 		case "backup":
 			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه-زاپاس ✅\n", it.Volume))
@@ -197,6 +213,5 @@ func buildTelegramText(items []ConfigItem) string {
 	}
 
 	// 3. ترکیب هدر با بقیه متن‌ها
-	// هدر را به ابتدای کل متن اضافه می‌کنیم
 	return header.String() + strings.Join(blocks, "\n----------------------------------------\n")
 }
