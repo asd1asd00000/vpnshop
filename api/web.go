@@ -179,7 +179,7 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 		var order models.Order
 
 		query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '') 
-		          FROM orders WHERE tracking_code = ?`
+		          FROM orders WHERE tracking_code = ? AND IFNULL(archived, 0) = 0`
 
 		err := db.DB.QueryRow(query, trackingCode).Scan(
 			&order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
