@@ -21,6 +21,8 @@ func main() {
 
 	// 🌐 مسیرهای عمومی
 	http.HandleFunc("/", api.ShopHandler)
+	http.HandleFunc("/renew", api.RenewalHandler)
+	http.HandleFunc("/api/check-renewal", api.CheckRenewalHandler)
 	http.HandleFunc("/track", api.TrackHandler)
 	http.HandleFunc("/api/webhook/sms", api.WebhookHandler)
 	http.HandleFunc("/api/order-status", api.CheckOrderStatus)
