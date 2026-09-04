@@ -12,4 +12,6 @@ type Order struct {
 	Status       string    `json:"status"` // pending یا paid
 	ConfigLink   string    `json:"config_link"`
 	CreatedAt    time.Time `json:"created_at"`
+	RenewUsername string `json:"renew_username"`
+	CarryGB       int    `json:"carry_gb"`
 }
