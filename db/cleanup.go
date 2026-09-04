@@ -118,6 +118,12 @@ func MigrateOrders() {
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN archived INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون archived به جدول orders اضافه شد")
 	}
+		if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN renew_username TEXT DEFAULT ''`); err == nil {
+		log.Println("✅ ستون renew_username به جدول orders اضافه شد")
+	}
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN carry_gb INTEGER DEFAULT 0`); err == nil {
+		log.Println("✅ ستون carry_gb به جدول orders اضافه شد")
+	}
 }
 
 // StartOrderCleanup مایگریشن + پاکسازی‌ها
