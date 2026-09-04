@@ -1,9 +1,9 @@
 [
   {
-    "id": "2GB-1M",
-    "title": "2GB - 1 Month",
-    "price": 100000,
-    "volume_gb": 2,
+    "id": "10GB-1M",
+    "title": "10GB - 1 Month",
+    "price": 150000,
+    "volume_gb": 10,
     "days": 30,
     "is_special": false,
     "backup_gb": 1,
