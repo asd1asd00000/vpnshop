@@ -703,6 +703,67 @@
                 });
             }
         }
+                // ── 📊 آمار فروش ──
+        let salesChart = null;
+
+        function fmtToman(n) {
+            return Number(n).toLocaleString('fa-IR');
+        }
+
+        function openStats() {
+            const m = document.getElementById('statsModal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+            loadStats(document.getElementById('statsRange').value);
+        }
+
+        function closeStats() {
+            const m = document.getElementById('statsModal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+
+        function loadStats(range) {
+            fetch(ADMIN_BASE + '/stats?range=' + range).then(r => r.json()).then(d => {
+                document.getElementById('statTotal').textContent = fmtToman(d.total);
+                document.getElementById('statCount').textContent = fmtToman(d.count);
+                document.getElementById('statAvg').textContent = fmtToman(d.avg);
+
+                const ctx = document.getElementById('salesChart');
+                if (salesChart) salesChart.destroy();
+
+                salesChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: d.labels,
+                        datasets: [{
+                            label: 'درآمد (تومان)',
+                            data: d.values,
+                            backgroundColor: '#14b8a6',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (c) => fmtToman(c.parsed.y) + ' تومان (' + fmtToman(d.counts[c.dataIndex]) + ' فروش)',
+                                    title: (items) => items[0].label
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { ticks: { callback: (v) => Number(v).toLocaleString('fa-IR') } },
+                            x: { ticks: { maxRotation: 0, autoSkip: true } }
+                        }
+                    }
+                });
+            }).catch(() => {
+                showNotification('❌ خطا در دریافت آمار', 'error');
+            });
+        }
     </script>
 </body>
 </html>
