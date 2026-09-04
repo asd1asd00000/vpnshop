@@ -181,7 +181,45 @@
 
     </div>
 
-
+    {{if not .CheckoutOrder}}
+    <!-- بخش تمدید اشتراک -->
+    <div class="bg-white p-6 rounded-2xl shadow-md mb-8 border-2 border-blue-500">
+        <h3 class="text-xl font-bold text-blue-600 mb-3">🔄 تمدید اشتراک</h3>
+        <p class="text-sm text-gray-600 mb-4">
+            اگر قبلاً اشتراک خریداری کرده‌اید، نام کاربری خود را وارد کنید تا اشتراک قبلی تمدید شود.
+            حجم باقیمانده و روزهای باقیمانده به اشتراک جدید اضافه می‌شود.
+        </p>
+        <form id="renewalForm" method="POST" action="/renew" onsubmit="return validateRenewal()">
+            <input type="text" name="renew_username" id="renewUsername" required
+                   placeholder="مثال: user_abc123"
+                   class="w-full border border-gray-300 rounded-lg p-3 mb-3 font-mono text-center focus:ring-2 focus:ring-blue-500">
+            <div id="renewalInfo" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm">
+                <div class="flex justify-between mb-1">
+                    <span>حجم باقیمانده:</span>
+                    <span id="remainingVolume" class="font-bold text-blue-700">0 GB</span>
+                </div>
+                <div class="flex justify-between mb-1">
+                    <span>روز باقیمانده:</span>
+                    <span id="remainingDays" class="font-bold text-blue-700">0 روز</span>
+                </div>
+                <div class="flex justify-between pt-2 border-t border-blue-200">
+                    <span class="font-bold">حجم منتقل‌شده به اشتراک جدید:</span>
+                    <span id="carryGB" class="font-bold text-green-600">0 GB</span>
+                </div>
+                <input type="hidden" name="carry_gb" id="carryGBInput" value="0">
+            </div>
+            <select name="plan_id" required class="w-full border border-gray-300 rounded-lg p-3 mb-3">
+                {{range .Plans}}
+                <option value="{{.ID}}">{{.Title}} - {{.Price}} تومان</option>
+                {{end}}
+            </select>
+            <button type="submit" id="renewBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition disabled:bg-gray-400" disabled>
+                تمدید اشتراک
+            </button>
+        </form>
+    </div>
+    {{end}}
     {{if .CheckoutOrder}}
 
     <!-- ======================================== -->
