@@ -400,3 +400,161 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		"Pagination": buildPagination(page, totalPages),
 	})
 }
+// CheckRenewalHandler بررسی وجود نام کاربری و محاسبه carry-over
+func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := r.FormValue("username")
+	if username == "" {
+		http.Error(w, "نام کاربری لازم است", http.StatusBadRequest)
+		return
+	}
+
+	// پیدا کردن آخرین فاکتور پرداخت‌شده با این username
+	var orderID int
+	var configLink string
+	err := db.DB.QueryRow(`SELECT id, IFNULL(config_link, '') FROM orders 
+	                       WHERE status = 'paid' AND config_link LIKE ?
+	                       ORDER BY id DESC LIMIT 1`, "%\"username\":\""+username+"\"%").
+		Scan(&orderID, &configLink)
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"found": false,
+			"error": "اشتراکی با این نام کاربری یافت نشد",
+		})
+		return
+	}
+
+	// پیدا کردن پنل اصلی
+	cfg := db.GetConfig()
+	var mainPanel *db.PanelConfig
+	for i := range cfg.Panels {
+		if cfg.Panels[i].Role == "main" {
+			mainPanel = &cfg.Panels[i]
+			break
+		}
+	}
+
+	if mainPanel == nil {
+		http.Error(w, "پنل اصلی یافت نشد", http.StatusInternalServerError)
+		return
+	}
+
+	// خواندن حجم و روز باقیمانده از پنل اصلی
+	var limitUsage, totalUsage, limitExpire int64
+	switch mainPanel.Type {
+	case "guards":
+		limitUsage, totalUsage, limitExpire, err = GetGuardsUserUsage(*mainPanel, username)
+	case "marzban":
+		// برای Marzban، می‌تونیم از GetMarzbanUserUsage استفاده کنیم
+		// ولی فعلاً فقط Guards پشتیبانی میشه
+		http.Error(w, "تمدید فعلاً فقط برای پنل Guards پشتیبانی می‌شود", http.StatusBadRequest)
+		return
+	default:
+		http.Error(w, "نوع پنل پشتیبانی نمی‌شود", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"found": false,
+			"error": "خطا در خواندن اطلاعات اشتراک: " + err.Error(),
+		})
+		return
+	}
+
+	// محاسبه carry-over
+	now := time.Now().Unix()
+	remainingVolume := limitUsage - totalUsage
+	remainingDays := (limitExpire - now) / 86400
+
+	if remainingDays <= 0 {
+		remainingDays = 0
+	}
+
+	// نرخ روزانه = حجم کل / 30 روز (فرض)
+	dailyRate := limitUsage / 30
+	carryOverBytes := remainingVolume
+	if remainingDays*dailyRate < carryOverBytes {
+		carryOverBytes = remainingDays * dailyRate
+	}
+
+	carryOverGB := int(carryOverBytes / 1073741824)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"found":            true,
+		"username":         username,
+		"remaining_volume": remainingVolume / 1073741824,
+		"remaining_days":   remainingDays,
+		"carry_gb":         carryOverGB,
+	})
+}
+
+// RenewalHandler ساخت فاکتور تمدید
+func RenewalHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("templates/shop.html")
+	if err != nil {
+		http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
+		return
+	}
+
+	plans, _ := models.LoadPlans()
+	cfg := db.GetConfig()
+	cards := cfg.Cards
+
+	if r.Method == http.MethodPost {
+		planID := r.FormValue("plan_id")
+		renewUsername := r.FormValue("renew_username")
+		carryGBStr := r.FormValue("carry_gb")
+
+		var selectedPlan *models.Plan
+		for _, p := range plans {
+			if p.ID == planID {
+				selectedPlan = &p
+				break
+			}
+		}
+
+		if selectedPlan == nil {
+			http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
+			return
+		}
+
+		carryGB := 0
+		if carryGBStr != "" {
+			fmt.Sscanf(carryGBStr, "%d", &carryGB)
+		}
+
+		basePrice := selectedPlan.Price
+		rand.Seed(time.Now().UnixNano())
+		uniqueAmount := basePrice + rand.Intn(999) + 1
+		trackingCode := generateTrackingCode()
+
+		// ساخت فاکتور تمدید
+		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, renew_username, carry_gb, status) 
+			VALUES (?, ?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, renewUsername, carryGB)
+
+		if err != nil {
+			http.Error(w, "خطا در ثبت فاکتور تمدید", http.StatusInternalServerError)
+			return
+		}
+
+		order := models.Order{
+			TrackingCode: trackingCode,
+			PlanName:     selectedPlan.Title,
+			UniqueAmount: uniqueAmount,
+		}
+
+		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": plans, "Cards": cards, "IsRenewal": true, "RenewUsername": renewUsername})
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
