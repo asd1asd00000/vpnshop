@@ -1,8 +1,10 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"os"
+)
 
-// Order ساختار فاکتور در دیتابیس را مشخص می‌کند
 type Order struct {
 	ID             int    `json:"id"`
 	TrackingCode   string `json:"tracking_code"`
@@ -20,4 +22,15 @@ type Order struct {
 	PlanDays       int    `json:"plan_days"`
 	RenewUsername  string `json:"renew_username"`
 	CarryGB        int    `json:"carry_gb"`
+}
+
+// LoadPlans خواندن پلن‌ها از فایل
+func LoadPlans() ([]Plan, error) {
+	data, err := os.ReadFile("plans.json")
+	if err != nil {
+		return nil, err
+	}
+	var plans []Plan
+	err = json.Unmarshal(data, &plans)
+	return plans, err
 }
