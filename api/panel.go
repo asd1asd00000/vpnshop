@@ -36,6 +36,11 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 		return GenerateConfigFromRenewal(order.RenewUsername, order.PlanName, order.CarryGB)
 	}
 
+	cfg := db.GetConfig()
+	if len(cfg.Panels) == 0 {
+		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
+	}
+
 	// 🎯 خواندن حجم‌ها از پلن
 	pv := planVolumes{mainGB: 20, days: 30}
 	plans, _ := models.LoadPlans()
