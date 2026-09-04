@@ -1049,6 +1049,60 @@
     checkPaymentStatus();
 
     {{end}}
+        /* ======================================== */
+    /* تمدید اشتراک */
+    /* ======================================== */
+
+    const renewUsernameInput = document.getElementById('renewUsername');
+    if (renewUsernameInput) {
+        let renewalCheckTimeout;
+        
+        renewUsernameInput.addEventListener('input', function() {
+            clearTimeout(renewalCheckTimeout);
+            const username = this.value.trim();
+            
+            if (username.length < 5) {
+                document.getElementById('renewalInfo').classList.add('hidden');
+                document.getElementById('renewBtn').disabled = true;
+                return;
+            }
+
+            renewalCheckTimeout = setTimeout(() => {
+                fetch('/api/check-renewal', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'username=' + encodeURIComponent(username)
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.found) {
+                        document.getElementById('remainingVolume').textContent = data.remaining_volume + ' GB';
+                        document.getElementById('remainingDays').textContent = data.remaining_days + ' روز';
+                        document.getElementById('carryGB').textContent = data.carry_gb + ' GB';
+                        document.getElementById('carryGBInput').value = data.carry_gb;
+                        document.getElementById('renewalInfo').classList.remove('hidden');
+                        document.getElementById('renewBtn').disabled = false;
+                    } else {
+                        document.getElementById('renewalInfo').classList.add('hidden');
+                        document.getElementById('renewBtn').disabled = true;
+                        alert(data.error || 'اشتراک یافت نشد');
+                    }
+                })
+                .catch(err => {
+                    console.error('خطا:', err);
+                    document.getElementById('renewBtn').disabled = true;
+                });
+            }, 800);
+        });
+    }
+
+    function validateRenewal() {
+        const btn = document.getElementById('renewBtn');
+        if (btn.disabled) return false;
+        btn.disabled = true;
+        btn.textContent = '⏳ در حال ایجاد فاکتور تمدید...';
+        return true;
+    }
 
 </script>
 
