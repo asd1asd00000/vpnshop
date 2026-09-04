@@ -31,9 +31,9 @@ type planVolumes struct {
 }
 
 func GenerateConfigFromOrder(order models.Order) (string, error) {
-	cfg := db.GetConfig()
-	if len(cfg.Panels) == 0 {
-		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
+	// 🎯 اگه تمدید هست، از منطق تمدید استفاده کن
+	if order.RenewUsername != "" {
+		return GenerateConfigFromRenewal(order.RenewUsername, order.PlanName, order.CarryGB)
 	}
 
 	// 🎯 خواندن حجم‌ها از پلن
