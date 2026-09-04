@@ -284,12 +284,6 @@ func UpdateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days 
 		return "", err
 	}
 
-	// دریافت اطلاعات فعلی
-	sub, err := getGuardsSubscription(panel.URL, token, username)
-	if err != nil {
-		return "", fmt.Errorf("اطلاعات اشتراک فعلی دریافت نشد: %v", err)
-	}
-
 	// محاسبه حجم و انقضای جدید
 	newLimitUsage := int64(volumeGB) * 1073741824
 	newLimitExpire := time.Now().AddDate(0, 0, days).Unix()
