@@ -37,6 +37,7 @@ func main() {
 	http.HandleFunc(adminBase+"/note", api.AdminNoteHandler)
 	http.HandleFunc(adminBase+"/login", api.LoginHandler)
 	http.HandleFunc(adminBase+"/logout", api.LogoutHandler)
+	http.HandleFunc(adminBase+"/stats", api.StatsHandler)
 
 	// ⚙️ مسیرهای تنظیمات
 	http.HandleFunc(adminBase+"/settings", api.SettingsHandler)
