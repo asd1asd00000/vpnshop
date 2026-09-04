@@ -159,6 +159,128 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 	}
 	return items, false, nil
 }
+// GenerateConfigFromRenewal تمدید اشتراک با carry-over
+func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int) (string, error) {
+	cfg := db.GetConfig()
+	if len(cfg.Panels) == 0 {
+		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
+	}
+
+	// خواندن حجم و روز از پلن
+	plans, _ := models.LoadPlans()
+	var selectedPlan *models.Plan
+	for _, p := range plans {
+		if p.ID == planID {
+			selectedPlan = &p
+			break
+		}
+	}
+	if selectedPlan == nil {
+		return "", fmt.Errorf("پلن یافت نشد")
+	}
+
+	pv := planVolumes{
+		mainGB:   selectedPlan.VolumeGB,
+		backupGB: selectedPlan.BackupGB,
+		giftGB:   selectedPlan.GiftGB,
+		days:     selectedPlan.Days,
+		giftNote: selectedPlan.GiftNote,
+	}
+
+	// حجم‌های نهایی = پلن + carry-over
+	mainVolume := pv.mainGB + carryGB
+	backupVolume := pv.backupGB + carryGB
+	giftVolume := pv.giftGB
+
+	items, err := renewOnAllPanels(cfg.Panels, renewUsername, mainVolume, backupVolume, giftVolume, pv.days, pv.giftNote)
+	if err != nil {
+		return "", err
+	}
+
+	jsonData, _ := json.Marshal(items)
+	return string(jsonData), nil
+}
+
+// renewOnAllPanels تمدید روی همه پنل‌ها
+func renewOnAllPanels(panels []db.PanelConfig, username string, mainGB, backupGB, giftGB, days int, giftNote string) ([]ConfigItem, error) {
+	var items []ConfigItem
+	var errors []string
+
+	for _, panel := range panels {
+		var panelVolume int
+		switch panel.Role {
+		case "backup":
+			panelVolume = backupGB
+		case "gift":
+			panelVolume = giftGB
+		default:
+			panelVolume = mainGB
+		}
+
+		if panelVolume <= 0 {
+			continue
+		}
+
+		var link string
+		var err error
+
+		switch panel.Type {
+		case "guards":
+			link, err = UpdateGuardsUser(panel, username, panelVolume, days)
+		case "marzban":
+			link, err = UpdateMarzbanUser(panel, username, panelVolume, days)
+		default:
+			err = fmt.Errorf("نوع پنل ناشناخته: %s", panel.Type)
+		}
+
+		if err != nil {
+			log.Printf("❌ خطا در تمدید پنل %s: %v", panel.Name, err)
+			errors = append(errors, fmt.Sprintf("%s: %v", panel.Name, err))
+			continue
+		}
+
+		panelName := panel.Name
+		if panelName == "" {
+			panelName = panel.Type
+		}
+
+		var title, desc string
+		switch panel.Role {
+		case "backup":
+			title = fmt.Sprintf("🛡️ %s — کانفیگ زاپاس", panelName)
+			desc = fmt.Sprintf("حجم: %dGB | برای مواقع اضطراری", panelVolume)
+		case "gift":
+			title = fmt.Sprintf("🎁 %s — کانفیگ هدیه", panelName)
+			desc = fmt.Sprintf("حجم: %dGB | %s", panelVolume, giftNote)
+		default:
+			title = fmt.Sprintf("🛡️ %s — کانفیگ اصلی", panelName)
+			desc = fmt.Sprintf("حجم: %dGB | مدت: %d روز", panelVolume, days)
+		}
+
+		role := panel.Role
+		if role == "" {
+			role = "main"
+		}
+
+		items = append(items, ConfigItem{
+			Title:    title,
+			Desc:     desc,
+			Link:     link,
+			Role:     role,
+			Volume:   panelVolume,
+			Note:     giftNote,
+			Username: username,
+		})
+	}
+
+	if len(items) == 0 {
+		return nil, fmt.Errorf("همه پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
+	}
+	if len(errors) > 0 {
+		return items, fmt.Errorf("برخی پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
+	}
+	return items, nil
+}
 
 // buildTelegramText متن آماده کپی برای تلگرام می‌سازه
 func buildTelegramText(items []ConfigItem) string {
