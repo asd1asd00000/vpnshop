@@ -22,10 +22,19 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	flash := ""
+	switch r.URL.Query().Get("msg") {
+	case "email_saved":
+		flash = "✅ بکاپ خودکار به ایمیل فعال شد و تنظیمات ذخیره گردید"
+	case "email_test":
+		flash = "📧 ایمیل تست در پس‌زمینه ارسال شد — اینباکس را بررسی کنید"
+	}
+
 	cfg := db.GetConfig()
 	tmpl.Execute(w, map[string]interface{}{
 		"Config":    cfg,
 		"AdminBase": AdminBasePath(),
+		"Flash":     flash,
 	})
 }
 
