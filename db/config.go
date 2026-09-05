@@ -94,6 +94,9 @@ func LoadConfig() *AppConfig {
 	if config.Cleanup.OrderExpireHours <= 0 {
 		config.Cleanup.OrderExpireHours = 48
 	}
+		if config.EmailBackup.IntervalHours <= 0 {
+		config.EmailBackup.IntervalHours = 24
+	}
 
 	return config
 }
