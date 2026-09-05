@@ -166,32 +166,39 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
 	}
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	enabled := r.FormValue("email_enabled") == "on"
 	email := strings.TrimSpace(r.FormValue("email"))
 	smtpServer := strings.TrimSpace(r.FormValue("smtp_server"))
-	smtpPortStr := r.FormValue("smtp_port")
+	smtpPort, _ := strconv.Atoi(r.FormValue("smtp_port"))
 	smtpUser := strings.TrimSpace(r.FormValue("smtp_user"))
 	smtpPass := r.FormValue("smtp_pass")
+	intervalHours, _ := strconv.Atoi(r.FormValue("interval_hours"))
+	zipPassword := r.FormValue("zip_password")
 
-	smtpPort, _ := strconv.Atoi(smtpPortStr)
 	if smtpPort <= 0 {
 		smtpPort = 587
 	}
+	if intervalHours <= 0 {
+		intervalHours = 24
+	}
+
+	// 🎯 فعال‌سازی خودکار: اگه فیلدها پر شده باشن
+	enabled := email != "" && smtpServer != "" && smtpUser != ""
 
 	cfg := db.GetConfig()
 	cfg.EmailBackup = db.EmailBackupConfig{
-		Enabled:    enabled,
-		Email:      email,
-		SMTPServer: smtpServer,
-		SMTPPort:   smtpPort,
-		SMTPUser:   smtpUser,
-		SMTPPass:   smtpPass,
+		Enabled:       enabled,
+		Email:         email,
+		SMTPServer:    smtpServer,
+		SMTPPort:      smtpPort,
+		SMTPUser:      smtpUser,
+		SMTPPass:      smtpPass,
+		IntervalHours: intervalHours,
+		ZipPassword:   zipPassword,
 	}
 
 	if err := db.SaveConfig(cfg); err != nil {
@@ -199,9 +206,8 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.LogEventf("general", "success", "📧 تنظیمات ایمیل بکاپ بروزرسانی شد (فعال: %v)", enabled)
+	db.LogEventf("general", "success", "📧 تنظیمات ایمیل بکاپ ذخیره شد (فعال: %v | بازه: %d ساعت)", enabled, intervalHours)
 
-	// اگه دکمه تست بود، ایمیل تستی بفرست
 	if r.FormValue("action") == "test" {
 		go func() {
 			if err := SendTestEmail(cfg.EmailBackup); err != nil {
@@ -210,10 +216,11 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 				db.LogEvent("general", "success", "✅ ایمیل تست با موفقیت ارسال شد")
 			}
 		}()
-		db.LogEvent("general", "info", "📧 ایمیل تست در پس‌زمینه ارسال شد")
+		http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_test", http.StatusSeeOther)
+		return
 	}
 
-	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
+	http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_saved", http.StatusSeeOther)
 }
 // AddCardHandler افزودن شماره کارت
 func AddCardHandler(w http.ResponseWriter, r *http.Request) {
