@@ -170,7 +170,7 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ───────────── بکاپ کامل (ZIP) — نسخه ثابت با headers دستی ─────────────
+// ───────────── بکاپ کامل (ZIP) — ساخت اتمیک + کپی مجزا ─────────────
 
 const backupDir = "./backups"
 const latestBackupName = "vpnshop_backup_latest.zip"
@@ -187,7 +187,8 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 
 	timestamp := time.Now().Format("20060102_150405")
 	tmpDB := fmt.Sprintf("%s/vpnshop_backup_%s.db", backupDir, timestamp)
-	zipPath := fmt.Sprintf("%s/%s", backupDir, latestBackupName)
+	finalZipPath := fmt.Sprintf("%s/%s", backupDir, latestBackupName)
+	tmpZipPath := fmt.Sprintf("%s/.%s.tmp_%s", backupDir, latestBackupName, timestamp)
 
 	if _, err := db.DB.Exec(fmt.Sprintf("VACUUM INTO '%s'", tmpDB)); err != nil {
 		db.LogEventf("general", "error", "❌ خطا در گرفتن بکاپ: %v", err)
@@ -195,16 +196,26 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := createBackupZip(zipPath, tmpDB); err != nil {
+	if err := createBackupZip(tmpZipPath, tmpDB); err != nil {
 		os.Remove(tmpDB)
+		os.Remove(tmpZipPath)
 		http.Error(w, "خطا در ساخت فایل زیپ", http.StatusInternalServerError)
 		return
 	}
-
 	os.Remove(tmpDB)
+
+	// جایگزینی اتمیک؛ اگر کسی هم‌زمان نسخه قبلی رو داره دانلود می‌کنه، دیتاش خراب نمیشه
+	if err := os.Rename(tmpZipPath, finalZipPath); err != nil {
+		os.Remove(tmpZipPath)
+		http.Error(w, "خطا در جایگزینی فایل بکاپ", http.StatusInternalServerError)
+		return
+	}
+
 	cleanupOldBackups(3)
 
-	file, err := os.Open(zipPath)
+	// یک کپی مجزا برای همین درخواست باز می‌کنیم تا اگر بکاپ بعدی هم بیاد،
+	// این fd به همون نسخه‌ای که ساختیم اشاره داره
+	file, err := os.Open(finalZipPath)
 	if err != nil {
 		http.Error(w, "خطا در باز کردن فایل", http.StatusInternalServerError)
 		return
@@ -220,7 +231,6 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="vpnshop_backup_%s.zip"`, timestamp))
-	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
 	if _, err := io.Copy(w, file); err != nil {
@@ -229,6 +239,31 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db.LogEvent("general", "info", "📥 بکاپ کامل دانلود شد")
+}
+
+// cleanupOldBackups فقط N بکاپ قدیمی رو نگه می‌داره (latest حذف نمیشه)
+func cleanupOldBackups(keep int) {
+	files, err := os.ReadDir(backupDir)
+	if err != nil {
+		return
+	}
+
+	var backups []string
+	for _, f := range files {
+		name := f.Name()
+		if !f.IsDir() && name == latestBackupName {
+			continue
+		}
+		if !f.IsDir() && strings.HasPrefix(name, "vpnshop_backup_") && strings.HasSuffix(name, ".zip") {
+			backups = append(backups, name)
+		}
+	}
+
+	if len(backups) > keep {
+		for i := 0; i < len(backups)-keep; i++ {
+			os.Remove(fmt.Sprintf("%s/%s", backupDir, backups[i]))
+		}
+	}
 }
 
 // cleanupOldBackups فقط N بکاپ قدیمی رو نگه می‌داره (latest حذف نمیشه)
