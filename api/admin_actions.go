@@ -266,31 +266,6 @@ func cleanupOldBackups(keep int) {
 	}
 }
 
-// cleanupOldBackups فقط N بکاپ قدیمی رو نگه می‌داره (latest حذف نمیشه)
-func cleanupOldBackups(keep int) {
-	files, err := os.ReadDir(backupDir)
-	if err != nil {
-		return
-	}
-
-	var backups []string
-	for _, f := range files {
-		name := f.Name()
-		if !f.IsDir() && name == latestBackupName {
-			continue
-		}
-		if !f.IsDir() && strings.HasPrefix(name, "vpnshop_backup_") && strings.HasSuffix(name, ".zip") {
-			backups = append(backups, name)
-		}
-	}
-
-	if len(backups) > keep {
-		for i := 0; i < len(backups)-keep; i++ {
-			os.Remove(fmt.Sprintf("%s/%s", backupDir, backups[i]))
-		}
-	}
-}
-
 func createBackupZip(zipPath, dbPath string) error {
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
