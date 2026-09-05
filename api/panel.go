@@ -178,7 +178,6 @@ func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int)
 		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
 	}
 
-	// خواندن حجم و روز از پلن
 	plans, _ := models.LoadPlans()
 	var selectedPlan *models.Plan
 	for _, p := range plans {
@@ -199,9 +198,9 @@ func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int)
 		giftNote: selectedPlan.GiftNote,
 	}
 
-	// حجم‌های نهایی = پلن + carry-over
+	// 🎯 carry-over فقط به پنل اصلی اضافه میشه
 	mainVolume := pv.mainGB + carryGB
-	backupVolume := pv.backupGB + carryGB
+	backupVolume := pv.backupGB
 	giftVolume := pv.giftGB
 
 	items, err := renewOnAllPanels(cfg.Panels, renewUsername, mainVolume, backupVolume, giftVolume, pv.days, pv.giftNote)
