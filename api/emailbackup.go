@@ -50,7 +50,7 @@ func SendEmailBackup(config db.EmailBackupConfig) error {
 	subject := fmt.Sprintf("📦 بکاپ VPNShop - %s", timestamp)
 	body := fmt.Sprintf("بکاپ کامل دیتابیس و تنظیمات VPNShop\nتاریخ: %s\n\nشامل:\n- vpnshop.db\n- config.json", timestamp)
 	if config.ZipPassword != "" {
-		body += "\n\n🔒 رمز فایل زیپ: " + config.ZipPassword
+		body += "\n\n🔒 این فایل با رمز عبور محافظت شده است.\n   رمز عبور در تنظیمات سیستم شما ذخیره شده است."
 	}
 
 	msg := buildEmailWithAttachment(config.Email, subject, body, fmt.Sprintf("vpnshop_backup_%s.zip", timestamp), zipData)
