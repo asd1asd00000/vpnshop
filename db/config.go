@@ -31,12 +31,14 @@ type AdminConfig struct {
 }
 
 type EmailBackupConfig struct {
-	Enabled    bool   `json:"enabled"`
-	Email      string `json:"email"`
-	SMTPServer string `json:"smtp_server"`
-	SMTPPort   int    `json:"smtp_port"`
-	SMTPUser   string `json:"smtp_user"`
-	SMTPPass   string `json:"smtp_pass"`
+	Enabled       bool   `json:"enabled"`
+	Email         string `json:"email"`
+	SMTPServer    string `json:"smtp_server"`
+	SMTPPort      int    `json:"smtp_port"`
+	SMTPUser      string `json:"smtp_user"`
+	SMTPPass      string `json:"smtp_pass"`
+	IntervalHours int    `json:"interval_hours"`
+	ZipPassword   string `json:"zip_password"`
 }
 type CleanupConfig struct {
 	OrderExpireHours int `json:"order_expire_hours"`
