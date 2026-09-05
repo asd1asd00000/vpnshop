@@ -173,16 +173,26 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ───────────── بکاپ کامل (ZIP) ─────────────
+// ───────────── بکاپ کامل (ZIP) — نسخه ثابت روی دیسک ─────────────
+
+const backupDir = "./backups"
+const latestBackupName = "latest_backup.zip"
 
 func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
 	}
 
+	// ساخت پوشه اگه نیست
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		http.Error(w, "خطا در ساخت پوشه بکاپ", http.StatusInternalServerError)
+		return
+	}
+
 	timestamp := time.Now().Format("20060102_150405")
-	tmpDB := fmt.Sprintf("/tmp/vpnshop_backup_%s.db", timestamp)
-	zipPath := fmt.Sprintf("/tmp/vpnshop_backup_%s.zip", timestamp)
+	tmpDB := fmt.Sprintf("%s/vpnshop_backup_%s.db", backupDir, timestamp)
+	zipPath := fmt.Sprintf("%s/vpnshop_backup_%s.zip", backupDir, timestamp)
+	latestPath := fmt.Sprintf("%s/%s", backupDir, latestBackupName)
 
 	// ۱. کپی یکپارچه دیتابیس
 	if _, err := db.DB.Exec(fmt.Sprintf("VACUUM INTO '%s'", tmpDB)); err != nil {
@@ -191,19 +201,51 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۲. ساخت ZIP شامل دیتابیس + تنظیمات
+	// ۲. ساخت ZIP
 	if err := createBackupZip(zipPath, tmpDB); err != nil {
 		os.Remove(tmpDB)
 		http.Error(w, "خطا در ساخت فایل زیپ", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="vpnshop_backup_%s.zip"`, timestamp))
-	http.ServeFile(w, r, zipPath)
-
+	// ۳. حذف فایل db موقت
 	os.Remove(tmpDB)
-	os.Remove(zipPath)
-	db.LogEvent("general", "info", "📥 بکاپ کامل (دیتابیس + تنظیمات) دانلود شد")
+
+	// ۴. کپی به latest_backup.zip (برای دانلود ثابت)
+	if data, err := os.ReadFile(zipPath); err == nil {
+		os.WriteFile(latestPath, data, 0644)
+	}
+
+	// ۵. تمیزکاری: فقط ۳ بکاپ آخر رو نگه دار
+	cleanupOldBackups(3)
+
+	db.LogEvent("general", "info", "📥 بکاپ کامل (دیتابیس + تنظیمات) آماده دانلود شد")
+
+	// ۶. سرو فایل ثابت (بدون حذف فوری)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="vpnshop_backup_%s.zip"`, timestamp))
+	http.ServeFile(w, r, latestPath)
+}
+
+// cleanupOldBackups فقط N بکاپ آخر رو نگه می‌داره
+func cleanupOldBackups(keep int) {
+	files, err := os.ReadDir(backupDir)
+	if err != nil {
+		return
+	}
+
+	var backups []string
+	for _, f := range files {
+		if !f.IsDir() && strings.HasPrefix(f.Name(), "vpnshop_backup_") && strings.HasSuffix(f.Name(), ".zip") {
+			backups = append(backups, f.Name())
+		}
+	}
+
+	// مرتب‌سازی بر اساس نام (که شامل timestamp هست)
+	if len(backups) > keep {
+		for i := 0; i < len(backups)-keep; i++ {
+			os.Remove(fmt.Sprintf("%s/%s", backupDir, backups[i]))
+		}
+	}
 }
 
 func createBackupZip(zipPath, dbPath string) error {
