@@ -492,6 +492,84 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 
 	return "", nil
 }
+// RenewMarzbanUser تمدید کاربر Marzban با ریست هوشمند حجم
+// سقف جدید = مصرف‌شده + حجم پلن  →  باقیمانده واقعی = حجم پلن
+// انقضای جدید = الان + روزهای پلن  →  بدون جمع باقیمانده قبلی
+func RenewMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, days int) (string, error) {
+	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
+	if err != nil {
+		return "", err
+	}
+
+	baseURL := strings.TrimRight(panel.URL, "/")
+	client := makeHTTPClient(10 * time.Second)
+
+	// ۱) خواندن مصرف فعلی
+	usedTraffic, err := GetMarzbanUserUsage(panel, targetUser)
+	if err != nil {
+		usedTraffic = 0 // اگه نخوندیم، فرض صفر
+	}
+
+	// ۲) سقف جدید = مصرف + حجم پلن
+	newLimit := usedTraffic + int64(volumeGB)*1073741824
+
+	// ۳) انقضای جدید = الان + روزهای پلن (بدون جمع باقیمانده)
+	newExpire := time.Now().AddDate(0, 0, days).Unix()
+
+	// ۴) GET کاربر فعلی
+	reqGet, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
+	reqGet.Header.Add("Authorization", "Bearer "+token)
+	respGet, err := client.Do(reqGet)
+	if err != nil {
+		return "", err
+	}
+
+	if respGet.StatusCode != http.StatusOK {
+		respGet.Body.Close()
+		log.Printf("⚠️ [پاسارگاد-تمدید] کاربر %s یافت نشد، ساخت خودکار...", targetUser)
+		return CreateMarzbanUser(panel, targetUser, volumeGB, days)
+	}
+
+	var user map[string]interface{}
+	json.NewDecoder(respGet.Body).Decode(&user)
+	respGet.Body.Close()
+
+	user["data_limit"] = newLimit
+	user["expire"] = newExpire
+	user["status"] = "active"
+
+	jsonData, _ := json.Marshal(user)
+	reqPut, _ := http.NewRequest("PUT", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), bytes.NewBuffer(jsonData))
+	reqPut.Header.Add("Authorization", "Bearer "+token)
+	reqPut.Header.Add("Content-Type", "application/json")
+
+	respPut, err := client.Do(reqPut)
+	if err != nil {
+		return "", err
+	}
+	defer respPut.Body.Close()
+
+	if respPut.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("پاسارگاد: تمدید ناموفق، کد: %d", respPut.StatusCode)
+	}
+
+	log.Printf("✅ [پاسارگاد-تمدید] %s تمدید شد | سقف=%d بایت | روز=%d", targetUser, newLimit, days)
+
+	// گرفتن لینک اشتراک
+	reqGetLink, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
+	reqGetLink.Header.Add("Authorization", "Bearer "+token)
+	respGetLink, err := client.Do(reqGetLink)
+	if err == nil && respGetLink.StatusCode == http.StatusOK {
+		defer respGetLink.Body.Close()
+		var updatedUser map[string]interface{}
+		json.NewDecoder(respGetLink.Body).Decode(&updatedUser)
+		if subLink := extractPasarguardSubURL(baseURL, updatedUser); subLink != "" {
+			return subLink, nil
+		}
+	}
+
+	return "", nil
+}
 
 func GetMarzbanUserUsage(panel db.PanelConfig, targetUser string) (int64, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
