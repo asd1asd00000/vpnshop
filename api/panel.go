@@ -31,8 +31,15 @@ type planVolumes struct {
 }
 
 func GenerateConfigFromOrder(order models.Order) (string, error) {
+	// 🎯 اگه RenewUsername خالیه، از دیتابیس بخون
+	if order.RenewUsername == "" {
+		db.DB.QueryRow(`SELECT IFNULL(renew_username, ''), IFNULL(carry_gb, 0) FROM orders WHERE id = ?`, order.ID).
+			Scan(&order.RenewUsername, &order.CarryGB)
+	}
+
 	// 🎯 اگه تمدید هست، از منطق تمدید استفاده کن
 	if order.RenewUsername != "" {
+		log.Printf("🔄 [تمدید] شناسایی شد: username=%s, carry=%dGB", order.RenewUsername, order.CarryGB)
 		return GenerateConfigFromRenewal(order.RenewUsername, order.PlanName, order.CarryGB)
 	}
 
