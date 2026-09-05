@@ -66,7 +66,7 @@ func SendEmailBackup(config db.EmailBackupConfig) error {
 	return nil
 }
 
-// createEncryptedBackupZip ساخت زیپ رمزدار
+// createEncryptedBackupZip ساخت زیپ رمزدار (با AES-256)
 func createEncryptedBackupZip(zipPath, dbPath, password string) error {
 	f, err := os.Create(zipPath)
 	if err != nil {
@@ -86,16 +86,18 @@ func createEncryptedBackupZip(zipPath, dbPath, password string) error {
 		if _, err := os.Stat(item.src); err != nil {
 			continue
 		}
-		header := &enczip.FileHeader{Name: item.name, Method: enczip.Deflate, Flags: enczip.AESEncryption}
-		header.SetPassword(password)
-		w, err := zw.CreateHeader(header)
+		
+		// استفاده از CreateEncrypted برای رمزگذاری AES-256
+		w, err := zw.CreateEncrypted(item.name, password, enczip.AES256Encryption)
 		if err != nil {
 			return err
 		}
+
 		src, err := os.Open(item.src)
 		if err != nil {
 			return err
 		}
+
 		if _, err := io.Copy(w, src); err != nil {
 			src.Close()
 			return err
