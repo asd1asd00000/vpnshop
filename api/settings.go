@@ -153,7 +153,7 @@ func DeletePanelHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
 
-// EmailBackupHandler (placeholder - بعداً پیاده‌سازی می‌شود)
+// EmailBackupHandler ذخیره تنظیمات ایمیل بکاپ + تست ارسال
 func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -164,11 +164,48 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "pending",
-		"message": "این قابلیت هنوز پیاده‌سازی نشده است",
-	})
+	enabled := r.FormValue("email_enabled") == "on"
+	email := strings.TrimSpace(r.FormValue("email"))
+	smtpServer := strings.TrimSpace(r.FormValue("smtp_server"))
+	smtpPortStr := r.FormValue("smtp_port")
+	smtpUser := strings.TrimSpace(r.FormValue("smtp_user"))
+	smtpPass := r.FormValue("smtp_pass")
+
+	smtpPort, _ := strconv.Atoi(smtpPortStr)
+	if smtpPort <= 0 {
+		smtpPort = 587
+	}
+
+	cfg := db.GetConfig()
+	cfg.EmailBackup = db.EmailBackupConfig{
+		Enabled:    enabled,
+		Email:      email,
+		SMTPServer: smtpServer,
+		SMTPPort:   smtpPort,
+		SMTPUser:   smtpUser,
+		SMTPPass:   smtpPass,
+	}
+
+	if err := db.SaveConfig(cfg); err != nil {
+		http.Error(w, "خطا در ذخیره تنظیمات", http.StatusInternalServerError)
+		return
+	}
+
+	db.LogEventf("general", "success", "📧 تنظیمات ایمیل بکاپ بروزرسانی شد (فعال: %v)", enabled)
+
+	// اگه دکمه تست بود، ایمیل تستی بفرست
+	if r.FormValue("action") == "test" {
+		go func() {
+			if err := SendTestEmail(cfg.EmailBackup); err != nil {
+				db.LogEventf("general", "error", "❌ خطا در ارسال ایمیل تست: %v", err)
+			} else {
+				db.LogEvent("general", "success", "✅ ایمیل تست با موفقیت ارسال شد")
+			}
+		}()
+		db.LogEvent("general", "info", "📧 ایمیل تست در پس‌زمینه ارسال شد")
+	}
+
+	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
 // AddCardHandler افزودن شماره کارت
 func AddCardHandler(w http.ResponseWriter, r *http.Request) {
