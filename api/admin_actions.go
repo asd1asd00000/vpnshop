@@ -8,8 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
@@ -107,7 +107,6 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۱. خواندن سفارش
 	var order models.Order
 	err := db.DB.QueryRow(`
 		SELECT id, tracking_code, plan_name, status 
@@ -124,7 +123,6 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۲. چک کن قبلاً تایید نشده باشه
 	if order.Status == "paid" {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -134,7 +132,6 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۳. ساخت کانفیگ
 	configLink, err := GenerateConfigFromOrder(order)
 	if err != nil {
 		db.LogEventf("config", "error", "❌ خطا در ساخت کانفیگ برای سفارش #%d: %v", req.ID, err)
@@ -146,7 +143,6 @@ func ManualConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۴. بروزرسانی دیتابیس (status = paid + admin_confirmed = 1 + payment_method + paid_at + config_link)
 	_, err = db.DB.Exec(`
 		UPDATE orders 
 		SET status = 'paid', 
@@ -184,7 +180,6 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ساخت پوشه اگه نیست
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		http.Error(w, "خطا در ساخت پوشه بکاپ", http.StatusInternalServerError)
 		return
@@ -194,27 +189,21 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 	tmpDB := fmt.Sprintf("%s/vpnshop_backup_%s.db", backupDir, timestamp)
 	zipPath := fmt.Sprintf("%s/%s", backupDir, latestBackupName)
 
-	// ۱. کپی یکپارچه دیتابیس
 	if _, err := db.DB.Exec(fmt.Sprintf("VACUUM INTO '%s'", tmpDB)); err != nil {
 		db.LogEventf("general", "error", "❌ خطا در گرفتن بکاپ: %v", err)
 		http.Error(w, "خطا در گرفتن بکاپ", http.StatusInternalServerError)
 		return
 	}
 
-	// ۲. ساخت ZIP
 	if err := createBackupZip(zipPath, tmpDB); err != nil {
 		os.Remove(tmpDB)
 		http.Error(w, "خطا در ساخت فایل زیپ", http.StatusInternalServerError)
 		return
 	}
 
-	// ۳. حذف فایل db موقت
 	os.Remove(tmpDB)
-
-	// ۴. تمیزکاری: فقط ۳ بکاپ قدیمی رو نگه دار (latest همیشه بمونه)
 	cleanupOldBackups(3)
 
-	// ۵. باز کردن فایل و خواندن سایز
 	file, err := os.Open(zipPath)
 	if err != nil {
 		http.Error(w, "خطا در باز کردن فایل", http.StatusInternalServerError)
@@ -228,14 +217,12 @@ func BackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۶. ست کردن headers برای دانلود منیجر
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="vpnshop_backup_%s.zip"`, timestamp))
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
-	// ۷. کپی محتوا
 	if _, err := io.Copy(w, file); err != nil {
 		db.LogEventf("general", "error", "❌ خطا در ارسال فایل بکاپ: %v", err)
 		return
@@ -254,7 +241,6 @@ func cleanupOldBackups(keep int) {
 	var backups []string
 	for _, f := range files {
 		name := f.Name()
-		// latest رو نادیده بگیر
 		if !f.IsDir() && name == latestBackupName {
 			continue
 		}
@@ -263,29 +249,6 @@ func cleanupOldBackups(keep int) {
 		}
 	}
 
-	// مرتب‌سازی بر اساس نام (timestamp)
-	if len(backups) > keep {
-		for i := 0; i < len(backups)-keep; i++ {
-			os.Remove(fmt.Sprintf("%s/%s", backupDir, backups[i]))
-		}
-	}
-}
-
-// cleanupOldBackups فقط N بکاپ آخر رو نگه می‌داره
-func cleanupOldBackups(keep int) {
-	files, err := os.ReadDir(backupDir)
-	if err != nil {
-		return
-	}
-
-	var backups []string
-	for _, f := range files {
-		if !f.IsDir() && strings.HasPrefix(f.Name(), "vpnshop_backup_") && strings.HasSuffix(f.Name(), ".zip") {
-			backups = append(backups, f.Name())
-		}
-	}
-
-	// مرتب‌سازی بر اساس نام (که شامل timestamp هست)
 	if len(backups) > keep {
 		for i := 0; i < len(backups)-keep; i++ {
 			os.Remove(fmt.Sprintf("%s/%s", backupDir, backups[i]))
@@ -303,12 +266,10 @@ func createBackupZip(zipPath, dbPath string) error {
 	zw := zip.NewWriter(zipFile)
 	defer zw.Close()
 
-	// دیتابیس
 	if err := addFileToZip(zw, dbPath, "vpnshop.db"); err != nil {
 		return err
 	}
 
-	// تنظیمات (اگه وجود داشته باشه)
 	if _, err := os.Stat("./config.json"); err == nil {
 		if err := addFileToZip(zw, "./config.json", "config.json"); err != nil {
 			return err
@@ -380,13 +341,11 @@ func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case bytes.HasPrefix(data, []byte("SQLite format 3")):
-		// بکاپ قدیمی (.db)
 		if err := restoreFromDB(tmpPath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case bytes.HasPrefix(data, []byte{0x50, 0x4B, 0x03, 0x04}):
-		// بکاپ جدید (.zip)
 		if err := restoreFromZip(tmpPath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -408,7 +367,7 @@ func restoreFromDB(tmpPath string) error {
 		return err
 	}
 	db.InitDB("./vpnshop.db")
-	db.MigrateOrders() // ✅ مایگریشن برای بکاپ‌های قدیمی
+	db.MigrateOrders()
 	db.LogEvent("general", "success", "♻️ دیتابیس از بکاپ بازگردانی شد")
 	return nil
 }
@@ -441,14 +400,12 @@ func restoreFromZip(zipPath string) error {
 		return fmt.Errorf("فایل vpnshop.db در بکاپ یافت نشد")
 	}
 
-	// اعتبارسنجی دیتابیس داخل زیپ
 	if data, err := os.ReadFile(dbTmp); err != nil || len(data) < 16 || string(data[:15]) != "SQLite format 3" {
 		os.Remove(dbTmp)
 		os.Remove(cfgTmp)
 		return fmt.Errorf("دیتابیس داخل بکاپ معتبر نیست")
 	}
 
-	// بکاپ ایمنی از فایل‌های فعلی
 	if cur, err := os.ReadFile("./vpnshop.db"); err == nil {
 		os.WriteFile("./vpnshop.db.before_restore", cur, 0644)
 	}
@@ -467,7 +424,7 @@ func restoreFromZip(zipPath string) error {
 
 	db.InitDB("./vpnshop.db")
 	db.LoadConfig()
-	db.MigrateOrders() // ✅ مایگریشن برای بکاپ‌های قدیمی
+	db.MigrateOrders()
 
 	db.LogEvent("general", "success", "♻️ بکاپ کامل (دیتابیس + تنظیمات) بازگردانی شد")
 	return nil
