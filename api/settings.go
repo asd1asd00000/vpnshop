@@ -210,10 +210,10 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.FormValue("action") == "test" {
 		go func() {
-			if err := SendTestEmail(cfg.EmailBackup); err != nil {
+			if err := SendEmailBackup(cfg.EmailBackup); err != nil {
 				db.LogEventf("general", "error", "❌ خطا در ارسال ایمیل تست: %v", err)
 			} else {
-				db.LogEvent("general", "success", "✅ ایمیل تست با موفقیت ارسال شد")
+				db.LogEvent("general", "success", "✅ ایمیل تست با بکاپ واقعی ارسال شد")
 			}
 		}()
 		http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_test", http.StatusSeeOther)
