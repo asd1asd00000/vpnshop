@@ -18,6 +18,7 @@ func main() {
 	db.StartLogCleanup()
     db.StartOrderCleanup()
 		api.StartGroupCache()
+		api.StartBackupCleanup()
 		api.StartAutoEmailBackup()
 
 	// 🌐 مسیرهای عمومی
