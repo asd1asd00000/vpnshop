@@ -86,9 +86,15 @@ func createEncryptedBackupZip(zipPath, dbPath, password string) error {
 		if _, err := os.Stat(item.src); err != nil {
 			continue
 		}
-		
-		// استفاده از CreateEncrypted برای رمزگذاری AES-256
-		w, err := zw.CreateEncrypted(item.name, password, enczip.AES256Encryption)
+
+		// ساخت FileHeader با رمز عبور
+		header := &enczip.FileHeader{
+			Name:   item.name,
+			Method: enczip.Deflate,
+		}
+		header.SetPassword(password)
+
+		w, err := zw.CreateHeader(header)
 		if err != nil {
 			return err
 		}
