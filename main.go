@@ -32,6 +32,7 @@ func main() {
 	adminBase := api.AdminBasePath()
 	http.HandleFunc(adminBase, api.AdminHandler)
 	http.HandleFunc(adminBase+"/backup", api.BackupHandler)
+		http.HandleFunc(adminBase+"/backup/download/", api.BackupFileHandler)
 	http.HandleFunc(adminBase+"/confirm", api.AdminConfirmHandler)
 	http.HandleFunc(adminBase+"/restore", api.RestoreHandler)
 	http.HandleFunc(adminBase+"/logs", api.AdminLogsHandler)
