@@ -797,26 +797,53 @@
                 showNotification('❌ خطا در دریافت آمار', 'error');
             });
         }
-                // ── 🏷️ toggle لیبل «اصلاح آمار فروش» ──
+        // ── 🏷️ toggle لیبل «اصلاح آمار فروش» با پاپ‌آپ تایید ──
+        let pendingStatsEl = null;
+        let pendingStatsId = null;
+        let pendingStatsVal = false;
+
         function toggleStatsFixed(id, el) {
             const isOn = el.dataset.on === '1';
-            const newVal = !isOn;
+            pendingStatsVal = !isOn;
+            pendingStatsEl = el;
+            pendingStatsId = id;
+
+            document.getElementById('statsFixedMsg').textContent = pendingStatsVal
+                ? 'لیبل «اصلاح آمار فروش» فعال شود؟'
+                : 'لیبل «اصلاح آمار فروش» غیرفعال شود؟';
+
+            const m = document.getElementById('statsFixedModal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+
+        function closeStatsFixed() {
+            const m = document.getElementById('statsFixedModal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+            pendingStatsEl = null;
+        }
+
+        function doStatsFixed() {
+            if (!pendingStatsEl) return;
 
             fetch(ADMIN_BASE + '/stats-fixed', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: id, fixed: newVal })
+                body: JSON.stringify({ id: pendingStatsId, fixed: pendingStatsVal })
             }).then(r => r.json()).then(data => {
                 if (data.success) {
-                    el.dataset.on = newVal ? '1' : '0';
+                    pendingStatsEl.dataset.on = pendingStatsVal ? '1' : '0';
                     const base = 'px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap cursor-pointer select-none transition ';
-                    if (newVal) {
-                        el.className = base + 'bg-red-100 text-red-700 border border-red-300';
-                    } else {
-                        el.className = base + 'bg-gray-100 text-gray-400 border border-gray-200';
-                    }
+                    pendingStatsEl.className = base + (pendingStatsVal
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                        : 'bg-gray-100 text-gray-400 border border-gray-200');
                 }
-            }).catch(() => showNotification('❌ خطا در ذخیره لیبل', 'error'));
+                closeStatsFixed();
+            }).catch(() => {
+                showNotification('❌ خطا در ذخیره لیبل', 'error');
+                closeStatsFixed();
+            });
         }
     </script>
 </body>
