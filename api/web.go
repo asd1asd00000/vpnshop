@@ -101,6 +101,12 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plans, _ := models.LoadPlans()
+		// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول (حجم×روز ÷ قیمت)
+	sort.SliceStable(plans, func(i, j int) bool {
+		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
+		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
+		return si > sj
+	})
 	cfg := db.GetConfig()
 	cards := cfg.Cards
 
