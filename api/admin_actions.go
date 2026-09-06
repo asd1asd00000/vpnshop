@@ -550,3 +550,37 @@ func AdminLogsClearHandler(w http.ResponseWriter, r *http.Request) {
 	db.LogEvent("general", "warning", "🗑️ لاگ‌ها توسط ادمین پاک شدند")
 	w.WriteHeader(http.StatusOK)
 }
+// ───────────── 🏷️ لیبل دستی «اصلاح آمار فروش» ─────────────
+
+func AdminStatsFixedHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID    int  `json:"id"`
+		Fixed bool `json:"fixed"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	val := 0
+	if req.Fixed {
+		val = 1
+	}
+
+	_, err := db.DB.Exec(`UPDATE orders SET stats_fixed = ? WHERE id = ?`, val, req.ID)
+	if err != nil {
+		http.Error(w, "خطا در بروزرسانی", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
