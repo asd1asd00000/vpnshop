@@ -860,6 +860,34 @@
                 closeStatsFixed();
             });
         }
+                // ── 📅 تقویم شمسی + ساعت زنده ──
+        function updateClock() {
+            const now = new Date();
+            const dateFmt = new Intl.DateTimeFormat('fa-IR', {
+                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+            });
+            const timeFmt = new Intl.DateTimeFormat('fa-IR', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            const d = document.getElementById('jalaliDate');
+            const c = document.getElementById('liveClock');
+            if (d) d.textContent = dateFmt.format(now);
+            if (c) c.textContent = timeFmt.format(now);
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // ── 💰 آمار فروش روز جاری (بروزرسانی هر ۶۰ ثانیه) ──
+        function loadTodayStats() {
+            fetch(ADMIN_BASE + '/stats?range=today').then(r => r.json()).then(d => {
+                const s = document.getElementById('todaySales');
+                const n = document.getElementById('todayCount');
+                if (s) s.textContent = Number(d.total).toLocaleString('fa-IR');
+                if (n) n.textContent = Number(d.count).toLocaleString('fa-IR');
+            }).catch(() => {});
+        }
+        loadTodayStats();
+        setInterval(loadTodayStats, 60000);
     </script>
 </body>
 </html>
