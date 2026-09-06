@@ -365,15 +365,25 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	var orders []adminOrder
 	for rows.Next() {
 		var o adminOrder
-		var confirmed int
+		var confirmed, statsFixed int
+		var renewUsername string
 		if err := rows.Scan(
 			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
 			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
-			&o.AdminNote,
+			&o.AdminNote, &renewUsername, &statsFixed,
 		); err != nil {
 			continue
 		}
 		o.AdminConfirmed = confirmed == 1
+		o.RenewUsername = renewUsername
+		o.StatsFixed = statsFixed == 1
+
+		// 🎯 لیبل «جدید»: ساخته‌شده در ۲۴ ساعت اخیر
+		if o.CreatedAt != "" {
+			if t, perr := time.Parse("2006-01-02 15:04:05", o.CreatedAt); perr == nil {
+				o.IsNew = time.Now().UTC().Sub(t) < 24*time.Hour
+			}
+		}
 
 		if o.ConfigLink != "" {
 			var items []ConfigItem
