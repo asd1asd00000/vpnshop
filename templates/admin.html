@@ -136,15 +136,10 @@
                             </svg>
                         </div>
 
-                        <!-- ردیف ۲: مبلغ (راست) + کد پیگیری قابل کپی (چپ) -->
+                        <!-- ردیف ۲: مبلغ -->
                         <div class="flex items-center justify-between gap-2 mt-2">
                             <span class="font-bold text-green-600 text-sm md:text-base">
                                 {{.UniqueAmount}} <span class="text-xs text-gray-400 font-normal">تومان</span>
-                            </span>
-                            <span onclick="event.stopPropagation(); copyTracking('{{.TrackingCode}}', this)"
-                                  title="برای کپی کلیک کنید"
-                                  class="font-mono text-xs md:text-sm text-gray-500 hover:text-blue-600 transition cursor-pointer" dir="ltr">
-                                {{.TrackingCode}} <span class="text-gray-400">📋</span>
                             </span>
                         </div>
                     </div>
