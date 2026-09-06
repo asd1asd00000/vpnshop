@@ -507,103 +507,66 @@
     <!-- انتخاب پلن‌ها -->
     <!-- ======================================== -->
 
-    <div class="grid md:grid-cols-2 gap-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
 
         {{range .Plans}}
 
-        <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition text-center
+        <div class="relative bg-white p-4 pt-5 rounded-xl shadow-md hover:shadow-xl transition text-center flex flex-col
             {{if .IsSpecial}}
-                border-2 border-blue-500 relative
+                border-2 border-blue-500 ring-2 ring-blue-200
             {{else}}
                 border border-gray-100
             {{end}}">
 
             {{if .IsSpecial}}
-
-            <span class="absolute top-0 right-1/2 transform translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-bold">
-                پیشنهاد ویژه
+            <span class="absolute top-0 right-1/2 translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap shadow">
+                ⭐ پیشنهاد ویژه
             </span>
-
             {{end}}
 
-
-            <h3 class="text-xl font-bold text-gray-800 mb-2">
-                {{.Title}}
+            <!-- عنوان فارسی -->
+            <h3 class="text-sm md:text-base font-bold text-gray-800 mb-1">
+                {{.VolumeGB}} گیگ | {{.Days}} روز
             </h3>
 
-
-            <p class="text-3xl font-bold text-blue-600 mb-4">
-
+            <!-- قیمت -->
+            <p class="text-lg md:text-xl font-bold text-blue-600 mb-0.5">
                 {{.Price}}
-
-                <span class="text-sm text-gray-500 font-normal">
-                    تومان
-                </span>
-
+                <span class="text-[10px] text-gray-400 font-normal">تومان</span>
             </p>
 
+            <!-- معادل ماهانه (با JS پر میشه) -->
+            <p class="monthly text-[10px] text-green-600 font-bold mb-2" data-price="{{.Price}}" data-days="{{.Days}}">
+                ≈ ماهانه —
+            </p>
 
-            <div class="text-right text-xs space-y-1 mb-4 bg-gray-50 rounded-lg p-3 border border-gray-100">
-
-                <div class="text-gray-700">
-                    🛡️ {{.VolumeGB}}GB اصلی + {{.Days}} روز
-                </div>
-
-
+            <!-- جزئیات فشرده -->
+            <div class="text-[10px] text-gray-500 bg-gray-50 rounded-lg p-2 mb-3 border border-gray-100 space-y-0.5 text-right">
+                <div>🛡️ {{.VolumeGB}}GB اصلی + {{.Days}} روز</div>
                 {{if .BackupGB}}
-
-                <div class="text-gray-500">
-                    🛡️ {{.BackupGB}}GB زاپاس
-                    {{if index $.PanelNames "backup"}}
-                        از پنل {{index $.PanelNames "backup"}}
-                    {{end}}
-                </div>
-
+                <div>🛡️ {{.BackupGB}}GB زاپاس</div>
                 {{end}}
-
-
                 {{if .GiftGB}}
-
-                <div class="text-gray-500">
-                    🎁 {{.GiftGB}}GB هدیه
-                    {{if index $.PanelNames "gift"}}
-                        از پنل {{index $.PanelNames "gift"}}
-                    {{end}}
-                </div>
-
+                <div>🎁 {{.GiftGB}}GB هدیه</div>
+                {{end}}
                 {{if .GiftNote}}
-
-                <div class="text-orange-500">
-                    ⚠️ {{.GiftNote}}
-                </div>
-
+                <div class="text-orange-500">⚠️ {{.GiftNote}}</div>
                 {{end}}
-
-                {{end}}
-
             </div>
 
-
-            <form method="POST"
+            <!-- دکمه خرید -->
+            <form method="POST" class="mt-auto"
                   onsubmit="var b=this.querySelector('button'); if(b.dataset.sending){return false;} b.dataset.sending='1'; b.disabled=true; b.textContent='⏳ در حال ایجاد فاکتور...'; return true;">
-
-                <input type="hidden"
-                       name="plan_id"
-                       value="{{.ID}}">
-
+                <input type="hidden" name="plan_id" value="{{.ID}}">
                 <button type="submit"
-                        class="w-full
+                        class="w-full text-white text-xs font-bold py-2.5 rounded-lg transition
                         {{if .IsSpecial}}
                             bg-blue-600 hover:bg-blue-700
                         {{else}}
                             bg-gray-800 hover:bg-gray-900
-                        {{end}}
-                        text-white font-bold py-3 rounded-lg transition">
-
+                        {{end}}">
                     خرید این پلن
-
                 </button>
-
             </form>
 
         </div>
