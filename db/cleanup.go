@@ -124,6 +124,9 @@ func MigrateOrders() {
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN carry_gb INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون carry_gb به جدول orders اضافه شد")
 	}
+		if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN stats_fixed INTEGER DEFAULT 0`); err == nil {
+		log.Println("✅ ستون stats_fixed به جدول orders اضافه شد")
+	}
 }
 
 // StartOrderCleanup مایگریشن + پاکسازی‌ها
