@@ -776,6 +776,27 @@
                 showNotification('❌ خطا در دریافت آمار', 'error');
             });
         }
+                // ── 🏷️ toggle لیبل «اصلاح آمار فروش» ──
+        function toggleStatsFixed(id, el) {
+            const isOn = el.dataset.on === '1';
+            const newVal = !isOn;
+
+            fetch(ADMIN_BASE + '/stats-fixed', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id, fixed: newVal })
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    el.dataset.on = newVal ? '1' : '0';
+                    const base = 'px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap cursor-pointer select-none transition ';
+                    if (newVal) {
+                        el.className = base + 'bg-red-100 text-red-700 border border-red-300';
+                    } else {
+                        el.className = base + 'bg-gray-100 text-gray-400 border border-gray-200';
+                    }
+                }
+            }).catch(() => showNotification('❌ خطا در ذخیره لیبل', 'error'));
+        }
     </script>
 </body>
 </html>
