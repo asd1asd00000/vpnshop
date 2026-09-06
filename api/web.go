@@ -265,6 +265,9 @@ type adminOrder struct {
 	TelegramText   string
 	AdminNote      string
 	Username       string
+	RenewUsername string
+	StatsFixed    bool
+	IsNew         bool
 }
 
 type pageItem struct {
