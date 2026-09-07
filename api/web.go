@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"math/rand"
 	"net"
@@ -14,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"fmt"
 
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
@@ -111,7 +111,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		return si > sj
 	})
 
-	// 🎯 غنی‌سازی پلن‌ها (اینجا، بیرون همه شرط‌ها!)
+	// 🎯 غنی‌سازی پلن‌ها
 	type shopPlanView struct {
 		models.Plan
 		MonthLabel     string
@@ -130,12 +130,49 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// ── بخش POST (checkout / renew) ──
+	// ── ساخت panelNames ──
+	panelNames := make(map[string]string)
+	for _, panel := range cfg.Panels {
+		if panel.Role == "backup" || panel.Role == "gift" {
+			panelNames[panel.Role] = panel.Name
+		}
+	}
+
+	// ── بخش POST (checkout) ──
 	if r.Method == http.MethodPost {
 		planID := r.FormValue("plan_id")
-		// ... بقیه کد قبلی ...
-		
-		// در این بخش هم، اگر tmpl.Execute داری، حتماً "Plans": enrichedPlans باشه
+		var selectedPlan *models.Plan
+		for _, p := range plans {
+			if p.ID == planID {
+				selectedPlan = &p
+				break
+			}
+		}
+
+		if selectedPlan == nil {
+			http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
+			return
+		}
+
+		basePrice := selectedPlan.Price
+		rand.Seed(time.Now().UnixNano())
+		uniqueAmount := basePrice + rand.Intn(999) + 1
+		trackingCode := generateTrackingCode()
+
+		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
+			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
+
+		if err != nil {
+			http.Error(w, "خطا در ثبت فاکتور", http.StatusInternalServerError)
+			return
+		}
+
+		order := models.Order{
+			TrackingCode: trackingCode,
+			PlanName:     selectedPlan.Title,
+			UniqueAmount: uniqueAmount,
+		}
+
 		tmpl.Execute(w, map[string]interface{}{
 			"CheckoutOrder": order,
 			"Plans":         enrichedPlans,
@@ -279,9 +316,9 @@ type adminOrder struct {
 	TelegramText   string
 	AdminNote      string
 	Username       string
-	RenewUsername string
-	StatsFixed    bool
-	IsNew         bool
+	RenewUsername  string
+	StatsFixed     bool
+	IsNew          bool
 }
 
 type pageItem struct {
@@ -351,7 +388,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var totalOrders int
-		if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE IFNULL(archived, 0) = 0`).Scan(&totalOrders); err != nil {
+	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE IFNULL(archived, 0) = 0`).Scan(&totalOrders); err != nil {
 		totalOrders = 0
 	}
 	totalPages := (totalOrders + pageSize - 1) / pageSize
@@ -428,6 +465,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		"Pagination": buildPagination(page, totalPages),
 	})
 }
+
 // CheckRenewalHandler بررسی وجود نام کاربری و محاسبه carry-over
 func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -479,8 +517,6 @@ func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
 	case "guards":
 		limitUsage, totalUsage, limitExpire, err = GetGuardsUserUsage(*mainPanel, username)
 	case "marzban":
-		// برای Marzban، می‌تونیم از GetMarzbanUserUsage استفاده کنیم
-		// ولی فعلاً فقط Guards پشتیبانی میشه
 		http.Error(w, "تمدید فعلاً فقط برای پنل Guards پشتیبانی می‌شود", http.StatusBadRequest)
 		return
 	default:
@@ -537,6 +573,40 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := db.GetConfig()
 	cards := cfg.Cards
 
+	// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
+	sort.SliceStable(plans, func(i, j int) bool {
+		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
+		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
+		return si > sj
+	})
+
+	// 🎯 غنی‌سازی پلن‌ها (در scope این تابع)
+	type shopPlanView struct {
+		models.Plan
+		MonthLabel     string
+		PriceFormatted string
+	}
+	var enrichedPlans []shopPlanView
+	for _, p := range plans {
+		ml := fmt.Sprintf("%d روز", p.Days)
+		if p.Days >= 30 && p.Days%30 == 0 {
+			ml = fmt.Sprintf("%d ماهه", p.Days/30)
+		}
+		enrichedPlans = append(enrichedPlans, shopPlanView{
+			Plan:           p,
+			MonthLabel:     ml,
+			PriceFormatted: formatPrice(p.Price),
+		})
+	}
+
+	// ── ساخت panelNames ──
+	panelNames := make(map[string]string)
+	for _, panel := range cfg.Panels {
+		if panel.Role == "backup" || panel.Role == "gift" {
+			panelNames[panel.Role] = panel.Name
+		}
+	}
+
 	if r.Method == http.MethodPost {
 		planID := r.FormValue("plan_id")
 		renewUsername := r.FormValue("renew_username")
@@ -580,7 +650,14 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 			UniqueAmount: uniqueAmount,
 		}
 
-		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": enrichedPlans, "Cards": cards, "IsRenewal": true, "RenewUsername": renewUsername})
+		tmpl.Execute(w, map[string]interface{}{
+			"CheckoutOrder": order,
+			"Plans":         enrichedPlans,
+			"Cards":         cards,
+			"PanelNames":    panelNames,
+			"IsRenewal":     true,
+			"RenewUsername": renewUsername,
+		})
 		return
 	}
 
