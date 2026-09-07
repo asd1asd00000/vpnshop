@@ -172,7 +172,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			UniqueAmount: uniqueAmount,
 		}
 
-		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": plans, "Cards": cards})
+		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": enrichedPlans, "Cards": cards})
 	}
 }
 
@@ -603,7 +603,7 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 			UniqueAmount: uniqueAmount,
 		}
 
-		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": plans, "Cards": cards, "IsRenewal": true, "RenewUsername": renewUsername})
+		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": enrichedPlans, "Cards": cards, "IsRenewal": true, "RenewUsername": renewUsername})
 		return
 	}
 
