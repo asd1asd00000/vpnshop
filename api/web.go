@@ -133,7 +133,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		for _, p := range cfg.Panels {
 			panelNames[p.Role] = p.Name
 		}
-		tmpl.Execute(w, map[string]interface{}{"Plans": plans, "PanelNames": panelNames, "Cards": cards})
+		tmpl.Execute(w, map[string]interface{}{"Plans": enrichedPlans, "PanelNames": panelNames, "Cards": cards})
 		return
 	}
 
