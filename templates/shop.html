@@ -68,6 +68,39 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
         }
 
+                /* ✨ انیمیشن درخشش دکمه خرید — هر ۲ ثانیه */
+        @keyframes glow-pulse {
+            0%, 100% {
+                color: #ffffff80;
+                text-shadow: none;
+                box-shadow: none;
+            }
+            50% {
+                color: #ffffff;
+                text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 20px #ffffff;
+                box-shadow: 0 0 5px #008cff, 0 0 20px #008cff, 0 0 50px #008cff, 0 0 100px #008cff;
+            }
+        }
+
+        .buy-btn {
+            animation: glow-pulse 2s infinite ease-in-out;
+            transition: 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 700;
+            user-select: none;
+        }
+
+        .buy-btn:hover {
+            animation-play-state: paused;
+            color: #ffffff !important;
+            background: #008cff !important;
+            border-color: #008cff !important;
+            text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 20px #ffffff;
+            box-shadow: 0 0 5px #008cff, 0 0 20px #008cff, 0 0 50px #008cff, 0 0 100px #008cff;
+        }
+        
         /* افکت هاور روی پرچم */
         .country-flag:hover {
             transform: translateY(-3px) scale(1.08);
