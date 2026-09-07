@@ -557,6 +557,56 @@
             </span>
             {{end}}
 
+            <!-- عنوان: حجم + ماهه -->
+            <h3 class="text-sm md:text-base font-bold text-gray-800 mb-1">
+                {{.VolumeGB}} گیگ | {{.MonthLabel}}
+            </h3>
+
+            <!-- قیمت با کاما -->
+            <p class="text-lg md:text-xl font-bold text-blue-600 mb-2">
+                {{.PriceFormatted}}
+                <span class="text-[10px] text-gray-400 font-normal">تومان</span>
+            </p>
+
+            <!-- جزئیات -->
+            <div class="text-[10px] text-gray-500 bg-gray-50 rounded-lg p-2 mb-3 border border-gray-100 space-y-0.5 text-right">
+                <div>🛡️ {{.VolumeGB}}GB اصلی   {{.Days}} روز</div>
+                {{if .BackupGB}}
+                <div>🛡️ {{.BackupGB}}GB زاپاس
+                    {{if index $.PanelNames "backup"}}
+                        از پنل {{index $.PanelNames "backup"}}
+                    {{end}}
+                </div>
+                {{end}}
+                {{if .GiftGB}}
+                <div>🎁 {{.GiftGB}}GB هدیه
+                    {{if index $.PanelNames "gift"}}
+                        از پنل {{index $.PanelNames "gift"}}
+                    {{end}}
+                </div>
+                {{if .GiftNote}}
+                <div class="text-orange-500">⚠️ {{.GiftNote}}</div>
+                {{end}}
+                {{end}}
+            </div>
+
+            <!-- دکمه خرید با انیمیشن -->
+            <form method="POST" class="mt-auto"
+                  onsubmit="var b=this.querySelector('button'); if(b.dataset.sending){return false;} b.dataset.sending='1'; b.disabled=true; b.textContent='⏳ در حال ایجاد فاکتور...'; return true;">
+                <input type="hidden" name="plan_id" value="{{.ID}}">
+                <button type="submit"
+                        class="buy-btn w-full text-white text-xs
+                        {{if .IsSpecial}}bg-blue-600{{else}}bg-gray-800{{end}}">
+                    خرید این پلن
+                </button>
+            </form>
+
+        </div>
+
+        {{end}}
+
+    </div>
+
             <!-- عنوان فارسی -->
             <h3 class="text-sm md:text-base font-bold text-gray-800 mb-1">
                 {{.VolumeGB}} گیگ | {{.Days}} روز
