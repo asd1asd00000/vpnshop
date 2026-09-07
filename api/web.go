@@ -158,6 +158,19 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// formatPrice جداسازی سه‌رقمی از سمت راست با کاما
+func formatPrice(n int) string {
+	s := strconv.Itoa(n)
+	var result strings.Builder
+	for i, r := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result.WriteByte(',')
+		}
+		result.WriteRune(r)
+	}
+	return result.String()
+}
+
 // ───────────── 🔍 پیگیری سفارش ─────────────
 
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
