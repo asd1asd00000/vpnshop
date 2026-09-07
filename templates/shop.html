@@ -1149,15 +1149,7 @@
         btn.textContent = '⏳ در حال ایجاد فاکتور تمدید...';
         return true;
     }
-        /* ======================================== */
-    /* محاسبه معادل ماهانه هر پلن */
-    /* ======================================== */
-    document.querySelectorAll('.monthly').forEach(function (el) {
-        var p = parseInt(el.dataset.price, 10) || 0;
-        var d = parseInt(el.dataset.days, 10) || 30;
-        var m = Math.round(p * 30 / d);
-        el.textContent = '≈ ماهانه ' + m.toLocaleString('fa-IR') + ' تومان';
-    });
+
 
 </script>
 
