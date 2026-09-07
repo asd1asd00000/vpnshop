@@ -101,6 +101,24 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plans, _ := models.LoadPlans()
+		// 🎯 غنی‌سازی پلن‌ها برای نمایش
+	type shopPlanView struct {
+		models.Plan
+		MonthLabel     string
+		PriceFormatted string
+	}
+	var enrichedPlans []shopPlanView
+	for _, p := range plans {
+		ml := fmt.Sprintf("%d روز", p.Days)
+		if p.Days >= 30 && p.Days%30 == 0 {
+			ml = fmt.Sprintf("%d ماهه", p.Days/30)
+		}
+		enrichedPlans = append(enrichedPlans, shopPlanView{
+			Plan:           p,
+			MonthLabel:     ml,
+			PriceFormatted: formatPrice(p.Price),
+		})
+	}
 		// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول (حجم×روز ÷ قیمت)
 	sort.SliceStable(plans, func(i, j int) bool {
 		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
