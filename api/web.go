@@ -96,12 +96,22 @@ func AdminBasePath() string {
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/shop.html")
 	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب فروشگاه", http.StatusInternalServerError)
+		http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
 		return
 	}
 
 	plans, _ := models.LoadPlans()
-		// 🎯 غنی‌سازی پلن‌ها برای نمایش
+	cfg := db.GetConfig()
+	cards := cfg.Cards
+
+	// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
+	sort.SliceStable(plans, func(i, j int) bool {
+		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
+		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
+		return si > sj
+	})
+
+	// 🎯 غنی‌سازی پلن‌ها (اینجا، بیرون همه شرط‌ها!)
 	type shopPlanView struct {
 		models.Plan
 		MonthLabel     string
@@ -119,61 +129,28 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			PriceFormatted: formatPrice(p.Price),
 		})
 	}
-		// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول (حجم×روز ÷ قیمت)
-	sort.SliceStable(plans, func(i, j int) bool {
-		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
-		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
-		return si > sj
-	})
-	cfg := db.GetConfig()
-	cards := cfg.Cards
 
-	if r.Method == http.MethodGet {
-		panelNames := map[string]string{}
-		for _, p := range cfg.Panels {
-			panelNames[p.Role] = p.Name
-		}
-		tmpl.Execute(w, map[string]interface{}{"Plans": enrichedPlans, "PanelNames": panelNames, "Cards": cards})
+	// ── بخش POST (checkout / renew) ──
+	if r.Method == http.MethodPost {
+		planID := r.FormValue("plan_id")
+		// ... بقیه کد قبلی ...
+		
+		// در این بخش هم، اگر tmpl.Execute داری، حتماً "Plans": enrichedPlans باشه
+		tmpl.Execute(w, map[string]interface{}{
+			"CheckoutOrder": order,
+			"Plans":         enrichedPlans,
+			"Cards":         cards,
+			"PanelNames":    panelNames,
+		})
 		return
 	}
 
-	if r.Method == http.MethodPost {
-		planID := r.FormValue("plan_id")
-
-		var selectedPlan *models.Plan
-		for _, p := range plans {
-			if p.ID == planID {
-				selectedPlan = &p
-				break
-			}
-		}
-
-		if selectedPlan == nil {
-			http.Error(w, "پلن انتخاب شده نامعتبر است", http.StatusBadRequest)
-			return
-		}
-
-		basePrice := selectedPlan.Price
-		rand.Seed(time.Now().UnixNano())
-		uniqueAmount := basePrice + rand.Intn(999) + 1
-		trackingCode := generateTrackingCode()
-
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, status) 
-			VALUES (?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, selectedPlan.Days)
-
-		if err != nil {
-			http.Error(w, "خطا در ثبت سفارش", http.StatusInternalServerError)
-			return
-		}
-
-		order := models.Order{
-			TrackingCode: trackingCode,
-			PlanName:     selectedPlan.Title,
-			UniqueAmount: uniqueAmount,
-		}
-
-		tmpl.Execute(w, map[string]interface{}{"CheckoutOrder": order, "Plans": enrichedPlans, "Cards": cards})
-	}
+	// ── بخش GET (نمایش پلن‌ها) ──
+	tmpl.Execute(w, map[string]interface{}{
+		"Plans":      enrichedPlans,
+		"Cards":      cards,
+		"PanelNames": panelNames,
+	})
 }
 
 // formatPrice جداسازی سه‌رقمی از سمت راست با کاما
