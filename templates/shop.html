@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -68,7 +67,7 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
         }
 
-                /* ✨ انیمیشن درخشش دکمه خرید — هر ۲ ثانیه */
+        /* ✨ انیمیشن درخشش دکمه خرید — هر ۲ ثانیه */
         @keyframes glow-pulse {
             0%, 100% {
                 color: #ffffff80;
@@ -100,7 +99,7 @@
             text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 20px #ffffff;
             box-shadow: 0 0 5px #008cff, 0 0 20px #008cff, 0 0 50px #008cff, 0 0 100px #008cff;
         }
-        
+
         /* افکت هاور روی پرچم */
         .country-flag:hover {
             transform: translateY(-3px) scale(1.08);
@@ -243,7 +242,7 @@
             </div>
             <select name="plan_id" required class="w-full border border-gray-300 rounded-lg p-3 mb-3">
                 {{range .Plans}}
-                <option value="{{.ID}}">{{.Title}} - {{.Price}} تومان</option>
+                <option value="{{.ID}}">{{.VolumeGB}} گیگ | {{.MonthLabel}} - {{.PriceFormatted}} تومان</option>
                 {{end}}
             </select>
             <button type="submit" id="renewBtn"
@@ -462,7 +461,7 @@
                     <path stroke-linecap="round"
                           stroke-linejoin="round"
                           stroke-width="2"
-                          d="M5 13l4 4L19 7">
+                          d="M5 13l4 4L9 7">
                     </path>
 
                 </svg>
@@ -607,57 +606,6 @@
 
     </div>
 
-            <!-- عنوان فارسی -->
-            <h3 class="text-sm md:text-base font-bold text-gray-800 mb-1">
-                {{.VolumeGB}} گیگ | {{.Days}} روز
-            </h3>
-
-            <!-- قیمت -->
-            <p class="text-lg md:text-xl font-bold text-blue-600 mb-0.5">
-                {{.Price}}
-                <span class="text-[10px] text-gray-400 font-normal">تومان</span>
-            </p>
-
-            <!-- معادل ماهانه (با JS پر میشه) -->
-            <p class="monthly text-[10px] text-green-600 font-bold mb-2" data-price="{{.Price}}" data-days="{{.Days}}">
-                ≈ ماهانه —
-            </p>
-
-            <!-- جزئیات فشرده -->
-            <div class="text-[10px] text-gray-500 bg-gray-50 rounded-lg p-2 mb-3 border border-gray-100 space-y-0.5 text-right">
-                <div>🛡️ {{.VolumeGB}}GB اصلی + {{.Days}} روز</div>
-                {{if .BackupGB}}
-                <div>🛡️ {{.BackupGB}}GB زاپاس</div>
-                {{end}}
-                {{if .GiftGB}}
-                <div>🎁 {{.GiftGB}}GB هدیه</div>
-                {{end}}
-                {{if .GiftNote}}
-                <div class="text-orange-500">⚠️ {{.GiftNote}}</div>
-                {{end}}
-            </div>
-
-            <!-- دکمه خرید -->
-            <form method="POST" class="mt-auto"
-                  onsubmit="var b=this.querySelector('button'); if(b.dataset.sending){return false;} b.dataset.sending='1'; b.disabled=true; b.textContent='⏳ در حال ایجاد فاکتور...'; return true;">
-                <input type="hidden" name="plan_id" value="{{.ID}}">
-                <button type="submit"
-                        class="w-full text-white text-xs font-bold py-2.5 rounded-lg transition
-                        {{if .IsSpecial}}
-                            bg-blue-600 hover:bg-blue-700
-                        {{else}}
-                            bg-gray-800 hover:bg-gray-900
-                        {{end}}">
-                    خرید این پلن
-                </button>
-            </form>
-
-        </div>
-
-        {{end}}
-
-    </div>
-
 
     <!-- پیگیری سفارش -->
     <div class="text-center mt-8">
@@ -700,7 +648,8 @@
 
         copyToClipboard(input.value, btn, '📋 کپی');
     }
-        /* ======================================== */
+
+    /* ======================================== */
     /* کپی شماره کارت */
     /* ======================================== */
 
@@ -878,7 +827,6 @@
             ) {
 
                 setBuildingState();
-
             }
 
             /* هنوز پرداخت نشده */
@@ -975,11 +923,11 @@
 
         }
 
-                    /* 👤 نمایش نام کاربری */
-            if (items && items.length > 0 && items[0].username) {
-                document.getElementById('usernameValue').textContent = items[0].username;
-                document.getElementById('usernameBox').classList.remove('hidden');
-            }
+        /* 👤 نمایش نام کاربری */
+        if (items && items.length > 0 && items[0].username) {
+            document.getElementById('usernameValue').textContent = items[0].username;
+            document.getElementById('usernameBox').classList.remove('hidden');
+        }
 
         /* ======================================== */
         /* چند کانفیگ */
@@ -1060,7 +1008,7 @@
                             onclick="copyInput(this)"
                             class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
 
-                            📋 کپی
+                                📋 کپی
 
                         </button>
 
@@ -1095,18 +1043,19 @@
     checkPaymentStatus();
 
     {{end}}
-        /* ======================================== */
+
+    /* ======================================== */
     /* تمدید اشتراک */
     /* ======================================== */
 
     const renewUsernameInput = document.getElementById('renewUsername');
     if (renewUsernameInput) {
         let renewalCheckTimeout;
-        
+
         renewUsernameInput.addEventListener('input', function() {
             clearTimeout(renewalCheckTimeout);
             const username = this.value.trim();
-            
+
             if (username.length < 5) {
                 document.getElementById('renewalInfo').classList.add('hidden');
                 document.getElementById('renewBtn').disabled = true;
@@ -1150,9 +1099,7 @@
         return true;
     }
 
-
 </script>
 
 </body>
 </html>
-
