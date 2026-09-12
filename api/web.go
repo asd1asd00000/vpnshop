@@ -1,665 +1,702 @@
 package api
 
 import (
-	crand "crypto/rand"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"html/template"
-	"math/rand"
-	"net"
-	"net/http"
-	"os"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
+        crand "crypto/rand"
+        "database/sql"
+        "encoding/json"
+        "fmt"
+        "html/template"
+        "math/rand"
+        "net"
+        "net/http"
+        "os"
+        "sort"
+        "strconv"
+        "strings"
+        "sync"
+        "time"
 
-	"github.com/asd1asd00000/vpnshop/db"
-	"github.com/asd1asd00000/vpnshop/models"
+        "github.com/asd1asd00000/vpnshop/db"
+        "github.com/asd1asd00000/vpnshop/models"
 )
 
 // ───────────── 🔒 محدودیت نرخ ─────────────
 
 var (
-	rateMu   sync.Mutex
-	attempts = make(map[string][]time.Time)
+        rateMu   sync.Mutex
+        attempts = make(map[string][]time.Time)
 )
 
 const (
-	rateLimitWindow = 1 * time.Minute
-	rateLimitMax    = 3
+        rateLimitWindow = 1 * time.Minute
+        rateLimitMax    = 3
 )
 
 func clientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		return strings.TrimSpace(strings.Split(fwd, ",")[0])
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+        if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+                return strings.TrimSpace(strings.Split(fwd, ",")[0])
+        }
+        host, _, err := net.SplitHostPort(r.RemoteAddr)
+        if err != nil {
+                return r.RemoteAddr
+        }
+        return host
 }
 
 func allowTrackAttempt(ip string) bool {
-	rateMu.Lock()
-	defer rateMu.Unlock()
+        rateMu.Lock()
+        defer rateMu.Unlock()
 
-	now := time.Now()
-	windowStart := now.Add(-rateLimitWindow)
+        now := time.Now()
+        windowStart := now.Add(-rateLimitWindow)
 
-	list := attempts[ip]
-	filtered := make([]time.Time, 0, len(list))
-	for _, t := range list {
-		if t.After(windowStart) {
-			filtered = append(filtered, t)
-		}
-	}
+        list := attempts[ip]
+        filtered := make([]time.Time, 0, len(list))
+        for _, t := range list {
+                if t.After(windowStart) {
+                        filtered = append(filtered, t)
+                }
+        }
 
-	if len(filtered) >= rateLimitMax {
-		attempts[ip] = filtered
-		return false
-	}
+        if len(filtered) >= rateLimitMax {
+                attempts[ip] = filtered
+                return false
+        }
 
-	attempts[ip] = append(filtered, now)
-	return true
+        attempts[ip] = append(filtered, now)
+        return true
 }
 
 // ───────────── 🎫 کد پیگیری امن ─────────────
 
 func generateTrackingCode() string {
-	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 15)
-	if _, err := crand.Read(b); err != nil {
-		return "VP000000000000000"
-	}
-	for i := range b {
-		b[i] = chars[int(b[i])%len(chars)]
-	}
-	return "VP" + string(b)
+        const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+        b := make([]byte, 15)
+        if _, err := crand.Read(b); err != nil {
+                return "VP000000000000000"
+        }
+        for i := range b {
+                b[i] = chars[int(b[i])%len(chars)]
+        }
+        return "VP" + string(b)
 }
 
 // ───────────── 🔐 مسیر مخفی ادمین ─────────────
 
 func AdminBasePath() string {
-	secret := os.Getenv("ADMIN_SECRET_PATH")
-	if secret == "" {
-		return "/admin"
-	}
-	return "/" + secret + "/admin"
+        secret := os.Getenv("ADMIN_SECRET_PATH")
+        if secret == "" {
+                return "/admin"
+        }
+        return "/" + secret + "/admin"
 }
 
 // ───────────── 🛒 فروشگاه ─────────────
 
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("templates/shop.html")
-	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
-		return
-	}
+        tmpl, err := template.ParseFiles("templates/shop.html")
+        if err != nil {
+                http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
+                return
+        }
 
-	plans, _ := models.LoadPlans()
-	cfg := db.GetConfig()
-	cards := cfg.Cards
+        plans, _ := models.LoadPlans()
+        cfg := db.GetConfig()
+        cards := cfg.Cards
 
-	// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
-	sort.SliceStable(plans, func(i, j int) bool {
-		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
-		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
-		return si > sj
-	})
+        // 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
+        sort.SliceStable(plans, func(i, j int) bool {
+                si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
+                sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
+                return si > sj
+        })
 
-	// 🎯 غنی‌سازی پلن‌ها
-	type shopPlanView struct {
-		models.Plan
-		MonthLabel     string
-		PriceFormatted string
-	}
-	var enrichedPlans []shopPlanView
-	for _, p := range plans {
-		ml := fmt.Sprintf("%d روز", p.Days)
-		if p.Days >= 30 && p.Days%30 == 0 {
-			ml = fmt.Sprintf("%d ماهه", p.Days/30)
-		}
-		enrichedPlans = append(enrichedPlans, shopPlanView{
-			Plan:           p,
-			MonthLabel:     ml,
-			PriceFormatted: formatPrice(p.Price),
-		})
-	}
+        // 🎯 غنی‌سازی پلن‌ها
+        type shopPlanView struct {
+                models.Plan
+                MonthLabel     string
+                PriceFormatted string
+        }
+        var enrichedPlans []shopPlanView
+        for _, p := range plans {
+                ml := fmt.Sprintf("%d روز", p.Days)
+                if p.Days >= 30 && p.Days%30 == 0 {
+                        ml = fmt.Sprintf("%d ماهه", p.Days/30)
+                }
+                enrichedPlans = append(enrichedPlans, shopPlanView{
+                        Plan:           p,
+                        MonthLabel:     ml,
+                        PriceFormatted: formatPrice(p.Price),
+                })
+        }
 
-	// ── ساخت panelNames ──
-	panelNames := make(map[string]string)
-	for _, panel := range cfg.Panels {
-		if panel.Role == "backup" || panel.Role == "gift" {
-			panelNames[panel.Role] = panel.Name
-		}
-	}
+        // ── ساخت panelNames ──
+        panelNames := make(map[string]string)
+        for _, panel := range cfg.Panels {
+                if panel.Role == "backup" || panel.Role == "gift" {
+                        panelNames[panel.Role] = panel.Name
+                }
+        }
 
-	// ── بخش POST (checkout) ──
-	if r.Method == http.MethodPost {
-		planID := r.FormValue("plan_id")
-		var selectedPlan *models.Plan
-		for _, p := range plans {
-			if p.ID == planID {
-				selectedPlan = &p
-				break
-			}
-		}
+        // ── بخش POST (checkout) ──
+        if r.Method == http.MethodPost {
+                planID := r.FormValue("plan_id")
+                var selectedPlan *models.Plan
+                for _, p := range plans {
+                        if p.ID == planID {
+                                selectedPlan = &p
+                                break
+                        }
+                }
 
-		if selectedPlan == nil {
-			http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
-			return
-		}
+                if selectedPlan == nil {
+                        http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
+                        return
+                }
 
-		basePrice := selectedPlan.Price
-		rand.Seed(time.Now().UnixNano())
-		uniqueAmount := basePrice + rand.Intn(999) + 1
-		trackingCode := generateTrackingCode()
+                basePrice := selectedPlan.Price
+                rand.Seed(time.Now().UnixNano())
+                uniqueAmount := basePrice + rand.Intn(999) + 1
+                trackingCode := generateTrackingCode()
 
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
-			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
+                _, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status)
+                        VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
 
-		if err != nil {
-			http.Error(w, "خطا در ثبت فاکتور", http.StatusInternalServerError)
-			return
-		}
+                if err != nil {
+                        http.Error(w, "خطا در ثبت فاکتور", http.StatusInternalServerError)
+                        return
+                }
 
-		order := models.Order{
-			TrackingCode: trackingCode,
-			PlanName:     selectedPlan.Title,
-			UniqueAmount: uniqueAmount,
-		}
+                order := models.Order{
+                        TrackingCode: trackingCode,
+                        PlanName:     selectedPlan.Title,
+                        UniqueAmount: uniqueAmount,
+                }
 
-		tmpl.Execute(w, map[string]interface{}{
-			"CheckoutOrder": order,
-			"Plans":         enrichedPlans,
-			"Cards":         cards,
-			"PanelNames":    panelNames,
-		})
-		return
-	}
+                tmpl.Execute(w, map[string]interface{}{
+                        "CheckoutOrder": order,
+                        "Plans":         enrichedPlans,
+                        "Cards":         cards,
+                        "PanelNames":    panelNames,
+                })
+                return
+        }
 
-	// ── بخش GET (نمایش پلن‌ها) ──
-	tmpl.Execute(w, map[string]interface{}{
-		"Plans":      enrichedPlans,
-		"Cards":      cards,
-		"PanelNames": panelNames,
-	})
+        // ── بخش GET (نمایش پلن‌ها) ──
+        tmpl.Execute(w, map[string]interface{}{
+                "Plans":      enrichedPlans,
+                "Cards":      cards,
+                "PanelNames": panelNames,
+        })
 }
 
 // formatPrice جداسازی سه‌رقمی از سمت راست با کاما
 func formatPrice(n int) string {
-	s := strconv.Itoa(n)
-	var result strings.Builder
-	for i, r := range s {
-		if i > 0 && (len(s)-i)%3 == 0 {
-			result.WriteByte(',')
-		}
-		result.WriteRune(r)
-	}
-	return result.String()
+        s := strconv.Itoa(n)
+        var result strings.Builder
+        for i, r := range s {
+                if i > 0 && (len(s)-i)%3 == 0 {
+                        result.WriteByte(',')
+                }
+                result.WriteRune(r)
+        }
+        return result.String()
 }
 
 // ───────────── 🔍 پیگیری سفارش ─────────────
 
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("templates/track.html")
-	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب صفحه", http.StatusInternalServerError)
-		return
-	}
+        tmpl, err := template.ParseFiles("templates/track.html")
+        if err != nil {
+                http.Error(w, "خطا در بارگذاری قالب صفحه", http.StatusInternalServerError)
+                return
+        }
 
-	if r.Method == http.MethodGet {
-		tmpl.Execute(w, nil)
-		return
-	}
+        if r.Method == http.MethodGet {
+                tmpl.Execute(w, nil)
+                return
+        }
 
-	if r.Method == http.MethodPost {
-		ip := clientIP(r)
-		if !allowTrackAttempt(ip) {
-			db.LogEventf("ratelimit", "warning", "⚠️ محدودیت نرخ پیگیری برای IP: %s", ip)
-			tmpl.Execute(w, map[string]interface{}{
-				"Error": "تعداد تلاش‌ها بیش از حد مجاز است. لطفاً چند دقیقه بعد دوباره تلاش کنید.",
-			})
-			return
-		}
+        if r.Method == http.MethodPost {
+                ip := clientIP(r)
+                if !allowTrackAttempt(ip) {
+                        db.LogEventf("ratelimit", "warning", "⚠️ محدودیت نرخ پیگیری برای IP: %s", ip)
+                        tmpl.Execute(w, map[string]interface{}{
+                                "Error": "تعداد تلاش‌ها بیش از حد مجاز است. لطفاً چند دقیقه بعد دوباره تلاش کنید.",
+                        })
+                        return
+                }
 
-		trackingCode := r.FormValue("tracking_code")
-		var order models.Order
+                trackingCode := r.FormValue("tracking_code")
+                var order models.Order
 
-		query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '') 
-		          FROM orders WHERE tracking_code = ? AND IFNULL(archived, 0) = 0`
+                query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '')
+                          FROM orders WHERE tracking_code = ? AND IFNULL(archived, 0) = 0`
 
-		err := db.DB.QueryRow(query, trackingCode).Scan(
-			&order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
-		)
+                err := db.DB.QueryRow(query, trackingCode).Scan(
+                        &order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
+                )
 
-		if err == sql.ErrNoRows {
-			tmpl.Execute(w, map[string]interface{}{"Error": "فاکتوری با این کد یافت نشد."})
-			return
-		} else if err != nil {
-			tmpl.Execute(w, map[string]interface{}{"Error": "خطای سیستمی رخ داده است."})
-			return
-		}
+                if err == sql.ErrNoRows {
+                        tmpl.Execute(w, map[string]interface{}{"Error": "فاکتوری با این کد یافت نشد."})
+                        return
+                } else if err != nil {
+                        tmpl.Execute(w, map[string]interface{}{"Error": "خطای سیستمی رخ داده است."})
+                        return
+                }
 
-		tmpl.Execute(w, map[string]interface{}{"Order": order})
-	}
+                tmpl.Execute(w, map[string]interface{}{"Order": order})
+        }
 }
 
 // CheckOrderStatus وضعیت سفارش رو برمی‌گردونه (برای polling)
 func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+        if r.Method != http.MethodGet {
+                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+                return
+        }
 
-	trackingCode := r.URL.Query().Get("code")
-	if trackingCode == "" {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
+        trackingCode := r.URL.Query().Get("code")
+        if trackingCode == "" {
+                http.Error(w, "Bad request", http.StatusBadRequest)
+                return
+        }
 
-	var order models.Order
-	query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '') 
-	          FROM orders WHERE tracking_code = ? AND IFNULL(archived, 0) = 0`
+        var order models.Order
+        query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '')
+                  FROM orders WHERE tracking_code = ? AND IFNULL(archived, 0) = 0`
 
-	err := db.DB.QueryRow(query, trackingCode).Scan(
-		&order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
-	)
+        err := db.DB.QueryRow(query, trackingCode).Scan(
+                &order.ID, &order.TrackingCode, &order.PlanName, &order.Status, &order.ConfigLink,
+        )
 
-	if err == sql.ErrNoRows {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status": "not_found"}`))
-		return
-	} else if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status": "error"}`))
-		return
-	}
+        if err == sql.ErrNoRows {
+                w.Header().Set("Content-Type", "application/json")
+                w.Write([]byte(`{"status": "not_found"}`))
+                return
+        } else if err != nil {
+                w.Header().Set("Content-Type", "application/json")
+                w.Write([]byte(`{"status": "error"}`))
+                return
+        }
 
-	w.Header().Set("Content-Type", "application/json")
-	if order.Status == "paid" && order.ConfigLink != "" {
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":      "paid",
-			"config_link": order.ConfigLink,
-		})
-	} else if order.Status == "paid" {
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": "processing",
-		})
-	} else {
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": "pending",
-		})
-	}
+        w.Header().Set("Content-Type", "application/json")
+        if order.Status == "paid" && order.ConfigLink != "" {
+                json.NewEncoder(w).Encode(map[string]string{
+                        "status":      "paid",
+                        "config_link": order.ConfigLink,
+                })
+        } else if order.Status == "paid" {
+                json.NewEncoder(w).Encode(map[string]string{
+                        "status": "processing",
+                })
+        } else {
+                json.NewEncoder(w).Encode(map[string]string{
+                        "status": "pending",
+                })
+        }
 }
 
 // ───────────── 👨‍💼 داشبورد ادمین ─────────────
 
 type adminOrder struct {
-	ID             int
-	TrackingCode   string
-	PlanName       string
-	UniqueAmount   int
-	Status         string
-	ConfigLink     string
-	AdminConfirmed bool
-	PaymentMethod  string
-	CreatedAt      string
-	PaidAt         string
-	CreatedAtFmt   string
-	PaidAtFmt      string
-	Configs        []ConfigItem
-	TelegramText   string
-	AdminNote      string
-	Username       string
-	RenewUsername  string
-	StatsFixed     bool
-	IsNew          bool
+        ID             int
+        TrackingCode   string
+        PlanName       string
+        UniqueAmount   int
+        Status         string
+        ConfigLink     string
+        AdminConfirmed bool
+        PaymentMethod  string
+        CreatedAt      string
+        PaidAt         string
+        CreatedAtFmt   string
+        PaidAtFmt      string
+        Configs        []ConfigItem
+        TelegramText   string
+        AdminNote      string
+        Username       string
+        RenewUsername  string
+        StatsFixed     bool
+        IsNew          bool
+        CreatedDate    string // 🎯 تاریخ شمسی فقط روز برای گروه‌بندی
 }
 
 type pageItem struct {
-	Page    int
-	Current bool
-	Dots    bool
+        Page    int
+        Current bool
+        Dots    bool
 }
 
 func buildPagination(current, total int) []pageItem {
-	var items []pageItem
+        var items []pageItem
 
-	if total <= 7 {
-		for i := 1; i <= total; i++ {
-			items = append(items, pageItem{Page: i, Current: i == current})
-		}
-		return items
-	}
+        if total <= 7 {
+                for i := 1; i <= total; i++ {
+                        items = append(items, pageItem{Page: i, Current: i == current})
+                }
+                return items
+        }
 
-	want := map[int]bool{1: true, total: true}
-	for i := current - 1; i <= current + 1; i++ {
-		if i >= 1 && i <= total {
-			want[i] = true
-		}
-	}
-	var pages []int
-	for p := range want {
-		pages = append(pages, p)
-	}
-	sort.Ints(pages)
+        want := map[int]bool{1: true, total: true}
+        for i := current - 1; i <= current + 1; i++ {
+                if i >= 1 && i <= total {
+                        want[i] = true
+                }
+        }
+        var pages []int
+        for p := range want {
+                pages = append(pages, p)
+        }
+        sort.Ints(pages)
 
-	prev := 0
-	for _, p := range pages {
-		if prev != 0 && p-prev > 1 {
-			items = append(items, pageItem{Dots: true})
-		}
-		items = append(items, pageItem{Page: p, Current: p == current})
-		prev = p
-	}
-	return items
+        prev := 0
+        for _, p := range pages {
+                if prev != 0 && p-prev > 1 {
+                        items = append(items, pageItem{Dots: true})
+                }
+                items = append(items, pageItem{Page: p, Current: p == current})
+                prev = p
+        }
+        return items
 }
 
 // checkAdminAuth بررسی session کوکی
 func checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
-	if c, err := r.Cookie("admin_session"); err == nil && validSession(c.Value) {
-		return true
-	}
-	http.Redirect(w, r, AdminBasePath()+"/login", http.StatusSeeOther)
-	return false
+        if c, err := r.Cookie("admin_session"); err == nil && validSession(c.Value) {
+                return true
+        }
+        http.Redirect(w, r, AdminBasePath()+"/login", http.StatusSeeOther)
+        return false
 }
 
 func AdminHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkAdminAuth(w, r) {
-		return
-	}
+        if !checkAdminAuth(w, r) {
+                return
+        }
 
-	tmpl, err := template.ParseFiles("templates/admin.html")
-	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب ادمین", http.StatusInternalServerError)
-		return
-	}
+        tmpl, err := template.ParseFiles("templates/admin.html")
+        if err != nil {
+                http.Error(w, "خطا در بارگذاری قالب ادمین", http.StatusInternalServerError)
+                return
+        }
 
-	// ── صفحه‌بندی ──
-	pageSize := 10
-	page := 1
-	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
-		page = p
-	}
+        // ── صفحه‌بندی ──
+        pageSize := 10
+        page := 1
+        if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
+                page = p
+        }
 
-	var totalOrders int
-	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE IFNULL(archived, 0) = 0`).Scan(&totalOrders); err != nil {
-		totalOrders = 0
-	}
-	totalPages := (totalOrders + pageSize - 1) / pageSize
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-	offset := (page - 1) * pageSize
+        var totalOrders int
+        if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE IFNULL(archived, 0) = 0`).Scan(&totalOrders); err != nil {
+                totalOrders = 0
+        }
+        totalPages := (totalOrders + pageSize - 1) / pageSize
+        if totalPages < 1 {
+                totalPages = 1
+        }
+        if page > totalPages {
+                page = totalPages
+        }
+        offset := (page - 1) * pageSize
 
-	rows, err := db.DB.Query(`
-		SELECT id, tracking_code, plan_name, unique_amount, status, 
-		       IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), 
-		       IFNULL(payment_method, ''),
-		       IFNULL(created_at, ''), IFNULL(paid_at, ''),
-		       IFNULL(admin_note, ''), IFNULL(renew_username, ''), IFNULL(stats_fixed, 0)
-		FROM orders WHERE IFNULL(archived, 0) = 0 ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
-	if err != nil {
-		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
+        rows, err := db.DB.Query(`
+                SELECT id, tracking_code, plan_name, unique_amount, status,
+                       IFNULL(config_link, ''), IFNULL(admin_confirmed, 0),
+                       IFNULL(payment_method, ''),
+                       IFNULL(created_at, ''), IFNULL(paid_at, ''),
+                       IFNULL(admin_note, ''), IFNULL(renew_username, ''), IFNULL(stats_fixed, 0)
+                FROM orders WHERE IFNULL(archived, 0) = 0 ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
+        if err != nil {
+                http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
+                return
+        }
+        defer rows.Close()
 
-	var orders []adminOrder
-	for rows.Next() {
-		var o adminOrder
-		var confirmed, statsFixed int
-		var renewUsername string
-		if err := rows.Scan(
-			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
-			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
-			&o.AdminNote, &renewUsername, &statsFixed,
-		); err != nil {
-			continue
-		}
-		o.AdminConfirmed = confirmed == 1
-		o.RenewUsername = renewUsername
-		o.StatsFixed = statsFixed == 1
+        var orders []adminOrder
+        for rows.Next() {
+                var o adminOrder
+                var confirmed, statsFixed int
+                var renewUsername string
+                if err := rows.Scan(
+                        &o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
+                        &o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
+                        &o.AdminNote, &renewUsername, &statsFixed,
+                ); err != nil {
+                        continue
+                }
+                o.AdminConfirmed = confirmed == 1
+                o.RenewUsername = renewUsername
+                o.StatsFixed = statsFixed == 1
 
-		// 🎯 لیبل «جدید»: ساخته‌شده در ۲۴ ساعت اخیر
-		if o.CreatedAt != "" {
-			if t, perr := time.Parse("2006-01-02 15:04:05", o.CreatedAt); perr == nil {
-				o.IsNew = time.Now().UTC().Sub(t) < 24*time.Hour
-			}
-		}
+                // 🎯 لیبل «جدید»: ساخته‌شده در ۲۴ ساعت اخیر
+                if o.CreatedAt != "" {
+                        if t, perr := time.Parse("2006-01-02 15:04:05", o.CreatedAt); perr == nil {
+                                o.IsNew = time.Now().UTC().Sub(t) < 24*time.Hour
+                        }
+                }
 
-		if o.ConfigLink != "" {
-			var items []ConfigItem
-			if jerr := json.Unmarshal([]byte(o.ConfigLink), &items); jerr == nil && len(items) > 0 {
-				o.Configs = items
-			}
-		}
+                if o.ConfigLink != "" {
+                        var items []ConfigItem
+                        if jerr := json.Unmarshal([]byte(o.ConfigLink), &items); jerr == nil && len(items) > 0 {
+                                o.Configs = items
+                        }
+                }
 
-		if len(o.Configs) > 0 {
-			o.TelegramText = buildTelegramText(o.Configs)
-			// 🎯 نام کاربری از اولین کانفیگ
-			o.Username = o.Configs[0].Username
-		}
+                if len(o.Configs) > 0 {
+                        o.TelegramText = buildTelegramText(o.Configs)
+                        // 🎯 نام کاربری از اولین کانفیگ
+                        o.Username = o.Configs[0].Username
+                }
 
-		o.CreatedAtFmt = db.FormatTehranUTC(o.CreatedAt)
-		o.PaidAtFmt = db.FormatTehranUTC(o.PaidAt)
+                o.CreatedAtFmt = db.FormatTehranUTC(o.CreatedAt)
+                o.PaidAtFmt = db.FormatTehranUTC(o.PaidAt)
 
-		orders = append(orders, o)
-	}
+                // 🎯 استخراج تاریخ شمسی فقط روز برای گروه‌بندی
+                if o.CreatedAt != "" {
+                        if t, err := time.Parse("2006-01-02 15:04:05", o.CreatedAt); err == nil {
+                                tt := t.In(db.TehranTZ)
+                                jy, jm, jd := gregorianToJalali(tt.Year(), int(tt.Month()), tt.Day())
+                                o.CreatedDate = fmt.Sprintf("%d-%02d-%02d", jy, jm, jd)
+                        }
+                }
 
-	tmpl.Execute(w, map[string]interface{}{
-		"Orders":     orders,
-		"AdminBase":  AdminBasePath(),
-		"Page":       page,
-		"TotalPages": totalPages,
-		"PrevPage":   page - 1,
-		"NextPage":   page + 1,
-		"Pagination": buildPagination(page, totalPages),
-	})
+                orders = append(orders, o)
+        }
+
+        tmpl.Execute(w, map[string]interface{}{
+                "Orders":     orders,
+                "AdminBase":  AdminBasePath(),
+                "Page":       page,
+                "TotalPages": totalPages,
+                "PrevPage":   page - 1,
+                "NextPage":   page + 1,
+                "Pagination": buildPagination(page, totalPages),
+        })
 }
 
 // CheckRenewalHandler بررسی وجود نام کاربری و محاسبه carry-over
 func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+        if r.Method != http.MethodPost {
+                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+                return
+        }
 
-	username := r.FormValue("username")
-	if username == "" {
-		http.Error(w, "نام کاربری لازم است", http.StatusBadRequest)
-		return
-	}
+        username := r.FormValue("username")
+        if username == "" {
+                http.Error(w, "نام کاربری لازم است", http.StatusBadRequest)
+                return
+        }
 
-	// پیدا کردن آخرین فاکتور پرداخت‌شده با این username
-	var orderID int
-	var configLink string
-	err := db.DB.QueryRow(`SELECT id, IFNULL(config_link, '') FROM orders 
-	                       WHERE status = 'paid' AND config_link LIKE ?
-	                       ORDER BY id DESC LIMIT 1`, "%\"username\":\""+username+"\"%").
-		Scan(&orderID, &configLink)
+        // پیدا کردن آخرین فاکتور پرداخت‌شده با این username
+        var orderID int
+        var configLink string
+        err := db.DB.QueryRow(`SELECT id, IFNULL(config_link, '') FROM orders
+                               WHERE status = 'paid' AND config_link LIKE ?
+                               ORDER BY id DESC LIMIT 1`, "%\"username\":\""+username+"\"%").
+                Scan(&orderID, &configLink)
 
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"found": false,
-			"error": "اشتراکی با این نام کاربری یافت نشد",
-		})
-		return
-	}
+        if err != nil {
+                w.Header().Set("Content-Type", "application/json")
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "found": false,
+                        "error": "اشتراکی با این نام کاربری یافت نشد",
+                })
+                return
+        }
 
-	// پیدا کردن پنل اصلی
-	cfg := db.GetConfig()
-	var mainPanel *db.PanelConfig
-	for i := range cfg.Panels {
-		if cfg.Panels[i].Role == "main" {
-			mainPanel = &cfg.Panels[i]
-			break
-		}
-	}
+        // پیدا کردن پنل اصلی
+        cfg := db.GetConfig()
+        var mainPanel *db.PanelConfig
+        for i := range cfg.Panels {
+                if cfg.Panels[i].Role == "main" {
+                        mainPanel = &cfg.Panels[i]
+                        break
+                }
+        }
 
-	if mainPanel == nil {
-		http.Error(w, "پنل اصلی یافت نشد", http.StatusInternalServerError)
-		return
-	}
+        if mainPanel == nil {
+                http.Error(w, "پنل اصلی یافت نشد", http.StatusInternalServerError)
+                return
+        }
 
-	// خواندن حجم و روز باقیمانده از پنل اصلی
-	var limitUsage, totalUsage, limitExpire int64
-	switch mainPanel.Type {
-	case "guards":
-		limitUsage, totalUsage, limitExpire, err = GetGuardsUserUsage(*mainPanel, username)
-	case "marzban":
-		http.Error(w, "تمدید فعلاً فقط برای پنل Guards پشتیبانی می‌شود", http.StatusBadRequest)
-		return
-	default:
-		http.Error(w, "نوع پنل پشتیبانی نمی‌شود", http.StatusBadRequest)
-		return
-	}
+        // خواندن حجم و روز باقیمانده از پنل اصلی
+        var limitUsage, totalUsage, limitExpire int64
+        switch mainPanel.Type {
+        case "guards":
+                limitUsage, totalUsage, limitExpire, err = GetGuardsUserUsage(*mainPanel, username)
+        case "marzban":
+                http.Error(w, "تمدید فعلاً فقط برای پنل Guards پشتیبانی می‌شود", http.StatusBadRequest)
+                return
+        default:
+                http.Error(w, "نوع پنل پشتیبانی نمی‌شود", http.StatusBadRequest)
+                return
+        }
 
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"found": false,
-			"error": "خطا در خواندن اطلاعات اشتراک: " + err.Error(),
-		})
-		return
-	}
+        if err != nil {
+                w.Header().Set("Content-Type", "application/json")
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "found": false,
+                        "error": "خطا در خواندن اطلاعات اشتراک: " + err.Error(),
+                })
+                return
+        }
 
-	// محاسبه carry-over
-	now := time.Now().Unix()
-	remainingVolume := limitUsage - totalUsage
-	remainingDays := (limitExpire - now) / 86400
+        // محاسبه carry-over
+        now := time.Now().Unix()
+        remainingVolume := limitUsage - totalUsage
+        remainingDays := (limitExpire - now) / 86400
 
-	if remainingDays <= 0 {
-		remainingDays = 0
-	}
+        if remainingDays <= 0 {
+                remainingDays = 0
+        }
 
-	// نرخ روزانه = حجم کل / 30 روز (فرض)
-	dailyRate := limitUsage / 30
-	carryOverBytes := remainingVolume
-	if remainingDays*dailyRate < carryOverBytes {
-		carryOverBytes = remainingDays * dailyRate
-	}
+        // نرخ روزانه = حجم کل / 30 روز (فرض)
+        dailyRate := limitUsage / 30
+        carryOverBytes := remainingVolume
+        if remainingDays*dailyRate < carryOverBytes {
+                carryOverBytes = remainingDays * dailyRate
+        }
 
-	carryOverGB := int(carryOverBytes / 1073741824)
+        carryOverGB := int(carryOverBytes / 1073741824)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"found":            true,
-		"username":         username,
-		"remaining_volume": remainingVolume / 1073741824,
-		"remaining_days":   remainingDays,
-		"carry_gb":         carryOverGB,
-	})
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+                "found":            true,
+                "username":         username,
+                "remaining_volume": remainingVolume / 1073741824,
+                "remaining_days":   remainingDays,
+                "carry_gb":         carryOverGB,
+        })
 }
 
 // RenewalHandler ساخت فاکتور تمدید
 func RenewalHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("templates/shop.html")
-	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
-		return
-	}
+        tmpl, err := template.ParseFiles("templates/shop.html")
+        if err != nil {
+                http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
+                return
+        }
 
-	plans, _ := models.LoadPlans()
-	cfg := db.GetConfig()
-	cards := cfg.Cards
+        plans, _ := models.LoadPlans()
+        cfg := db.GetConfig()
+        cards := cfg.Cards
 
-	// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
-	sort.SliceStable(plans, func(i, j int) bool {
-		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
-		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
-		return si > sj
-	})
+        // 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
+        sort.SliceStable(plans, func(i, j int) bool {
+                si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
+                sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
+                return si > sj
+        })
 
-	// 🎯 غنی‌سازی پلن‌ها (در scope این تابع)
-	type shopPlanView struct {
-		models.Plan
-		MonthLabel     string
-		PriceFormatted string
-	}
-	var enrichedPlans []shopPlanView
-	for _, p := range plans {
-		ml := fmt.Sprintf("%d روز", p.Days)
-		if p.Days >= 30 && p.Days%30 == 0 {
-			ml = fmt.Sprintf("%d ماهه", p.Days/30)
-		}
-		enrichedPlans = append(enrichedPlans, shopPlanView{
-			Plan:           p,
-			MonthLabel:     ml,
-			PriceFormatted: formatPrice(p.Price),
-		})
-	}
+        // 🎯 غنی‌سازی پلن‌ها (در scope این تابع)
+        type shopPlanView struct {
+                models.Plan
+                MonthLabel     string
+                PriceFormatted string
+        }
+        var enrichedPlans []shopPlanView
+        for _, p := range plans {
+                ml := fmt.Sprintf("%d روز", p.Days)
+                if p.Days >= 30 && p.Days%30 == 0 {
+                        ml = fmt.Sprintf("%d ماهه", p.Days/30)
+                }
+                enrichedPlans = append(enrichedPlans, shopPlanView{
+                        Plan:           p,
+                        MonthLabel:     ml,
+                        PriceFormatted: formatPrice(p.Price),
+                })
+        }
 
-	// ── ساخت panelNames ──
-	panelNames := make(map[string]string)
-	for _, panel := range cfg.Panels {
-		if panel.Role == "backup" || panel.Role == "gift" {
-			panelNames[panel.Role] = panel.Name
-		}
-	}
+        // ── ساخت panelNames ──
+        panelNames := make(map[string]string)
+        for _, panel := range cfg.Panels {
+                if panel.Role == "backup" || panel.Role == "gift" {
+                        panelNames[panel.Role] = panel.Name
+                }
+        }
 
-	if r.Method == http.MethodPost {
-		planID := r.FormValue("plan_id")
-		renewUsername := r.FormValue("renew_username")
-		carryGBStr := r.FormValue("carry_gb")
+        if r.Method == http.MethodPost {
+                planID := r.FormValue("plan_id")
+                renewUsername := r.FormValue("renew_username")
+                carryGBStr := r.FormValue("carry_gb")
 
-		var selectedPlan *models.Plan
-		for _, p := range plans {
-			if p.ID == planID {
-				selectedPlan = &p
-				break
-			}
-		}
+                var selectedPlan *models.Plan
+                for _, p := range plans {
+                        if p.ID == planID {
+                                selectedPlan = &p
+                                break
+                        }
+                }
 
-		if selectedPlan == nil {
-			http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
-			return
-		}
+                if selectedPlan == nil {
+                        http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
+                        return
+                }
 
-		carryGB := 0
-		if carryGBStr != "" {
-			fmt.Sscanf(carryGBStr, "%d", &carryGB)
-		}
+                carryGB := 0
+                if carryGBStr != "" {
+                        fmt.Sscanf(carryGBStr, "%d", &carryGB)
+                }
 
-		basePrice := selectedPlan.Price
-		rand.Seed(time.Now().UnixNano())
-		uniqueAmount := basePrice + rand.Intn(999) + 1
-		trackingCode := generateTrackingCode()
+                basePrice := selectedPlan.Price
+                rand.Seed(time.Now().UnixNano())
+                uniqueAmount := basePrice + rand.Intn(999) + 1
+                trackingCode := generateTrackingCode()
 
-		// ساخت فاکتور تمدید
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, renew_username, carry_gb, status) 
-			VALUES (?, ?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, renewUsername, carryGB)
+                // ساخت فاکتور تمدید
+                _, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, renew_username, carry_gb, status)
+                        VALUES (?, ?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, renewUsername, carryGB)
 
-		if err != nil {
-			http.Error(w, "خطا در ثبت فاکتور تمدید", http.StatusInternalServerError)
-			return
-		}
+                if err != nil {
+                        http.Error(w, "خطا در ثبت فاکتور تمدید", http.StatusInternalServerError)
+                        return
+                }
 
-		order := models.Order{
-			TrackingCode: trackingCode,
-			PlanName:     selectedPlan.Title,
-			UniqueAmount: uniqueAmount,
-		}
+                order := models.Order{
+                        TrackingCode: trackingCode,
+                        PlanName:     selectedPlan.Title,
+                        UniqueAmount: uniqueAmount,
+                }
 
-		tmpl.Execute(w, map[string]interface{}{
-			"CheckoutOrder": order,
-			"Plans":         enrichedPlans,
-			"Cards":         cards,
-			"PanelNames":    panelNames,
-			"IsRenewal":     true,
-			"RenewUsername": renewUsername,
-		})
-		return
-	}
+                tmpl.Execute(w, map[string]interface{}{
+                        "CheckoutOrder": order,
+                        "Plans":         enrichedPlans,
+                        "Cards":         cards,
+                        "PanelNames":    panelNames,
+                        "IsRenewal":     true,
+                        "RenewUsername": renewUsername,
+                })
+                return
+        }
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+        http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// gregorianToJalali تبدیل تاریخ میلادی به شمسی
+func gregorianToJalali(gy, gm, gd int) (int, int, int) {
+gdm := []int{0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334}
+gy2 := gy
+if gm > 2 {
+gy2 = gy + 1
+}
+days := 355666 + 365*gy + (gy2+3)/4 - (gy2+99)/100 + (gy2+399)/400 + gd + gdm[gm-1]
+jy := -1595 + 33 * (days / 12053)
+days %= 12053
+jy += 4 * (days / 1461)
+days %= 1461
+if days > 365 {
+jy += (days - 1) / 365
+days = (days - 1) % 365
+}
+var jm, jd int
+if days < 186 {
+jm = 1 + days/31
+jd = 1 + days%31
+} else {
+jm = 7 + (days-186)/30
+jd = 1 + (days-186)%30
+}
+return jy, jm, jd
 }
