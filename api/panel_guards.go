@@ -57,12 +57,11 @@ func planToVolumeAndDays(planID string) (volumeGB int, days int) {
 	return 20, 30
 }
 
-// ───────────── توابع اختصاصی پنل Guards ─────────────
+// ───────────── توابع اختصاصی پنل Guards (GoGuard 1.0) ─────────────
 
 // getGuardsToken احراز هویت در پنل Guards
 func getGuardsToken(nodeURL, username, password string) (string, error) {
 	data := url.Values{}
-	data.Set("grant_type", "password")
 	data.Set("username", username)
 	data.Set("password", password)
 
@@ -89,7 +88,10 @@ func getGuardsToken(nodeURL, username, password string) (string, error) {
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 
-	if token, ok := result["access_token"].(string); ok {
+	if token, ok := result["token"].(string); ok && token != "" {
+		return token, nil
+	}
+	if token, ok := result["access_token"].(string); ok && token != "" {
 		return token, nil
 	}
 	return "", fmt.Errorf("Guards token not found in response")
@@ -124,17 +126,16 @@ func getGuardsServiceIDs(nodeURL, token string) []int {
 	return []int{1}
 }
 
-// createGuardsSubscription ساخت یه اشتراک در Guards
+// createGuardsSubscription ساخت اشتراک در Guards (GoGuard 1.0)
+// payload: تک object (نه آرایه)
 func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit int64, expireTimestamp int64) (string, error) {
 	serviceIDs := getGuardsServiceIDs(nodeURL, token)
 
-	payload := []map[string]interface{}{
-		{
-			"username":     username,
-			"limit_usage":  nodeVolumeLimit,
-			"limit_expire": expireTimestamp,
-			"service_ids":  serviceIDs,
-		},
+	payload := map[string]interface{}{
+		"username":     username,
+		"limit_usage":  nodeVolumeLimit,
+		"limit_expire": expireTimestamp,
+		"services":     serviceIDs,
 	}
 
 	jsonData, _ := json.Marshal(payload)
@@ -153,13 +154,17 @@ func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit i
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		bodyBytes, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("Guards create failed, status: %d, detail: %s", resp.StatusCode, string(bodyBytes))
 	}
 
+	// پاسخ می‌تونه آرایه باشه یا تک object
 	var rawResult interface{}
-	json.NewDecoder(resp.Body).Decode(&rawResult)
+	if err := json.Unmarshal(bodyBytes, &rawResult); err != nil {
+		return "", fmt.Errorf("Guards: خطا در پارس پاسخ: %v", err)
+	}
 
 	var firstResult map[string]interface{}
 	if listRes, ok := rawResult.([]interface{}); ok && len(listRes) > 0 {
@@ -169,20 +174,29 @@ func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit i
 	}
 
 	if firstResult != nil {
+		// GoGuard 1.0: subscription_link
+		if link, ok := firstResult["subscription_link"].(string); ok && link != "" {
+			return link, nil
+		}
+		// fallback برای نسخه‌های قدیمی‌تر
 		if link, ok := firstResult["link"].(string); ok && link != "" {
 			return link, nil
 		}
-		secret, _ := firstResult["secret"].(string)
+		// ساخت دستی از access_key + tag
+		accessKey, _ := firstResult["access_key"].(string)
 		tag, _ := firstResult["tag"].(string)
-		if secret != "" && tag != "" {
-			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), tag, secret), nil
+		serverKey, _ := firstResult["server_key"].(string)
+		if serverKey != "" && accessKey != "" {
+			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), serverKey, accessKey), nil
+		}
+		if tag != "" && accessKey != "" {
+			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), tag, accessKey), nil
 		}
 	}
 	return "", fmt.Errorf("Guards: could not extract subscription link")
 }
 
-// CreateGuardsUser ساخت کاربر در پنل Guards با تلاش روی چند نام کاربری
-// CreateGuardsUser ساخت کاربر در پنل Guards با نام کاربری مشخص
+// CreateGuardsUser ساخت کاربر در پنل Guards
 func CreateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	token, err := getGuardsToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -212,9 +226,11 @@ func FormatGuardsConfig(panel db.PanelConfig, link string, volumeGB int) string 
 	}
 	return fmt.Sprintf("=== 🛡️ %s (%dGB) ===\n%s", panelName, volumeGB, link)
 }
-// getGuardsSubscription دریافت اطلاعات اشتراک از پنل Guards
+
+// getGuardsSubscription دریافت اطلاعات اشتراک از پنل Guards (GoGuard 1.0)
+// endpoint مستقیم برای یک کاربر حذف شده؛ از لیست همه + فیلتر استفاده می‌کنیم
 func getGuardsSubscription(nodeURL, token, username string) (map[string]interface{}, error) {
-	req, _ := http.NewRequest("GET", nodeURL+"/api/subscriptions/"+username, nil)
+	req, _ := http.NewRequest("GET", nodeURL+"/api/subscriptions", nil)
 	req.Header.Add("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 15 * time.Second}
@@ -226,23 +242,51 @@ func getGuardsSubscription(nodeURL, token, username string) (map[string]interfac
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Guards: اشتراک یافت نشد، status: %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Guards: دریافت لیست اشتراک‌ها ناموفق، status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return result, nil
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	// پاسخ می‌تونه مستقیم آرایه باشه، یا داخل یه object مثل {data: [...]}
+	var rawResult interface{}
+	if err := json.Unmarshal(bodyBytes, &rawResult); err != nil {
+		return nil, fmt.Errorf("Guards: خطا در پارس پاسخ: %v", err)
+	}
+
+	var subs []interface{}
+	switch v := rawResult.(type) {
+	case []interface{}:
+		subs = v
+	case map[string]interface{}:
+		if data, ok := v["data"].([]interface{}); ok {
+			subs = data
+		} else if items, ok := v["items"].([]interface{}); ok {
+			subs = items
+		}
+	}
+
+	for _, s := range subs {
+		if sub, ok := s.(map[string]interface{}); ok {
+			if u, ok := sub["username"].(string); ok && u == username {
+				return sub, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("Guards: اشتراک %s یافت نشد", username)
 }
 
-// updateGuardsSubscription بروزرسانی اشتراک (تمدید)
+// updateGuardsSubscription بروزرسانی اشتراک (تمدید) - Bulk Update
+// payload: { "usernames": [...], "limit_usage": ..., "limit_expire": ... }
 func updateGuardsSubscription(nodeURL, token, username string, newLimitUsage int64, newLimitExpire int64) (string, error) {
 	payload := map[string]interface{}{
-		"limit_usage": newLimitUsage,
+		"usernames":    []string{username},
+		"limit_usage":  newLimitUsage,
 		"limit_expire": newLimitExpire,
 	}
 
 	jsonData, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("PUT", nodeURL+"/api/subscriptions/"+username, bytes.NewBuffer(jsonData))
+	req, _ := http.NewRequest("PUT", nodeURL+"/api/subscriptions", bytes.NewBuffer(jsonData))
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("Content-Type", "application/json")
 
@@ -253,25 +297,33 @@ func updateGuardsSubscription(nodeURL, token, username string, newLimitUsage int
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("Guards: تمدید ناموفق، status: %d, body: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("Guards: تمدید ناموفق، status: %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if link, ok := result["link"].(string); ok && link != "" {
-		return link, nil
-	}
-
-	// اگه link نبود، دوباره GET کن
+	// گرفتن لینک بعد از آپدیت
 	sub, err := getGuardsSubscription(nodeURL, token, username)
 	if err != nil {
-		return "", fmt.Errorf("تمدید شد ولی link استخراج نشد")
+		return "", fmt.Errorf("تمدید شد ولی خواندن اشتراک ناموفق: %v", err)
+	}
+
+	if link, ok := sub["subscription_link"].(string); ok && link != "" {
+		return link, nil
 	}
 	if link, ok := sub["link"].(string); ok && link != "" {
 		return link, nil
+	}
+
+	accessKey, _ := sub["access_key"].(string)
+	serverKey, _ := sub["server_key"].(string)
+	tag, _ := sub["tag"].(string)
+	if serverKey != "" && accessKey != "" {
+		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), serverKey, accessKey), nil
+	}
+	if tag != "" && accessKey != "" {
+		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), tag, accessKey), nil
 	}
 
 	return "", fmt.Errorf("تمدید شد ولی link استخراج نشد")
@@ -298,6 +350,7 @@ func UpdateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days 
 }
 
 // GetGuardsUserUsage دریافت حجم و روز باقیمانده از پنل Guards
+// GoGuard 1.0: total_usage به جای current_usage
 func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64, totalUsage int64, limitExpire int64, err error) {
 	token, err := getGuardsToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -312,8 +365,15 @@ func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64
 	if v, ok := sub["limit_usage"].(float64); ok {
 		limitUsage = int64(v)
 	}
+	// GoGuard 1.0: total_usage
 	if v, ok := sub["total_usage"].(float64); ok {
 		totalUsage = int64(v)
+	}
+	// fallback برای نسخه‌های قدیمی‌تر
+	if totalUsage == 0 {
+		if v, ok := sub["current_usage"].(float64); ok {
+			totalUsage = int64(v)
+		}
 	}
 	if v, ok := sub["limit_expire"].(float64); ok {
 		limitExpire = int64(v)
