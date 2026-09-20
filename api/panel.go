@@ -240,6 +240,8 @@ func renewOnAllPanels(panels []db.PanelConfig, username string, mainGB, backupGB
 			link, err = UpdateGuardsUser(panel, username, panelVolume, days)
 		case "marzban":
 			link, err = RenewMarzbanUser(panel, username, panelVolume, days)
+		case "conf":
+			link, err = UpdateConfUser(panel, username, panelVolume, days)
 		default:
 			err = fmt.Errorf("نوع پنل ناشناخته: %s", panel.Type)
 		}
