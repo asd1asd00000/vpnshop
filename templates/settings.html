@@ -248,6 +248,27 @@
         function confirmAdminChange() {
             return confirm('⚠️ آیا از تغییر اطلاعات ورود اطمینان دارید؟');
         }
+            <script>
+        // مدیریت required فیلدهای فرم پنل بر اساس نوع پنل
+        (function() {
+            const typeSelect = document.querySelector('select[name="panel_type"]');
+            const usernameInput = document.getElementById('panel_username_input');
+            if (typeSelect && usernameInput) {
+                function updateRequired() {
+                    if (typeSelect.value === 'conf') {
+                        usernameInput.required = false;
+                        usernameInput.placeholder = 'خالی بگذارید (نیازی نیست)';
+                        usernameInput.value = '';
+                    } else {
+                        usernameInput.required = true;
+                        usernameInput.placeholder = 'نام کاربری';
+                    }
+                }
+                typeSelect.addEventListener('change', updateRequired);
+                updateRequired();
+            }
+        })();
+    </script>
     </script>
 </body>
 </html>
