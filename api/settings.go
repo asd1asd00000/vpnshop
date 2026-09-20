@@ -97,8 +97,13 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("panel_username")
 	password := r.FormValue("panel_password")
 
-	if url == "" || username == "" || password == "" || panelType == "" {
+	if url == "" || password == "" || panelType == "" {
 		http.Error(w, "فیلدهای اجباری را پر کنید", http.StatusBadRequest)
+		return
+	}
+	// پنل Conf فقط API Key می‌خواد (در فیلد password)، username لازم نداره
+	if panelType != "conf" && username == "" {
+		http.Error(w, "نام کاربری برای این نوع پنل الزامی است", http.StatusBadRequest)
 		return
 	}
 
