@@ -115,6 +115,8 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 			link, err = CreateGuardsUser(panel, username, panelVolume, pv.days)
 		case "marzban":
 			link, err = CreateMarzbanUser(panel, username, panelVolume, pv.days)
+		case "conf":
+			link, err = CreateConfUser(panel, username, panelVolume, pv.days)
 		default:
 			err = fmt.Errorf("نوع پنل ناشناخته: %s", panel.Type)
 		}
