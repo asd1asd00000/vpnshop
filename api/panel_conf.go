@@ -43,47 +43,32 @@ func getConfToken(panelURL, apiKey string) error {
 }
 
 // createConfUserRequest ساخت کاربر در Conf-to-Sub
-// body: {"username": "x", "days": 30}
-func createConfUserRequest(panelURL, apiKey, username string, days int) (string, int, error) {
-	payload := map[string]interface{}{
-		"username": username,
-		"days":     days,
-	}
-	jsonData, _ := json.Marshal(payload)
+// CreateConfUser ساخت کاربر در پنل Conf-to-Sub
+// تبدیل: volumeGB × confDaysPerGB → روزهای انقضا
+func CreateConfUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
+	apiKey := panel.Password
 
-	req, err := http.NewRequest("POST", panelURL+"/api/users", bytes.NewBuffer(jsonData))
+	if err := getConfToken(panel.URL, apiKey); err != nil {
+		return "", err
+	}
+
+	// 🎯 تبدیل حجم پلن به روز برای پنل Conf
+	confDays := volumeGB * confDaysPerGB
+	if confDays <= 0 {
+		// fallback: اگه volumeGB صفر بود، از days اصلی پلن استفاده کن
+		confDays = days
+	}
+	if confDays <= 0 {
+		confDays = 1
+	}
+
+	log.Printf("🔄 [Conf] ساخت کاربر %s: %dGB × %d = %d روز (حجم نامحدود)", username, volumeGB, confDaysPerGB, confDays)
+	link, _, err := createConfUserRequest(panel.URL, apiKey, username, confDays)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
-	req.Header.Add("Authorization", "Bearer "+apiKey)
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", 0, err
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return "", 0, fmt.Errorf("Conf: ساخت کاربر ناموفق، status: %d, body: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return "", 0, fmt.Errorf("Conf: خطا در پارس پاسخ: %v", err)
-	}
-
-	subURL, _ := result["subscription_url"].(string)
-	userID, _ := result["id"].(float64)
-
-	if subURL == "" {
-		return "", 0, fmt.Errorf("Conf: subscription_url در پاسخ یافت نشد")
-	}
-
-	return subURL, int(userID), nil
+	log.Printf("✅ [Conf] کاربر %s با موفقیت ساخته شد (%d روز)", username, confDays)
+	return link, nil
 }
 
 // CreateConfUser ساخت کاربر در پنل Conf-to-Sub
