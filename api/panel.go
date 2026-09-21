@@ -349,13 +349,19 @@ func buildTelegramText(items []ConfigItem) string {
 		var b strings.Builder
 		b.WriteString("`" + it.Link + "`\n\n")
 
+		// 🎯 برای پنل Conf، حجم به روز تبدیل میشه
+		volText := fmt.Sprintf("%d گیگ", it.Volume)
+		if it.PanelType == "conf" {
+			volText = fmt.Sprintf("%d روز (حجم نامحدود)", it.Volume*confDaysPerGB)
+		}
+
 		switch it.Role {
 		case "backup":
-			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه-زاپاس ✅\n", it.Volume))
+			b.WriteString(fmt.Sprintf("✅ %s هدیه-زاپاس ✅\n", volText))
 			b.WriteString("اگه لینک اصلی مشکل پیدا کرد اطلاع بدین\n")
 			b.WriteString("تا مشکل حل بشه از این لینک استفاده کنید")
 		case "gift":
-			b.WriteString(fmt.Sprintf("✅ %d گیگ هدیه ✅\n", it.Volume))
+			b.WriteString(fmt.Sprintf("✅ %s هدیه ✅\n", volText))
 			b.WriteString("از پنل آزمایشی\n")
 			b.WriteString("تست کنید ببینید در منطقه شما جواب میده ؟\n")
 			b.WriteString("پنل آزمایشی پشتیبانی نداره و حجم آن قابل انتقال نیست\n")
@@ -363,7 +369,7 @@ func buildTelegramText(items []ConfigItem) string {
 				b.WriteString(it.Note)
 			}
 		default: // main
-			b.WriteString(fmt.Sprintf("✅ **%d گیگ اشتراک اصلی شما** ✅", it.Volume))
+			b.WriteString(fmt.Sprintf("✅ **%s اشتراک اصلی شما** ✅", volText))
 		}
 		blocks = append(blocks, b.String())
 	}
