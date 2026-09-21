@@ -296,13 +296,14 @@ func renewOnAllPanels(panels []db.PanelConfig, username string, mainGB, backupGB
 		}
 
 		items = append(items, ConfigItem{
-			Title:    title,
-			Desc:     desc,
-			Link:     link,
-			Role:     role,
-			Volume:   panelVolume,
-			Note:     giftNote,
-			Username: username,
+			Title:     title,
+			Desc:      desc,
+			Link:      link,
+			Role:      role,
+			Volume:    panelVolume,
+			Note:      giftNote,
+			Username:  username,
+			PanelType: panel.Type,
 		})
 	}
 
