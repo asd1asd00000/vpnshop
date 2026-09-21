@@ -280,3 +280,12 @@ func GetConfUserUsage(panel db.PanelConfig, username string) (limitUsage int64, 
 
 	return limitUsage, totalUsage, limitExpire, nil
 }
+
+// formatVolumeForPanel برای پنل conf حجم رو به روز تبدیل می‌کنه، بقیه همون GB
+func formatVolumeForPanel(panelType string, gb int) string {
+	if panelType == "conf" {
+		return fmt.Sprintf("%d روز", gb*confDaysPerGB)
+	}
+	return fmt.Sprintf("%dGB", gb)
+}
+
