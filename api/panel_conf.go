@@ -288,4 +288,7 @@ func formatVolumeForPanel(panelType string, gb int) string {
 	}
 	return fmt.Sprintf("%dGB", gb)
 }
-
+// confVolumeDesc عبارت توضیح برای پنل Conf (حجم نامحدود + روز)
+func confVolumeDesc(gb int) string {
+	return fmt.Sprintf("حجم: نامحدود | مدت: %d روز", gb*confDaysPerGB)
+}
