@@ -547,8 +547,8 @@
             <div class="text-[10px] text-gray-500 bg-gray-50 rounded-lg p-2 mb-3 border border-gray-100 space-y-0.5 text-right">
                 <div>🛡️ {{.VolumeGB}}GB اصلی   {{.Days}} روز</div>
                 {{if .BackupGB}}
-                <div>🛡️ {{.BackupGB}}GB زاپاس
-                    {{if index $.PanelNames "backup"}}
+                <div>🛡️ {{.BackupDisplay}} زاپاس
+                {{if index $.PanelNames "backup"}}
                         از پنل {{index $.PanelNames "backup"}}
                     {{end}}
                 </div>
