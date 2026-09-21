@@ -164,13 +164,14 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 		}
 
 		items = append(items, ConfigItem{
-			Title:    title,
-			Desc:     desc,
-			Link:     link,
-			Role:     role,
-			Volume:   panelVolume,
-			Note:     pv.giftNote,
-			Username: username,
+			Title:     title,
+			Desc:      desc,
+			Link:      link,
+			Role:      role,
+			Volume:    panelVolume,
+			Note:      pv.giftNote,
+			Username:  username,
+			PanelType: panel.Type,
 		})
 	}
 
