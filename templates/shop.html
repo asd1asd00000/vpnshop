@@ -554,8 +554,8 @@
                 </div>
                 {{end}}
                 {{if .GiftGB}}
-                <div>🎁 {{.GiftGB}}GB هدیه
-                    {{if index $.PanelNames "gift"}}
+                <div>🎁 {{.GiftDisplay}} هدیه
+                {{if index $.PanelNames "gift"}}
                         از پنل {{index $.PanelNames "gift"}}
                     {{end}}
                 </div>
