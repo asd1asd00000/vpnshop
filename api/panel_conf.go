@@ -13,6 +13,11 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
+// ───────────── ضریب تبدیل GB به روز مخصوص پنل Conf ─────────────
+// هر 1GB در پلن فروش = confDaysPerGB روز در پنل Conf
+// اگه خواستی تغییر بدی فقط این عدد رو عوض کن
+const confDaysPerGB = 1
+
 // ───────────── توابع اختصاصی پنل Conf-to-Sub ─────────────
 
 // getConfToken احراز هویت با API Key
