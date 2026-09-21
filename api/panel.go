@@ -270,16 +270,24 @@ func renewOnAllPanels(panels []db.PanelConfig, username string, mainGB, backupGB
 		}
 
 		var title, desc string
+		volDesc := fmt.Sprintf("حجم: %dGB", panelVolume)
+		if panel.Type == "conf" {
+			volDesc = confVolumeDesc(panelVolume)
+		}
 		switch panel.Role {
 		case "backup":
 			title = fmt.Sprintf("🛡️ %s — کانفیگ زاپاس", panelName)
-			desc = fmt.Sprintf("حجم: %dGB | برای مواقع اضطراری", panelVolume)
+			desc = volDesc + " | برای مواقع اضطراری"
 		case "gift":
 			title = fmt.Sprintf("🎁 %s — کانفیگ هدیه", panelName)
-			desc = fmt.Sprintf("حجم: %dGB | %s", panelVolume, giftNote)
+			desc = volDesc + " | " + giftNote
 		default:
 			title = fmt.Sprintf("🛡️ %s — کانفیگ اصلی", panelName)
-			desc = fmt.Sprintf("حجم: %dGB | مدت: %d روز", panelVolume, days)
+			if panel.Type == "conf" {
+				desc = volDesc
+			} else {
+				desc = volDesc + fmt.Sprintf(" | مدت: %d روز", days)
+			}
 		}
 
 		role := panel.Role
