@@ -192,6 +192,8 @@ func renewConfUser(panelURL, apiKey string, userID int, days int) (string, error
 
 // UpdateConfUser تمدید اشتراک در پنل Conf-to-Sub
 // توجه: volumeGB نادیده گرفته میشه چون این پنل فقط زمانی هست
+// UpdateConfUser تمدید اشتراک در پنل Conf-to-Sub
+// تبدیل: volumeGB × confDaysPerGB → روزهای اضافه به انقضا
 func UpdateConfUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	apiKey := panel.Password
 
@@ -204,12 +206,21 @@ func UpdateConfUser(panel db.PanelConfig, username string, volumeGB int, days in
 		return "", err
 	}
 
-	log.Printf("🔄 [Conf] تمدید کاربر %s: %d روز", username, days)
-	link, err := renewConfUser(panel.URL, apiKey, userID, days)
+	// 🎯 تبدیل حجم پلن به روز برای پنل Conf
+	confDays := volumeGB * confDaysPerGB
+	if confDays <= 0 {
+		confDays = days
+	}
+	if confDays <= 0 {
+		confDays = 1
+	}
+
+	log.Printf("🔄 [Conf] تمدید کاربر %s: %dGB × %d = %d روز", username, volumeGB, confDaysPerGB, confDays)
+	link, err := renewConfUser(panel.URL, apiKey, userID, confDays)
 	if err != nil {
 		return "", err
 	}
-	log.Printf("✅ [Conf] کاربر %s با موفقیت تمدید شد", username)
+	log.Printf("✅ [Conf] کاربر %s با موفقیت تمدید شد (+%d روز)", username, confDays)
 	return link, nil
 }
 
