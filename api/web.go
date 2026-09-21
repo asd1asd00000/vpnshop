@@ -111,11 +111,18 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		return si > sj
 	})
 
-	// 🎯 غنی‌سازی پلن‌ها
+	// نقش → نوع پنل (برای تشخیص conf)
+	panelTypes := make(map[string]string)
+	for _, pn := range cfg.Panels {
+		panelTypes[pn.Role] = pn.Type
+	}
+
 	type shopPlanView struct {
 		models.Plan
 		MonthLabel     string
 		PriceFormatted string
+		BackupDisplay  string
+		GiftDisplay    string
 	}
 	var enrichedPlans []shopPlanView
 	for _, p := range plans {
@@ -127,6 +134,8 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			Plan:           p,
 			MonthLabel:     ml,
 			PriceFormatted: formatPrice(p.Price),
+			BackupDisplay:  formatVolumeForPanel(panelTypes["backup"], p.BackupGB),
+			GiftDisplay:    formatVolumeForPanel(panelTypes["gift"], p.GiftGB),
 		})
 	}
 
