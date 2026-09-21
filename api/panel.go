@@ -12,13 +12,14 @@ import (
 
 // ConfigItem یک کانفیگ جداگانه برای نمایش
 type ConfigItem struct {
-	Title    string `json:"title"`
-	Desc     string `json:"desc"`
-	Link     string `json:"link"`
-	Role     string `json:"role"`     // main | backup | gift
-	Volume   int    `json:"volume"`   // حجم به GB
-	Note     string `json:"note"`     // توضیح هدیه
-	Username string `json:"username"` // 🎯 نام کاربری
+	Title     string `json:"title"`
+	Desc      string `json:"desc"`
+	Link      string `json:"link"`
+	Role      string `json:"role"`       // main | backup | gift
+	Volume    int    `json:"volume"`     // حجم به GB
+	Note      string `json:"note"`       // توضیح هدیه
+	Username  string `json:"username"`   // 🎯 نام کاربری
+	PanelType string `json:"panel_type"` // 🎯 نوع پنل (guards | marzban | conf)
 }
 
 // planVolumes حجم‌های تعریف‌شده در پلن
