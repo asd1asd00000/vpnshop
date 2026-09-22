@@ -3,9 +3,6 @@ set -e
 
 # ========================================
 # 🚀 اسکریپت نصب VPNShop - نسخه کامل
-# - آخرین نسخه Go
-# - Mirror چینی برای ایران
-# - راه‌اندازی خودکار systemd
 # ========================================
 
 echo "🚀 شروع نصب VPNShop..."
@@ -31,26 +28,53 @@ echo "📦 معماری: $ARCH → $GOARCH"
 # ───────────── نصب پیش‌نیازها ─────────────
 echo "📦 نصب پیش‌نیازها..."
 apt-get update -qq
-apt-get install -y -qq git gcc build-essential curl wget > /dev/null 2>&1
+apt-get install -y -qq git gcc build-essential curl wget ca-certificates > /dev/null 2>&1
 echo "✅ پیش‌نیازها نصب شدند"
 
 # ───────────── حذف Go قدیمی ─────────────
 echo "🗑️ حذف نسخه قدیمی Go..."
 rm -rf /usr/local/go
 
-# ───────────── نصب آخرین نسخه Go ─────────────
-echo "🔍 دریافت آخرین نسخه Go..."
-# استفاده از API رسمی Go برای گرفتن آخرین نسخه
-LATEST_VERSION=$(curl -fsSL "https://go.dev/dl/?mode=json" | grep -o '"version": "[^"]*"' | head -1 | cut -d'"' -f4)
+# ───────────── نصب آخرین نسخه Go (پایدار) ─────────────
+echo "🔍 دریافت آخرین نسخه پایدار Go..."
 
+# روش ۱: استفاده از VERSION endpoint رسمی (مطمئن‌ترین)
+LATEST_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" 2>/dev/null | head -1 || true)
+
+# روش ۲: اگه بالا کار نکرد، از API JSON استفاده کن (با فیلتر stable)
 if [ -z "$LATEST_VERSION" ]; then
-    echo "⚠️ دریافت نسخه ناموفق، استفاده از نسخه پایدار..."
+    echo "⚠️  تلاش دوم با API JSON..."
+    LATEST_VERSION=$(curl -fsSL "https://go.dev/dl/?mode=json" 2>/dev/null | grep -E '"version".*"stable":true' | head -1 | grep -oE '"version": "[^"]+"' | cut -d'"' -f4 || true)
+fi
+
+# روش ۳: اگه هیچکدوم کار نکرد، نسخه fallback
+if [ -z "$LATEST_VERSION" ]; then
+    echo "⚠️  دریافت نسخه ناموفق، استفاده از نسخه پایدار fallback..."
+    LATEST_VERSION="go1.23.4"
+fi
+
+# اعتبارسنجی نام نسخه (باید با "go" شروع بشه)
+if [[ ! "$LATEST_VERSION" =~ ^go[0-9] ]]; then
+    echo "⚠️  نام نسخه نامعتبر: $LATEST_VERSION، استفاده از fallback..."
     LATEST_VERSION="go1.23.4"
 fi
 
 echo "📥 دانلود $LATEST_VERSION برای linux-$GOARCH..."
 cd /tmp
-curl -fsSLO "https://go.dev/dl/${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
+DOWNLOAD_URL="https://go.dev/dl/${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
+
+# تلاش برای دانلود
+if ! curl -fsSLO --retry 3 "$DOWNLOAD_URL"; then
+    echo "❌ دانلود $LATEST_VERSION ناموفق بود"
+    echo "🔄 تلاش با نسخه جایگزین go1.23.4..."
+    LATEST_VERSION="go1.23.4"
+    DOWNLOAD_URL="https://go.dev/dl/${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
+    if ! curl -fsSLO --retry 3 "$DOWNLOAD_URL"; then
+        echo "❌ دانلود هر دو نسخه ناموفق بود"
+        echo "💡 احتمالاً مشکل اینترنت یا تحریم هست"
+        exit 1
+    fi
+fi
 
 echo "📦 نصب Go در /usr/local..."
 tar -C /usr/local -xzf "${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
@@ -62,17 +86,21 @@ export PATH="/usr/local/go/bin:$PATH"
 export GOPATH="/root/go"
 
 # تنظیمات دائمی
-echo 'export PATH="/usr/local/go/bin:$PATH"' >> /root/.bashrc
-echo 'export GOPATH="/root/go"' >> /root/.bashrc
+if ! grep -q "/usr/local/go/bin" /root/.bashrc; then
+    echo 'export PATH="/usr/local/go/bin:$PATH"' >> /root/.bashrc
+fi
+if ! grep -q "GOPATH=" /root/.bashrc; then
+    echo 'export GOPATH="/root/go"' >> /root/.bashrc
+fi
 
-# 🇮🇷 تنظیم mirror چینی برای ایران
-go env -w GOPROXY=https://goproxy.cn,direct
-go env -w GOSUMDB=sum.golang.org
-go env -w GOPATH=/root/go
-go env -w GOTOOLCHAIN=local
+# 🇮🇷 تنظیم mirror چینی برای ایران (حیاتی!)
+/usr/local/go/bin/go env -w GOPROXY=https://goproxy.cn,direct
+/usr/local/go/bin/go env -w GOSUMDB=sum.golang.org
+/usr/local/go/bin/go env -w GOPATH=/root/go
+/usr/local/go/bin/go env -w GOTOOLCHAIN=local
 
-echo "✅ Go نصب شد: $(go version)"
-echo "✅ Mirror: $(go env GOPROXY)"
+echo "✅ Go نصب شد: $(/usr/local/go/bin/go version)"
+echo "✅ Mirror: $(/usr/local/go/bin/go env GOPROXY)"
 
 # ───────────── ساخت پوشه پروژه ─────────────
 PROJECT_DIR="/root/vpnshop"
@@ -80,9 +108,9 @@ if [ ! -d "$PROJECT_DIR" ]; then
     echo "📁 ساخت پوشه پروژه..."
     mkdir -p "$PROJECT_DIR"
     cd "$PROJECT_DIR"
-    git init
     echo "✅ پوشه پروژه آماده شد"
-    echo "⚠️  کد منبع رو در $PROJECT_DIR قرار بده و دوباره اسکریپت رو اجرا کن"
+    echo "⚠️  کد منبع (شامل go.mod) رو در $PROJECT_DIR قرار بده"
+    echo "⚠️  سپس دوباره این اسکریپت رو اجرا کن"
     exit 0
 fi
 
@@ -90,7 +118,11 @@ cd "$PROJECT_DIR"
 
 # ───────────── بررسی وجود کد ─────────────
 if [ ! -f "go.mod" ]; then
-    echo "❌ فایل go.mod یافت نشد. ابتدا کد رو در $PROJECT_DIR قرار بده"
+    echo "❌ فایل go.mod یافت نشد"
+    echo "💡 ابتدا کد رو در $PROJECT_DIR قرار بده:"
+    echo "   cd /root/vpnshop"
+    echo "   git clone https://github.com/asd1asd00000/vpnshop.git ."
+    echo "   سپس دوباره اسکریپت رو اجرا کن"
     exit 1
 fi
 
@@ -107,16 +139,26 @@ echo "✅ بیلد موفق: $(ls -lh vpnshop-app | awk '{print $5}')"
 
 # ───────────── ساخت پوشه‌های لازم ─────────────
 mkdir -p "$PROJECT_DIR/backups"
-mkdir -p "$PROJECT_DIR/templates"
-echo "✅ پوشه‌های پشتیبان و قالب آماده"
+echo "✅ پوشه بکاپ آماده"
 
-# ───────────── ساخت فایل config.json اگه نیست ─────────────
+# ───────────── ساخت فایل‌های پیش‌فرض ─────────────
 if [ ! -f "config.json" ]; then
-    echo '{"admin":{"username":"admin","password":"admin123"},"panels":[],"cards":[]}' > config.json
+    cat > config.json << 'EOF'
+{
+  "admin": {
+    "username": "admin",
+    "password": "admin123"
+  },
+  "panels": [],
+  "cards": [],
+  "cleanup": {
+    "order_expire_hours": 24
+  }
+}
+EOF
     echo "⚠️  config.json پیش‌فرض ساخته شد (کاربر: admin, رمز: admin123)"
 fi
 
-# ───────────── ساخت plans.json اگه نیست ─────────────
 if [ ! -f "plans.json" ]; then
     echo '[]' > plans.json
     echo "⚠️  plans.json خالی ساخته شد"
@@ -137,7 +179,6 @@ Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-Environment=ADMIN_SECRET_PATH=
 
 [Install]
 WantedBy=multi-user.target
@@ -150,14 +191,15 @@ systemctl enable vpnshop
 systemctl restart vpnshop
 
 # ───────────── بررسی وضعیت ─────────────
-sleep 2
+sleep 3
 if systemctl is-active --quiet vpnshop; then
+    IP=$(curl -fsSL https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
     echo ""
     echo "═══════════════════════════════════════"
     echo "✅ VPNShop با موفقیت نصب و راه‌اندازی شد!"
     echo "═══════════════════════════════════════"
     echo "📂 پوشه پروژه: $PROJECT_DIR"
-    echo "🌐 آدرس پنل ادمین: http://YOUR_IP:8080/admin"
+    echo "🌐 آدرس پنل ادمین: http://$IP:8080/admin"
     echo "👤 کاربر پیش‌فرض: admin"
     echo "🔑 رمز پیش‌فرض: admin123"
     echo "═══════════════════════════════════════"
