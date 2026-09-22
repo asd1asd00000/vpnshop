@@ -1,176 +1,173 @@
 #!/bin/bash
+set -e
 
-# ============================================================
-#  VPNShop - Automated Installation Script
-# ============================================================
+# ========================================
+# 🚀 اسکریپت نصب VPNShop - نسخه کامل
+# - آخرین نسخه Go
+# - Mirror چینی برای ایران
+# - راه‌اندازی خودکار systemd
+# ========================================
 
-echo ""
-echo "=================================================="
-echo "        VPNShop - Automated Installer"
-echo "=================================================="
-echo ""
+echo "🚀 شروع نصب VPNShop..."
 
-# ------------------------------------------------------------
-# Step 1: Configuration (interactive prompts)
-# ------------------------------------------------------------
-echo "[1/4] Configuration"
-echo "--------------------------------------------------"
+# ───────────── بررسی root ─────────────
+if [ "$EUID" -ne 0 ]; then
+    echo "❌ لطفاً با sudo یا root اجرا کنید"
+    exit 1
+fi
 
-# Shop domain
-read -p "Shop domain (e.g. shop.example.com) [Enter to skip]: " domain_name </dev/tty
+# ───────────── تشخیص معماری ─────────────
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    GOARCH="amd64"
+elif [ "$ARCH" = "aarch64" ]; then
+    GOARCH="arm64"
+else
+    echo "❌ معماری پشتیبانی نمی‌شود: $ARCH"
+    exit 1
+fi
+echo "📦 معماری: $ARCH → $GOARCH"
 
-# Admin username
-read -p "Admin username [default: admin]: " admin_user </dev/tty
-admin_user=${admin_user:-admin}
+# ───────────── نصب پیش‌نیازها ─────────────
+echo "📦 نصب پیش‌نیازها..."
+apt-get update -qq
+apt-get install -y -qq git gcc build-essential curl wget > /dev/null 2>&1
+echo "✅ پیش‌نیازها نصب شدند"
 
-# Admin password (silent input)
-default_admin_pass=$(head -c 200 /dev/urandom | tr -dc 'a-z0-9' | head -c 16)
-read -sp "Admin password [Enter to auto-generate]: " admin_pass </dev/tty
-echo ""
-admin_pass=${admin_pass:-$default_admin_pass}
+# ───────────── حذف Go قدیمی ─────────────
+echo "🗑️ حذف نسخه قدیمی Go..."
+rm -rf /usr/local/go
 
-# Admin secret path
-default_admin_path=$(head -c 200 /dev/urandom | tr -dc 'a-z0-9' | head -c 24)
-read -p "Admin secret path [Enter to auto-generate]: " admin_path </dev/tty
-admin_path=${admin_path:-$default_admin_path}
+# ───────────── نصب آخرین نسخه Go ─────────────
+echo "🔍 دریافت آخرین نسخه Go..."
+# استفاده از API رسمی Go برای گرفتن آخرین نسخه
+LATEST_VERSION=$(curl -fsSL "https://go.dev/dl/?mode=json" | grep -o '"version": "[^"]*"' | head -1 | cut -d'"' -f4)
 
-echo ""
-echo "Configuration saved."
-echo ""
+if [ -z "$LATEST_VERSION" ]; then
+    echo "⚠️ دریافت نسخه ناموفق، استفاده از نسخه پایدار..."
+    LATEST_VERSION="go1.23.4"
+fi
 
-# ------------------------------------------------------------
-# Step 2: Install system dependencies
-# ------------------------------------------------------------
-echo "[2/4] Installing system dependencies..."
-echo "--------------------------------------------------"
-sudo apt update
-sudo apt install -y golang-go git build-essential
-echo "Dependencies installed."
-echo ""
+echo "📥 دانلود $LATEST_VERSION برای linux-$GOARCH..."
+cd /tmp
+curl -fsSLO "https://go.dev/dl/${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
 
-# ------------------------------------------------------------
-# Step 3: Download source code and build
-# ------------------------------------------------------------
-echo "[3/4] Downloading source code and building..."
-echo "--------------------------------------------------"
-cd /root
-rm -rf vpnshop
-git clone https://github.com/asd1asd00000/vpnshop.git
-cd vpnshop
+echo "📦 نصب Go در /usr/local..."
+tar -C /usr/local -xzf "${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
+rm -f "${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
+
+# ───────────── تنظیم PATH و GOPROXY ─────────────
+echo "⚙️ تنظیم environment..."
+export PATH="/usr/local/go/bin:$PATH"
+export GOPATH="/root/go"
+
+# تنظیمات دائمی
+echo 'export PATH="/usr/local/go/bin:$PATH"' >> /root/.bashrc
+echo 'export GOPATH="/root/go"' >> /root/.bashrc
+
+# 🇮🇷 تنظیم mirror چینی برای ایران
+go env -w GOPROXY=https://goproxy.cn,direct
+go env -w GOSUMDB=sum.golang.org
+go env -w GOPATH=/root/go
+go env -w GOTOOLCHAIN=local
+
+echo "✅ Go نصب شد: $(go version)"
+echo "✅ Mirror: $(go env GOPROXY)"
+
+# ───────────── ساخت پوشه پروژه ─────────────
+PROJECT_DIR="/root/vpnshop"
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo "📁 ساخت پوشه پروژه..."
+    mkdir -p "$PROJECT_DIR"
+    cd "$PROJECT_DIR"
+    git init
+    echo "✅ پوشه پروژه آماده شد"
+    echo "⚠️  کد منبع رو در $PROJECT_DIR قرار بده و دوباره اسکریپت رو اجرا کن"
+    exit 0
+fi
+
+cd "$PROJECT_DIR"
+
+# ───────────── بررسی وجود کد ─────────────
+if [ ! -f "go.mod" ]; then
+    echo "❌ فایل go.mod یافت نشد. ابتدا کد رو در $PROJECT_DIR قرار بده"
+    exit 1
+fi
+
+# ───────────── دانلود وابستگی‌ها ─────────────
+echo "📥 دانلود وابستگی‌ها (با mirror چینی)..."
+go mod download
 go mod tidy
-CGO_ENABLED=1 go build -o vpnshop-app main.go
-echo "Build completed."
-echo ""
+echo "✅ وابستگی‌ها دانلود شدند"
 
-# ------------------------------------------------------------
-# Step 4: Create and start systemd service
-# ------------------------------------------------------------
-echo "[4/4] Setting up systemd service..."
-echo "--------------------------------------------------"
+# ───────────── بیلد پروژه ─────────────
+echo "🔨 بیلد پروژه..."
+CGO_ENABLED=1 go build -ldflags="-s -w" -o vpnshop-app .
+echo "✅ بیلد موفق: $(ls -lh vpnshop-app | awk '{print $5}')"
 
-cat <<EOF > /etc/systemd/system/vpnshop.service
+# ───────────── ساخت پوشه‌های لازم ─────────────
+mkdir -p "$PROJECT_DIR/backups"
+mkdir -p "$PROJECT_DIR/templates"
+echo "✅ پوشه‌های پشتیبان و قالب آماده"
+
+# ───────────── ساخت فایل config.json اگه نیست ─────────────
+if [ ! -f "config.json" ]; then
+    echo '{"admin":{"username":"admin","password":"admin123"},"panels":[],"cards":[]}' > config.json
+    echo "⚠️  config.json پیش‌فرض ساخته شد (کاربر: admin, رمز: admin123)"
+fi
+
+# ───────────── ساخت plans.json اگه نیست ─────────────
+if [ ! -f "plans.json" ]; then
+    echo '[]' > plans.json
+    echo "⚠️  plans.json خالی ساخته شد"
+fi
+
+# ───────────── ساخت systemd service ─────────────
+echo "⚙️ ساخت systemd service..."
+cat > /etc/systemd/system/vpnshop.service << 'EOF'
 [Unit]
-Description=VPNShop Golang Service
+Description=VPNShop - فروشگاه کانفیگ VPN
 After=network.target
 
 [Service]
 Type=simple
-User=root
 WorkingDirectory=/root/vpnshop
 ExecStart=/root/vpnshop/vpnshop-app
 Restart=always
 RestartSec=5
-
-# Guard panel settings
-
-
-# Admin dashboard credentials (set during installation)
-Environment="ADMIN_USER=$admin_user"
-Environment="ADMIN_PASS=$admin_pass"
-Environment="ADMIN_SECRET_PATH=$admin_path"
+StandardOutput=journal
+StandardError=journal
+Environment=ADMIN_SECRET_PATH=
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# ───────────── فعال‌سازی و شروع سرویس ─────────────
+echo "🚀 فعال‌سازی سرویس..."
 systemctl daemon-reload
 systemctl enable vpnshop
 systemctl restart vpnshop
-echo "VPNShop service installed and started."
-echo ""
 
-# ------------------------------------------------------------
-# Nginx + SSL setup (only if a domain was provided)
-# ------------------------------------------------------------
-if [ -n "$domain_name" ]; then
-    echo "Configuring Nginx and SSL for $domain_name ..."
-    echo "--------------------------------------------------"
-
-    if ! command -v nginx &> /dev/null; then
-        apt update && apt install -y nginx certbot python3-certbot-nginx
-    fi
-
-    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-
-    cat <<EOF > /etc/nginx/sites-available/vpnshop
-server {
-    listen 80;
-    server_name $domain_name;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-EOF
-
-    ln -sf /etc/nginx/sites-available/vpnshop /etc/nginx/sites-enabled/
-    nginx -t && systemctl restart nginx
-
-    certbot --nginx -d "$domain_name" --non-interactive --agree-tos -m "admin@$domain_name" --redirect \
-        || echo "WARNING: SSL certificate failed. Make sure your domain points to this server."
-
-    shop_url="https://$domain_name"
-    admin_url="https://$domain_name/$admin_path/admin"
-    echo "Domain $domain_name configured with HTTPS."
+# ───────────── بررسی وضعیت ─────────────
+sleep 2
+if systemctl is-active --quiet vpnshop; then
+    echo ""
+    echo "═══════════════════════════════════════"
+    echo "✅ VPNShop با موفقیت نصب و راه‌اندازی شد!"
+    echo "═══════════════════════════════════════"
+    echo "📂 پوشه پروژه: $PROJECT_DIR"
+    echo "🌐 آدرس پنل ادمین: http://YOUR_IP:8080/admin"
+    echo "👤 کاربر پیش‌فرض: admin"
+    echo "🔑 رمز پیش‌فرض: admin123"
+    echo "═══════════════════════════════════════"
+    echo ""
+    echo "📋 دستورات مفید:"
+    echo "  sudo systemctl status vpnshop     # وضعیت"
+    echo "  sudo systemctl restart vpnshop    # ریستارت"
+    echo "  sudo journalctl -u vpnshop -f     # لاگ زنده"
+    echo ""
 else
-    echo "No domain provided. Skipping Nginx/SSL setup."
-    shop_url="http://<SERVER_IP>:8080"
-    admin_url="http://<SERVER_IP>:8080/$admin_path/admin"
+    echo "❌ سرویس شروع نشد. لاگ:"
+    sudo journalctl -u vpnshop -n 20 --no-pager
 fi
-
-echo ""
-
-# ------------------------------------------------------------
-# Final summary table
-# ------------------------------------------------------------
-echo "=================================================="
-echo "   Installation completed successfully!"
-echo "=================================================="
-echo ""
-
-lines=()
-lines+=("Shop URL          : $shop_url")
-lines+=("Admin URL         : $admin_url")
-lines+=("Admin Username    : $admin_user")
-lines+=("Admin Password    : $admin_pass")
-lines+=("Admin Secret Path : $admin_path")
-
-max=0
-for l in "${lines[@]}"; do
-    [ ${#l} -gt $max ] && max=${#l}
-done
-
-border=$(printf '─%.0s' $(seq 1 $((max + 2))))
-echo "┌$border┐"
-for l in "${lines[@]}"; do
-    printf '│ %-*s │\n' "$max" "$l"
-done
-echo "└$border┘"
-
-echo ""
-echo "IMPORTANT: Save your admin credentials and secret path in a safe place!"
-echo ""
