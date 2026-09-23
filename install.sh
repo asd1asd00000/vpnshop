@@ -2,135 +2,149 @@
 set -e
 
 # ========================================
-# 🚀 اسکریپت نصب VPNShop - نسخه v2
-# - تشخیص هوشمند نسخه Go (با HEAD check)
-# - 5 mirror چینی به ترتیب تست می‌شن
-# - swap خودکار برای سرورهای ضعیف
-# - بیلد تک‌هسته‌ای برای RAM کم
+# VPNShop Installation Script v2
+# - Smart Go version detection with HEAD + follow redirects
+# - 5 proxy mirrors tested in sequence
+# - Automatic swap for weak servers
+# - Single-core build for low RAM
 # ========================================
 
-echo "🚀 شروع نصب VPNShop..."
+echo "🚀 Starting VPNShop installation..."
 
-# ───────────── بررسی root ─────────────
+# ───────────── Check root ─────────────
 if [ "$EUID" -ne 0 ]; then
-    echo "❌ لطفاً با sudo یا root اجرا کنید"
+    echo "❌ Please run as root or with sudo"
     exit 1
 fi
 
-# ───────────── تشخیص معماری ─────────────
+# ───────────── Detect architecture ─────────────
 ARCH=$(uname -m)
 if [ "$ARCH" = "x86_64" ]; then
     GOARCH="amd64"
 elif [ "$ARCH" = "aarch64" ]; then
     GOARCH="arm64"
 else
-    echo "❌ معماری پشتیبانی نمی‌شود: $ARCH"
+    echo "❌ Unsupported architecture: $ARCH"
     exit 1
 fi
-echo "📦 معماری: $ARCH → $GOARCH"
+echo "📦 Architecture: $ARCH → $GOARCH"
 
-# ───────────── نصب پیش‌نیازها ─────────────
-echo "📦 نصب پیش‌نیازها..."
+# ───────────── Install prerequisites ─────────────
+echo "📦 Installing prerequisites..."
 apt-get update -qq
 apt-get install -y -qq git gcc build-essential curl wget ca-certificates > /dev/null 2>&1
-echo "✅ پیش‌نیازها نصب شدند"
+echo "✅ Prerequisites installed"
 
-# ───────────── swap برای سرورهای ضعیف ─────────────
+# ───────────── Swap for weak servers ─────────────
 RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
 SWAP_MB=$(free -m | awk '/^Swap:/{print $2}')
 if [ "$RAM_MB" -le 2048 ] && [ "$SWAP_MB" -le 100 ]; then
-    echo "💾 RAM کم (${RAM_MB}MB) — ساخت swap 2GB..."
+    echo "💾 Low RAM (${RAM_MB}MB) — creating 2GB swap..."
     fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
     chmod 600 /swapfile
     mkswap /swapfile > /dev/null
     swapon /swapfile
     grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-    echo "✅ swap فعال شد"
+    echo "✅ Swap enabled"
 else
-    echo "💾 RAM: ${RAM_MB}MB | Swap: ${SWAP_MB}MB — نیازی به swap جدید نیست"
+    echo "💾 RAM: ${RAM_MB}MB | Swap: ${SWAP_MB}MB — no new swap needed"
 fi
 
-# ───────────── حذف Go قدیمی ─────────────
-echo "🗑️ حذف نسخه قدیمی Go..."
+# ───────────── Remove old Go ─────────────
+echo "🗑️ Removing old Go installation..."
 rm -rf /usr/local/go
 
 # ═══════════════════════════════════════════════════════════════
-# بخش ۱: پیدا کردن نسخه Go واقعاً قابل دانلود
+# Section 1: Find an actually downloadable Go version
+# Uses HEAD + follow redirects to verify the final URL (dl.google.com)
 # ═══════════════════════════════════════════════════════════════
 
-echo "🔍 تشخیص آخرین نسخه پایدار Go..."
+echo "🔍 Detecting latest stable Go version..."
+
+# Helper: check if Go version is actually downloadable
+is_go_version_available() {
+    local version=$1
+    local arch=$2
+    local url="https://go.dev/dl/${version}.linux-${arch}.tar.gz"
+    local status
+
+    # HEAD with follow redirects up to the final URL (dl.google.com)
+    status=$(curl -sIL --max-time 20 -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)
+    [ "$status" = "200" ] || [ "$status" = "206" ]
+}
 
 LATEST_VERSION=""
 
-# مرحله ۱: تست نسخه از VERSION endpoint
+# Step 1: Try version from VERSION endpoint
 VERSION_CANDIDATE=$(curl -fsSL --max-time 20 "https://go.dev/VERSION?m=text" 2>/dev/null | head -n1 | tr -d '\r\n ')
 if [ -n "$VERSION_CANDIDATE" ]; then
-    echo "   🧪 تست نسخه پیشنهادی: $VERSION_CANDIDATE"
-    if curl -fsSI --max-time 20 "https://go.dev/dl/${VERSION_CANDIDATE}.linux-${GOARCH}.tar.gz" > /dev/null 2>&1; then
+    echo "   🧪 Testing suggested version: $VERSION_CANDIDATE"
+    if is_go_version_available "$VERSION_CANDIDATE" "$GOARCH"; then
         LATEST_VERSION=$VERSION_CANDIDATE
-        echo "   ✅ نسخه معتبر: $LATEST_VERSION"
+        echo "   ✅ Valid version: $LATEST_VERSION"
     else
-        echo "   ⚠️ نسخه $VERSION_CANDIDATE در دسترس نیست (احتمالاً هنوز منتشر نشده)"
+        echo "   ⚠️ Version $VERSION_CANDIDATE has no downloadable file yet"
     fi
 fi
 
-# مرحله ۲: اگه مرحله ۱ شکست خورد، لیست JSON رو چک کن
+# Step 2: If Step 1 failed, scan JSON list of stable releases
 if [ -z "$LATEST_VERSION" ]; then
-    echo "   🧪 جستجو در لیست نسخه‌های منتشر شده..."
+    echo "   🧪 Scanning list of stable releases..."
     VERSIONS_JSON=$(curl -fsSL --max-time 30 "https://go.dev/dl/?mode=json" 2>/dev/null)
-    
+
     if [ -z "$VERSIONS_JSON" ]; then
-        echo "❌ نتونستم به go.dev وصل بشم. اتصال اینترنت رو چک کن."
+        echo "❌ Cannot reach go.dev. Please check internet connection."
         exit 1
     fi
-    
-    # استخراج نسخه‌ها از JSON
+
     for v in $(echo "$VERSIONS_JSON" | grep -o '"version":"go[^"]*"' | cut -d'"' -f4); do
-        if curl -fsSI --max-time 15 "https://go.dev/dl/${v}.linux-${GOARCH}.tar.gz" > /dev/null 2>&1; then
+        if is_go_version_available "$v" "$GOARCH"; then
             LATEST_VERSION=$v
-            echo "   ✅ اولین نسخه موجود: $LATEST_VERSION"
+            echo "   ✅ First available version: $LATEST_VERSION"
             break
+        else
+            echo "   ⚠️ $v has no downloadable file, trying next..."
         fi
     done
 fi
 
 if [ -z "$LATEST_VERSION" ]; then
-    echo "❌ هیچ نسخه معتبر Go پیدا نشد"
+    echo "❌ No valid Go version found"
     exit 1
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# بخش ۲: دانلود و نصب Go
+# Section 2: Download and install Go
 # ═══════════════════════════════════════════════════════════════
 
-echo "📥 دانلود ${LATEST_VERSION} برای linux-${GOARCH}..."
+echo "📥 Downloading ${LATEST_VERSION} for linux-${GOARCH}..."
 cd /tmp
 TARBALL="${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
 if ! curl -fSL --retry 3 --retry-delay 5 -o "$TARBALL" "https://go.dev/dl/${TARBALL}"; then
-    echo "❌ دانلود Go ناموفق بود"
+    echo "❌ Go download failed"
     exit 1
 fi
 
-echo "📦 نصب Go در /usr/local..."
+echo "📦 Installing Go to /usr/local..."
 tar -C /usr/local -xzf "$TARBALL"
 rm -f "$TARBALL"
 
-# ───────────── تنظیم PATH ─────────────
+# ───────────── Set PATH ─────────────
 export PATH="/usr/local/go/bin:$PATH"
 export GOPATH="/root/go"
 
 grep -q '/usr/local/go/bin' /root/.bashrc || echo 'export PATH="/usr/local/go/bin:$PATH"' >> /root/.bashrc
 grep -q 'GOPATH=' /root/.bashrc || echo 'export GOPATH="/root/go"' >> /root/.bashrc
 
-echo "✅ Go نصب شد: $(go version)"
+echo "✅ Go installed: $(go version)"
 
 # ═══════════════════════════════════════════════════════════════
-# بخش ۳: پیدا کردن proxy کارآمد با تست واقعی
+# Section 3: Find a working proxy with real HEAD check
 # ═══════════════════════════════════════════════════════════════
 
-echo "🔍 تست mirror ها برای دانلود ماژول‌های Go..."
+echo "🔍 Testing proxy mirrors for Go modules..."
 
-# لیست mirror ها به ترتیب اولویت
+# Mirrors in priority order
 MIRRORS=(
     "https://goproxy.cn"
     "https://goproxy.io"
@@ -143,105 +157,105 @@ WORKING_PROXY=""
 TEST_PKG="github.com/mattn/go-sqlite3/@v/list"
 
 for proxy in "${MIRRORS[@]}"; do
-    echo "   🧪 تست: $proxy"
+    echo "   🧪 Testing: $proxy"
     TEST_URL="${proxy}/${TEST_PKG}"
-    
-    # HEAD request برای چک کردن سریع
+
     if curl -fsSI --max-time 15 "$TEST_URL" > /dev/null 2>&1; then
         WORKING_PROXY=$proxy
-        echo "   ✅ mirror کارآمد: $proxy"
+        echo "   ✅ Working mirror: $proxy"
         break
     else
-        echo "   ⚠️ پاسخ نداد، بعدی..."
+        echo "   ⚠️ No response, trying next..."
     fi
 done
 
-# اگر هیچ mirror کار نکرد
+# Fallback chain if no mirror worked
 if [ -z "$WORKING_PROXY" ]; then
-    echo "   ⚠️ هیچ mirror چینی کار نکرد. تست مستقیم (proxy.golang.org)..."
+    echo "   ⚠️ No Chinese mirror worked. Testing official proxy..."
     if curl -fsSI --max-time 20 "https://proxy.golang.org/${TEST_PKG}" > /dev/null 2>&1; then
         WORKING_PROXY="https://proxy.golang.org"
-        echo "   ✅ proxy رسمی کار می‌کنه"
+        echo "   ✅ Official proxy works"
     else
         WORKING_PROXY="direct"
-        echo "   ⚠️ از حالت direct استفاده می‌کنم (شاید سرور خارجیه)"
+        echo "   ⚠️ Falling back to direct mode"
     fi
 fi
 
-# تنظیم محیطی
+# Set Go env variables
 go env -w GOPROXY="${WORKING_PROXY},direct"
 go env -w GOSUMDB=sum.golang.org
 go env -w GOPATH=/root/go
 go env -w GOTOOLCHAIN=local
 
-echo "✅ GOPROXY تنظیم شد: $(go env GOPROXY)"
+echo "✅ GOPROXY set: $(go env GOPROXY)"
 
 # ═══════════════════════════════════════════════════════════════
-# بخش ۴: آماده‌سازی پروژه
+# Section 4: Prepare project
 # ═══════════════════════════════════════════════════════════════
 
 PROJECT_DIR="/root/vpnshop"
 if [ ! -d "$PROJECT_DIR" ]; then
-    echo "📁 ساخت پوشه پروژه..."
+    echo "📁 Creating project directory..."
     mkdir -p "$PROJECT_DIR/templates"
-    echo "✅ پوشه پروژه آماده شد: $PROJECT_DIR"
-    echo "⚠️  کد منبع رو در $PROJECT_DIR قرار بده و دوباره اسکریپت رو اجرا کن"
+    echo "✅ Project directory ready: $PROJECT_DIR"
+    echo "⚠️  Place source code in $PROJECT_DIR and re-run the script"
     exit 0
 fi
 
 cd "$PROJECT_DIR"
 
 if [ ! -f "go.mod" ]; then
-    echo "❌ فایل go.mod یافت نشد. ابتدا کد رو در $PROJECT_DIR قرار بده"
+    echo "❌ go.mod not found. Place source code in $PROJECT_DIR first"
     exit 1
 fi
 
-# ───────────── دانلود وابستگی‌ها ─────────────
-echo "📥 دانلود وابستگی‌ها..."
+# ───────────── Download dependencies ─────────────
+echo "📥 Downloading dependencies..."
 if ! go mod download; then
-    echo "❌ دانلود وابستگی‌ها با $WORKING_PROXY شکست خورد"
-    echo "🔄 تست حالت direct..."
+    echo "❌ Dependencies download failed with $WORKING_PROXY"
+    echo "🔄 Falling back to direct mode..."
     go env -w GOPROXY=direct
-    go mod download || { echo "❌ دانلود ناموفق"; exit 1; }
+    go mod download || { echo "❌ Download failed"; exit 1; }
 fi
 go mod tidy
-echo "✅ وابستگی‌ها دانلود شدند"
+echo "✅ Dependencies downloaded"
 
-# ───────────── بیلد پروژه ─────────────
-echo "🔨 بیلد پروژه..."
+# ───────────── Build project ─────────────
+echo "🔨 Building project..."
 BUILD_FLAGS=""
 if [ "$RAM_MB" -le 1024 ]; then
-    echo "🐢 سرور ضعیف (${RAM_MB}MB RAM): بیلد تک‌هسته‌ای..."
+    echo "🐢 Low RAM (${RAM_MB}MB): using single-core build..."
     export GOMAXPROCS=1
     BUILD_FLAGS="-p=1"
 fi
 
 if ! CGO_ENABLED=1 go build $BUILD_FLAGS -ldflags="-s -w" -o vpnshop-app .; then
-    echo "❌ بیلد ناموفق"
+    echo "❌ Build failed"
     exit 1
 fi
-echo "✅ بیلد موفق: $(ls -lh vpnshop-app | awk '{print $5}')"
+echo "✅ Build succeeded: $(ls -lh vpnshop-app | awk '{print $5}')"
 
-# ───────────── ساخت پوشه‌های لازم ─────────────
+# ───────────── Create required directories ─────────────
 mkdir -p "$PROJECT_DIR/backups"
 mkdir -p "$PROJECT_DIR/templates"
 
-# ───────────── ساخت config.json اگه نیست ─────────────
+# ───────────── Create config.json if missing ─────────────
 if [ ! -f "config.json" ]; then
     echo '{"admin":{"username":"admin","password":"admin123"},"panels":[],"cards":[]}' > config.json
-    echo "⚠️  config.json پیش‌فرض ساخته شد (کاربر: admin, رمز: admin123)"
+    echo "⚠️  Default config.json created (user: admin, password: admin123)"
 fi
 
-# ───────────── ساخت plans.json اگه نیست ─────────────
+# ───────────── Create plans.json if missing ─────────────
 if [ ! -f "plans.json" ]; then
     echo '[]' > plans.json
+    echo "⚠️  Empty plans.json created"
 fi
 
-# ───────────── ساخت systemd service ─────────────
-echo "⚙️ ساخت systemd service..."
+# ───────────── Create systemd service ─────────────
+echo "⚙️ Setting up systemd service..."
 cat > /etc/systemd/system/vpnshop.service << 'EOF'
 [Unit]
-Description=VPNShop - فروشگاه کانفیگ VPN
+Description=VPNShop - VPN Config Store
 After=network.target
 
 [Service]
@@ -257,31 +271,31 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-# ───────────── فعال‌سازی و شروع سرویس ─────────────
-echo "🚀 فعال‌سازی سرویس..."
+# ───────────── Enable and start service ─────────────
+echo "🚀 Starting service..."
 systemctl daemon-reload
 systemctl enable vpnshop
 systemctl restart vpnshop
 
-# ───────────── بررسی وضعیت ─────────────
+# ───────────── Verify status ─────────────
 sleep 2
 if systemctl is-active --quiet vpnshop; then
     echo ""
     echo "═══════════════════════════════════════"
-    echo "✅ VPNShop با موفقیت نصب و راه‌اندازی شد!"
+    echo "✅ VPNShop installed and running!"
     echo "═══════════════════════════════════════"
-    echo "📂 پوشه پروژه: $PROJECT_DIR"
-    echo "🌐 آدرس پنل ادمین: http://YOUR_IP:8080/admin"
-    echo "👤 کاربر پیش‌فرض: admin"
-    echo "🔑 رمز پیش‌فرض: admin123"
+    echo "📂 Project directory: $PROJECT_DIR"
+    echo "🌐 Admin panel: http://YOUR_IP:8080/admin"
+    echo "👤 Default user: admin"
+    echo "🔑 Default password: admin123"
     echo "═══════════════════════════════════════"
     echo ""
-    echo "📋 دستورات مفید:"
-    echo "  sudo systemctl status vpnshop     # وضعیت"
-    echo "  sudo systemctl restart vpnshop    # ریستارت"
-    echo "  sudo journalctl -u vpnshop -f     # لاگ زنده"
+    echo "📋 Useful commands:"
+    echo "  sudo systemctl status vpnshop     # status"
+    echo "  sudo systemctl restart vpnshop    # restart"
+    echo "  sudo journalctl -u vpnshop -f     # live logs"
     echo ""
 else
-    echo "❌ سرویس شروع نشد. لاگ:"
+    echo "❌ Service failed to start. Logs:"
     journalctl -u vpnshop -n 20 --no-pager
 fi
