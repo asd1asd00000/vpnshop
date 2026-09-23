@@ -2,8 +2,8 @@
 set -e
 
 # ========================================
-# VPNShop Installation Script v3
-# - Robust Go version detection with multiple fallbacks
+# VPNShop Installation Script v4
+# - Byte-range download test (more reliable than HEAD)
 # - 5 proxy mirrors tested in sequence
 # - Automatic swap for weak servers
 # - Single-core build for low RAM
@@ -56,21 +56,22 @@ rm -rf /usr/local/go
 
 # ═══════════════════════════════════════════════════════════════
 # Section 1: Find an actually downloadable Go version
-# Uses HEAD + follow redirects to verify the final URL (dl.google.com)
+# Uses byte-range download (1KB) instead of HEAD for reliability
 # Falls back to hardcoded list if go.dev is unreachable
 # ═══════════════════════════════════════════════════════════════
 
 echo "🔍 Detecting latest stable Go version..."
 
-# Helper: check if Go version is actually downloadable
+# Helper: check if Go version is actually downloadable using byte-range
 is_go_version_available() {
     local version=$1
     local arch=$2
     local url="https://go.dev/dl/${version}.linux-${arch}.tar.gz"
     local status
 
-    # HEAD with follow redirects up to the final URL (dl.google.com)
-    status=$(curl -sIL --max-time 20 -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)
+    # Download just 1KB (byte range 0-1023) to test if file exists
+    # This is faster and more reliable than HEAD with redirects
+    status=$(curl -sL --max-time 30 -o /dev/null -w "%{http_code}" -r 0-1023 "$url" 2>/dev/null)
     [ "$status" = "200" ] || [ "$status" = "206" ]
 }
 
@@ -113,47 +114,26 @@ if [ -z "$LATEST_VERSION" ]; then
 
     # Hardcoded list of known stable Go versions (newest first)
     HARDCODED_VERSIONS=(
-        "go1.26.7"
-        "go1.26.6"
-        "go1.26.5"
-        "go1.26.4"
-        "go1.26.3"
-        "go1.26.2"
-        "go1.26.1"
-        "go1.26.0"
-        "go1.25.8"
-        "go1.25.7"
-        "go1.25.6"
-        "go1.25.5"
-        "go1.25.4"
-        "go1.25.3"
-        "go1.25.2"
-        "go1.25.1"
-        "go1.25.0"
-        "go1.24.7"
-        "go1.24.6"
-        "go1.24.5"
-        "go1.24.4"
-        "go1.24.3"
-        "go1.24.2"
-        "go1.24.1"
-        "go1.24.0"
-        "go1.23.12"
-        "go1.23.11"
-        "go1.23.10"
-        "go1.23.9"
-        "go1.23.8"
-        "go1.23.7"
-        "go1.23.6"
-        "go1.23.5"
         "go1.23.4"
         "go1.23.3"
         "go1.23.2"
         "go1.23.1"
         "go1.23.0"
-        "go1.22.12"
-        "go1.22.11"
         "go1.22.10"
+        "go1.22.9"
+        "go1.22.8"
+        "go1.22.7"
+        "go1.22.6"
+        "go1.22.5"
+        "go1.22.4"
+        "go1.22.3"
+        "go1.22.2"
+        "go1.22.1"
+        "go1.22.0"
+        "go1.21.13"
+        "go1.21.12"
+        "go1.21.11"
+        "go1.21.10"
     )
 
     for v in "${HARDCODED_VERSIONS[@]}"; do
@@ -168,18 +148,49 @@ fi
 
 if [ -z "$LATEST_VERSION" ]; then
     echo "❌ No valid Go version found from any source"
-    exit 1
+    echo "💡 This might be due to network restrictions. Trying direct Google mirror..."
+    
+    # Last resort: try direct download from dl.google.com
+    LATEST_VERSION="go1.23.4"
+    echo "   🧪 Forcing $LATEST_VERSION from dl.google.com..."
 fi
 
 # ═══════════════════════════════════════════════════════════════
 # Section 2: Download and install Go
+# Try multiple download sources
 # ═══════════════════════════════════════════════════════════════
 
 echo "📥 Downloading ${LATEST_VERSION} for linux-${GOARCH}..."
 cd /tmp
 TARBALL="${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
-if ! curl -fSL --retry 3 --retry-delay 5 -o "$TARBALL" "https://go.dev/dl/${TARBALL}"; then
-    echo "❌ Go download failed"
+
+# Try go.dev first, then dl.google.com, then Chinese mirror
+DOWNLOAD_SUCCESS=false
+
+echo "   🧪 Trying go.dev..."
+if curl -fSL --retry 3 --retry-delay 5 -o "$TARBALL" "https://go.dev/dl/${TARBALL}" 2>/dev/null; then
+    DOWNLOAD_SUCCESS=true
+    echo "   ✅ Downloaded from go.dev"
+fi
+
+if [ "$DOWNLOAD_SUCCESS" = false ]; then
+    echo "   🧪 Trying dl.google.com..."
+    if curl -fSL --retry 3 --retry-delay 5 -o "$TARBALL" "https://dl.google.com/go/${TARBALL}" 2>/dev/null; then
+        DOWNLOAD_SUCCESS=true
+        echo "   ✅ Downloaded from dl.google.com"
+    fi
+fi
+
+if [ "$DOWNLOAD_SUCCESS" = false ]; then
+    echo "   🧪 Trying Chinese mirror (golang.google.cn)..."
+    if curl -fSL --retry 3 --retry-delay 5 -o "$TARBALL" "https://golang.google.cn/dl/${TARBALL}" 2>/dev/null; then
+        DOWNLOAD_SUCCESS=true
+        echo "   ✅ Downloaded from Chinese mirror"
+    fi
+fi
+
+if [ "$DOWNLOAD_SUCCESS" = false ]; then
+    echo "❌ Go download failed from all sources"
     exit 1
 fi
 
