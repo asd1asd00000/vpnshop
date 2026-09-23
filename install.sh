@@ -1,200 +1,176 @@
 #!/bin/bash
-set -e
 
-# ========================================
-# VPNShop Installation Script
-# - Latest stable Go from go.dev
-# - goproxy.cn for fast module downloads
-# - Automatic swap for weak servers
-# - Single-core build for low RAM
-# ========================================
+# ============================================================
+#  VPNShop - Automated Installation Script
+# ============================================================
 
-echo "🚀 Starting VPNShop installation..."
+echo ""
+echo "=================================================="
+echo "        VPNShop - Automated Installer"
+echo "=================================================="
+echo ""
 
-# ───────────── Check root ─────────────
-if [ "$EUID" -ne 0 ]; then
-    echo "❌ Please run as root or with sudo"
-    exit 1
-fi
+# ------------------------------------------------------------
+# Step 1: Configuration (interactive prompts)
+# ------------------------------------------------------------
+echo "[1/4] Configuration"
+echo "--------------------------------------------------"
 
-# ───────────── Detect architecture ─────────────
-ARCH=$(uname -m)
-if [ "$ARCH" = "x86_64" ]; then
-    GOARCH="amd64"
-elif [ "$ARCH" = "aarch64" ]; then
-    GOARCH="arm64"
-else
-    echo "❌ Unsupported architecture: $ARCH"
-    exit 1
-fi
-echo "📦 Architecture: $ARCH → $GOARCH"
+# Shop domain
+read -p "Shop domain (e.g. shop.example.com) [Enter to skip]: " domain_name </dev/tty
 
-# ───────────── Install prerequisites ─────────────
-echo "📦 Installing prerequisites..."
-apt-get update -qq
-apt-get install -y -qq git gcc build-essential curl wget ca-certificates > /dev/null 2>&1
-echo "✅ Prerequisites installed"
+# Admin username
+read -p "Admin username [default: admin]: " admin_user </dev/tty
+admin_user=${admin_user:-admin}
 
-# ───────────── Swap for weak servers ─────────────
-RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
-SWAP_MB=$(free -m | awk '/^Swap:/{print $2}')
-if [ "$RAM_MB" -le 2048 ] && [ "$SWAP_MB" -le 100 ]; then
-    echo "💾 Low RAM (${RAM_MB}MB) — creating 2GB swap..."
-    fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
-    chmod 600 /swapfile
-    mkswap /swapfile > /dev/null
-    swapon /swapfile
-    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-    echo "✅ Swap enabled"
-else
-    echo "💾 RAM: ${RAM_MB}MB | Swap: ${SWAP_MB}MB"
-fi
+# Admin password (silent input)
+default_admin_pass=$(head -c 200 /dev/urandom | tr -dc 'a-z0-9' | head -c 16)
+read -sp "Admin password [Enter to auto-generate]: " admin_pass </dev/tty
+echo ""
+admin_pass=${admin_pass:-$default_admin_pass}
 
-# ───────────── Remove old Go ─────────────
-echo "🗑️ Removing old Go installation..."
-rm -rf /usr/local/go
+# Admin secret path
+default_admin_path=$(head -c 200 /dev/urandom | tr -dc 'a-z0-9' | head -c 24)
+read -p "Admin secret path [Enter to auto-generate]: " admin_path </dev/tty
+admin_path=${admin_path:-$default_admin_path}
 
-# ───────────── Get latest Go version ─────────────
-echo "🔍 Fetching latest Go version..."
-LATEST_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" 2>/dev/null | head -n1 | tr -d '\r\n ')
+echo ""
+echo "Configuration saved."
+echo ""
 
-if [ -z "$LATEST_VERSION" ]; then
-    echo "❌ Failed to fetch Go version from go.dev"
-    exit 1
-fi
+# ------------------------------------------------------------
+# Step 2: Install system dependencies
+# ------------------------------------------------------------
+echo "[2/4] Installing system dependencies..."
+echo "--------------------------------------------------"
+sudo apt update
+sudo apt install -y golang-go git build-essential
+echo "Dependencies installed."
+echo ""
 
-echo "📥 Downloading ${LATEST_VERSION} for linux-${GOARCH}..."
-cd /tmp
-TARBALL="${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
-
-if ! curl -fSL --retry 3 --retry-delay 5 -o "$TARBALL" "https://go.dev/dl/${TARBALL}"; then
-    echo "❌ Go download failed"
-    exit 1
-fi
-
-# ───────────── Install Go ─────────────
-echo "📦 Installing Go to /usr/local..."
-tar -C /usr/local -xzf "$TARBALL"
-rm -f "$TARBALL"
-
-export PATH="/usr/local/go/bin:$PATH"
-export GOPATH="/root/go"
-
-grep -q '/usr/local/go/bin' /root/.bashrc || echo 'export PATH="/usr/local/go/bin:$PATH"' >> /root/.bashrc
-grep -q 'GOPATH=' /root/.bashrc || echo 'export GOPATH="/root/go"' >> /root/.bashrc
-
-echo "✅ Go installed: $(go version)"
-
-# ───────────── Set GOPROXY for faster downloads ─────────────
-go env -w GOPROXY=https://goproxy.cn,direct
-go env -w GOSUMDB=sum.golang.org
-go env -w GOPATH=/root/go
-go env -w GOTOOLCHAIN=local
-
-echo "✅ GOPROXY configured: $(go env GOPROXY)"
-
-# ───────────── Prepare project ─────────────
-PROJECT_DIR="/root/vpnshop"
-if [ ! -d "$PROJECT_DIR" ]; then
-    echo "📁 Creating project directory..."
-    mkdir -p "$PROJECT_DIR/templates"
-    echo "✅ Project directory ready: $PROJECT_DIR"
-    echo "⚠️  Place source code in $PROJECT_DIR and re-run this script"
-    exit 0
-fi
-
-cd "$PROJECT_DIR"
-
-if [ ! -f "go.mod" ]; then
-    echo "❌ go.mod not found. Place source code in $PROJECT_DIR first"
-    exit 1
-fi
-
-# ───────────── Download dependencies ─────────────
-echo "📥 Downloading dependencies..."
-if ! go mod download; then
-    echo "❌ Dependencies download failed"
-    exit 1
-fi
+# ------------------------------------------------------------
+# Step 3: Download source code and build
+# ------------------------------------------------------------
+echo "[3/4] Downloading source code and building..."
+echo "--------------------------------------------------"
+cd /root
+rm -rf vpnshop
+git clone https://github.com/asd1asd00000/vpnshop.git
+cd vpnshop
 go mod tidy
-echo "✅ Dependencies downloaded"
+CGO_ENABLED=1 go build -o vpnshop-app main.go
+echo "Build completed."
+echo ""
 
-# ───────────── Build project ─────────────
-echo "🔨 Building project..."
-BUILD_FLAGS=""
-if [ "$RAM_MB" -le 1024 ]; then
-    echo "🐢 Low RAM (${RAM_MB}MB): using single-core build..."
-    export GOMAXPROCS=1
-    BUILD_FLAGS="-p=1"
-fi
+# ------------------------------------------------------------
+# Step 4: Create and start systemd service
+# ------------------------------------------------------------
+echo "[4/4] Setting up systemd service..."
+echo "--------------------------------------------------"
 
-if ! CGO_ENABLED=1 go build $BUILD_FLAGS -ldflags="-s -w" -o vpnshop-app .; then
-    echo "❌ Build failed"
-    exit 1
-fi
-echo "✅ Build succeeded: $(ls -lh vpnshop-app | awk '{print $5}')"
-
-# ───────────── Create required directories ─────────────
-mkdir -p "$PROJECT_DIR/backups"
-mkdir -p "$PROJECT_DIR/templates"
-
-# ───────────── Create config.json if missing ─────────────
-if [ ! -f "config.json" ]; then
-    echo '{"admin":{"username":"admin","password":"admin123"},"panels":[],"cards":[]}' > config.json
-    echo "⚠️  Default config.json created (user: admin, password: admin123)"
-fi
-
-# ───────────── Create plans.json if missing ─────────────
-if [ ! -f "plans.json" ]; then
-    echo '[]' > plans.json
-    echo "⚠️  Empty plans.json created"
-fi
-
-# ───────────── Create systemd service ─────────────
-echo "⚙️ Setting up systemd service..."
-cat > /etc/systemd/system/vpnshop.service << 'EOF'
+cat <<EOF > /etc/systemd/system/vpnshop.service
 [Unit]
-Description=VPNShop - VPN Config Store
+Description=VPNShop Golang Service
 After=network.target
 
 [Service]
 Type=simple
+User=root
 WorkingDirectory=/root/vpnshop
 ExecStart=/root/vpnshop/vpnshop-app
 Restart=always
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
+
+# Guard panel settings
+
+
+# Admin dashboard credentials (set during installation)
+Environment="ADMIN_USER=$admin_user"
+Environment="ADMIN_PASS=$admin_pass"
+Environment="ADMIN_SECRET_PATH=$admin_path"
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# ───────────── Enable and start service ─────────────
-echo "🚀 Starting service..."
 systemctl daemon-reload
 systemctl enable vpnshop
 systemctl restart vpnshop
+echo "VPNShop service installed and started."
+echo ""
 
-# ───────────── Verify status ─────────────
-sleep 2
-if systemctl is-active --quiet vpnshop; then
-    echo ""
-    echo "═══════════════════════════════════════"
-    echo "✅ VPNShop installed and running!"
-    echo "═══════════════════════════════════════"
-    echo "📂 Project directory: $PROJECT_DIR"
-    echo "🌐 Admin panel: http://YOUR_IP:8080/admin"
-    echo "👤 Default user: admin"
-    echo "🔑 Default password: admin123"
-    echo "═══════════════════════════════════════"
-    echo ""
-    echo "📋 Useful commands:"
-    echo "  sudo systemctl status vpnshop     # status"
-    echo "  sudo systemctl restart vpnshop    # restart"
-    echo "  sudo journalctl -u vpnshop -f     # live logs"
-    echo ""
+# ------------------------------------------------------------
+# Nginx + SSL setup (only if a domain was provided)
+# ------------------------------------------------------------
+if [ -n "$domain_name" ]; then
+    echo "Configuring Nginx and SSL for $domain_name ..."
+    echo "--------------------------------------------------"
+
+    if ! command -v nginx &> /dev/null; then
+        apt update && apt install -y nginx certbot python3-certbot-nginx
+    fi
+
+    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+
+    cat <<EOF > /etc/nginx/sites-available/vpnshop
+server {
+    listen 80;
+    server_name $domain_name;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+    ln -sf /etc/nginx/sites-available/vpnshop /etc/nginx/sites-enabled/
+    nginx -t && systemctl restart nginx
+
+    certbot --nginx -d "$domain_name" --non-interactive --agree-tos -m "admin@$domain_name" --redirect \
+        || echo "WARNING: SSL certificate failed. Make sure your domain points to this server."
+
+    shop_url="https://$domain_name"
+    admin_url="https://$domain_name/$admin_path/admin"
+    echo "Domain $domain_name configured with HTTPS."
 else
-    echo "❌ Service failed to start. Logs:"
-    journalctl -u vpnshop -n 20 --no-pager
+    echo "No domain provided. Skipping Nginx/SSL setup."
+    shop_url="http://<SERVER_IP>:8080"
+    admin_url="http://<SERVER_IP>:8080/$admin_path/admin"
 fi
+
+echo ""
+
+# ------------------------------------------------------------
+# Final summary table
+# ------------------------------------------------------------
+echo "=================================================="
+echo "   Installation completed successfully!"
+echo "=================================================="
+echo ""
+
+lines=()
+lines+=("Shop URL          : $shop_url")
+lines+=("Admin URL         : $admin_url")
+lines+=("Admin Username    : $admin_user")
+lines+=("Admin Password    : $admin_pass")
+lines+=("Admin Secret Path : $admin_path")
+
+max=0
+for l in "${lines[@]}"; do
+    [ ${#l} -gt $max ] && max=${#l}
+done
+
+border=$(printf '─%.0s' $(seq 1 $((max + 2))))
+echo "┌$border┐"
+for l in "${lines[@]}"; do
+    printf '│ %-*s │\n' "$max" "$l"
+done
+echo "└$border┘"
+
+echo ""
+echo "IMPORTANT: Save your admin credentials and secret path in a safe place!"
+echo ""
