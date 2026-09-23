@@ -2,8 +2,8 @@
 set -e
 
 # ========================================
-# VPNShop Installation Script v2
-# - Smart Go version detection with HEAD + follow redirects
+# VPNShop Installation Script v3
+# - Robust Go version detection with multiple fallbacks
 # - 5 proxy mirrors tested in sequence
 # - Automatic swap for weak servers
 # - Single-core build for low RAM
@@ -57,6 +57,7 @@ rm -rf /usr/local/go
 # ═══════════════════════════════════════════════════════════════
 # Section 1: Find an actually downloadable Go version
 # Uses HEAD + follow redirects to verify the final URL (dl.google.com)
+# Falls back to hardcoded list if go.dev is unreachable
 # ═══════════════════════════════════════════════════════════════
 
 echo "🔍 Detecting latest stable Go version..."
@@ -87,29 +88,86 @@ if [ -n "$VERSION_CANDIDATE" ]; then
     fi
 fi
 
-# Step 2: If Step 1 failed, scan JSON list of stable releases
+# Step 2: If Step 1 failed, try JSON list
 if [ -z "$LATEST_VERSION" ]; then
-    echo "   🧪 Scanning list of stable releases..."
+    echo "   🧪 Trying JSON list from go.dev..."
     VERSIONS_JSON=$(curl -fsSL --max-time 30 "https://go.dev/dl/?mode=json" 2>/dev/null)
 
-    if [ -z "$VERSIONS_JSON" ]; then
-        echo "❌ Cannot reach go.dev. Please check internet connection."
-        exit 1
+    if [ -n "$VERSIONS_JSON" ]; then
+        for v in $(echo "$VERSIONS_JSON" | grep -o '"version":"go[^"]*"' | cut -d'"' -f4); do
+            if is_go_version_available "$v" "$GOARCH"; then
+                LATEST_VERSION=$v
+                echo "   ✅ First available from JSON: $LATEST_VERSION"
+                break
+            fi
+        done
+    else
+        echo "   ⚠️ Cannot fetch JSON list from go.dev"
     fi
+fi
 
-    for v in $(echo "$VERSIONS_JSON" | grep -o '"version":"go[^"]*"' | cut -d'"' -f4); do
+# Step 3: Fallback to hardcoded list of known good versions
+# This guarantees installation even if go.dev is unreachable or JSON parsing fails
+if [ -z "$LATEST_VERSION" ]; then
+    echo "   🧪 Falling back to hardcoded version list..."
+
+    # Hardcoded list of known stable Go versions (newest first)
+    HARDCODED_VERSIONS=(
+        "go1.26.7"
+        "go1.26.6"
+        "go1.26.5"
+        "go1.26.4"
+        "go1.26.3"
+        "go1.26.2"
+        "go1.26.1"
+        "go1.26.0"
+        "go1.25.8"
+        "go1.25.7"
+        "go1.25.6"
+        "go1.25.5"
+        "go1.25.4"
+        "go1.25.3"
+        "go1.25.2"
+        "go1.25.1"
+        "go1.25.0"
+        "go1.24.7"
+        "go1.24.6"
+        "go1.24.5"
+        "go1.24.4"
+        "go1.24.3"
+        "go1.24.2"
+        "go1.24.1"
+        "go1.24.0"
+        "go1.23.12"
+        "go1.23.11"
+        "go1.23.10"
+        "go1.23.9"
+        "go1.23.8"
+        "go1.23.7"
+        "go1.23.6"
+        "go1.23.5"
+        "go1.23.4"
+        "go1.23.3"
+        "go1.23.2"
+        "go1.23.1"
+        "go1.23.0"
+        "go1.22.12"
+        "go1.22.11"
+        "go1.22.10"
+    )
+
+    for v in "${HARDCODED_VERSIONS[@]}"; do
+        echo "   🧪 Testing $v..."
         if is_go_version_available "$v" "$GOARCH"; then
             LATEST_VERSION=$v
-            echo "   ✅ First available version: $LATEST_VERSION"
+            echo "   ✅ First available from hardcoded list: $LATEST_VERSION"
             break
-        else
-            echo "   ⚠️ $v has no downloadable file, trying next..."
         fi
     done
 fi
 
 if [ -z "$LATEST_VERSION" ]; then
-    echo "❌ No valid Go version found"
+    echo "❌ No valid Go version found from any source"
     exit 1
 fi
 
