@@ -2,6 +2,10 @@
 
 # ============================================================
 #  VPNShop - Automated Installation Script
+#  - Latest Go from go.dev (not apt)
+#  - goproxy.cn for fast module downloads
+#  - Interactive configuration
+#  - Optional Nginx + SSL with certbot
 # ============================================================
 
 echo ""
@@ -13,7 +17,7 @@ echo ""
 # ------------------------------------------------------------
 # Step 1: Configuration (interactive prompts)
 # ------------------------------------------------------------
-echo "[1/4] Configuration"
+echo "[1/5] Configuration"
 echo "--------------------------------------------------"
 
 # Shop domain
@@ -39,33 +43,91 @@ echo "Configuration saved."
 echo ""
 
 # ------------------------------------------------------------
-# Step 2: Install system dependencies
+# Step 2: Install system dependencies (without Go)
 # ------------------------------------------------------------
-echo "[2/4] Installing system dependencies..."
+echo "[2/5] Installing system dependencies..."
 echo "--------------------------------------------------"
 sudo apt update
-sudo apt install -y golang-go git build-essential
+sudo apt install -y git build-essential curl wget ca-certificates
 echo "Dependencies installed."
 echo ""
 
 # ------------------------------------------------------------
-# Step 3: Download source code and build
+# Step 3: Install latest Go from go.dev
 # ------------------------------------------------------------
-echo "[3/4] Downloading source code and building..."
+echo "[3/5] Installing latest Go from go.dev..."
+echo "--------------------------------------------------"
+
+# Detect architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    GOARCH="amd64"
+elif [ "$ARCH" = "aarch64" ]; then
+    GOARCH="arm64"
+else
+    echo "❌ Unsupported architecture: $ARCH"
+    exit 1
+fi
+
+# Fetch latest Go version
+LATEST_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -n1 | tr -d '\r\n ')
+if [ -z "$LATEST_VERSION" ]; then
+    echo "❌ Failed to fetch Go version from go.dev"
+    exit 1
+fi
+
+echo "Latest Go version: $LATEST_VERSION"
+
+# Remove old Go installation
+sudo rm -rf /usr/local/go
+
+# Download and install
+cd /tmp
+TARBALL="${LATEST_VERSION}.linux-${GOARCH}.tar.gz"
+echo "Downloading $TARBALL..."
+if ! curl -fSL --retry 3 --retry-delay 5 -o "$TARBALL" "https://go.dev/dl/${TARBALL}"; then
+    echo "❌ Failed to download Go"
+    exit 1
+fi
+
+sudo tar -C /usr/local -xzf "$TARBALL"
+rm -f "$TARBALL"
+
+# Set PATH permanently
+echo 'export PATH="/usr/local/go/bin:$PATH"' >> ~/.bashrc
+echo 'export GOPATH="/root/go"' >> ~/.bashrc
+export PATH="/usr/local/go/bin:$PATH"
+export GOPATH="/root/go"
+
+echo "✅ Go installed: $(go version)"
+
+# Configure Go environment
+go env -w GOPROXY=https://goproxy.cn,direct
+go env -w GOSUMDB=sum.golang.org
+go env -w GOPATH=/root/go
+go env -w GOTOOLCHAIN=local
+
+echo "✅ Go environment configured"
+echo ""
+
+# ------------------------------------------------------------
+# Step 4: Download source code and build
+# ------------------------------------------------------------
+echo "[4/5] Downloading source code and building..."
 echo "--------------------------------------------------"
 cd /root
 rm -rf vpnshop
 git clone https://github.com/asd1asd00000/vpnshop.git
 cd vpnshop
 go mod tidy
-CGO_ENABLED=1 go build -o vpnshop-app main.go
+CGO_ENABLED=1 go build -o vpnshop-app .
 echo "Build completed."
 echo ""
 
 # ------------------------------------------------------------
-# Step 4: Create and start systemd service
+# Step 5: Create and start systemd service
 # ------------------------------------------------------------
-echo "[4/4] Setting up systemd service..."
+echo "[5/5] Setting up systemd service..."
 echo "--------------------------------------------------"
 
 cat <<EOF > /etc/systemd/system/vpnshop.service
@@ -80,9 +142,6 @@ WorkingDirectory=/root/vpnshop
 ExecStart=/root/vpnshop/vpnshop-app
 Restart=always
 RestartSec=5
-
-# Guard panel settings
-
 
 # Admin dashboard credentials (set during installation)
 Environment="ADMIN_USER=$admin_user"
@@ -158,6 +217,7 @@ lines+=("Admin URL         : $admin_url")
 lines+=("Admin Username    : $admin_user")
 lines+=("Admin Password    : $admin_pass")
 lines+=("Admin Secret Path : $admin_path")
+lines+=("Go Version        : $LATEST_VERSION")
 
 max=0
 for l in "${lines[@]}"; do
