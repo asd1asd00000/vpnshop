@@ -65,7 +65,9 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// ✅ لاگ مهم: ساخت کانفیگ (۳۰ روز نگهداری)
 		db.LogEventf("config", "success", "🔗 کانفیگ برای %s ساخته شد: %s", order.TrackingCode, link)
-		db.DB.Exec(`UPDATE orders SET config_link = ? WHERE id = ?`, link, order.ID)
+		
+		// 🎯 ثبت زمان پرداخت (دقیقاً = زمان ساخت کانفیگ) + روش پرداخت
+		db.DB.Exec(`UPDATE orders SET config_link = ?, paid_at = datetime('now'), payment_method = 'customer' WHERE id = ?`, link, order.ID)
 	}
 
 	w.WriteHeader(http.StatusOK)
