@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,7 +25,6 @@ func init() {
 // ───────────── توابع کمکی عمومی (مشترک بین پنل‌ها) ─────────────
 
 // generateUsername یه نام کاربری تصادفی ۶ حرفی می‌سازه
-// فرمت: user_xxxxxx (حروف کوچک + اعداد)
 func generateUsername() string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	randomPart := make([]byte, 6)
@@ -53,13 +54,71 @@ func planToVolumeAndDays(planID string) (volumeGB int, days int) {
 			return p.VolumeGB, p.Days
 		}
 	}
-	// مقادیر پیش‌فرض اگه پلن پیدا نشد
 	return 20, 30
 }
 
 // ───────────── توابع اختصاصی پنل Guards (GoGuard 1.0) ─────────────
 
-// getGuardsToken احراز هویت در پنل Guards
+// guardsUserAgent شبیه مرورگر Chrome برای عبور از Cloudflare/WAF
+const guardsUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+// guardsClient کلاینت مشترک: اجبار به IPv4 + timeout سی ثانیه + بدون keep-alive
+// (DisableKeepAlives جلوی خطاهای EOF ناشی از connection های stale رو می‌گیره)
+var guardsClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
+			return d.DialContext(ctx, "tcp4", addr)
+		},
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 25 * time.Second,
+		DisableKeepAlives:     true,
+	},
+}
+
+// guardsRequest ارسال درخواست با User-Agent و هدرهای auth
+func guardsRequest(method, rawURL string, body []byte, auth map[string]string) (*http.Response, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewBuffer(body)
+	}
+	req, err := http.NewRequest(method, rawURL, reader)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", guardsUserAgent)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range auth {
+		req.Header.Set(k, v)
+	}
+	return guardsClient.Do(req)
+}
+
+// authMode برای لاگ: نشون می‌ده با APIKey وصل شدیم یا token
+func authMode(panel db.PanelConfig) string {
+	if strings.TrimSpace(panel.APIKey) != "" {
+		return "APIKey"
+	}
+	return "token"
+}
+
+// guardsAuthHeaders اولویت با API Key (هدر X-API-Key)، وگرنه fallback به توکن
+func guardsAuthHeaders(panel db.PanelConfig) (map[string]string, error) {
+	if key := strings.TrimSpace(panel.APIKey); key != "" {
+		return map[string]string{"X-API-Key": key}, nil
+	}
+	token, err := getGuardsToken(panel.URL, panel.Username, panel.Password)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"Authorization": "Bearer " + token}, nil
+}
+
+// getGuardsToken احراز هویت با یوزر/پسورد (حالت fallback)
 func getGuardsToken(nodeURL, username, password string) (string, error) {
 	data := url.Values{}
 	data.Set("username", username)
@@ -69,12 +128,11 @@ func getGuardsToken(nodeURL, username, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("User-Agent", guardsUserAgent)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
 
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Accept", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := guardsClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -98,12 +156,8 @@ func getGuardsToken(nodeURL, username, password string) (string, error) {
 }
 
 // getGuardsServiceIDs شناسه سرویس‌های فعال پنل Guards
-func getGuardsServiceIDs(nodeURL, token string) []int {
-	req, _ := http.NewRequest("GET", nodeURL+"/api/services", nil)
-	req.Header.Add("Authorization", "Bearer "+token)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+func getGuardsServiceIDs(panel db.PanelConfig, auth map[string]string) []int {
+	resp, err := guardsRequest("GET", panel.URL+"/api/services", nil, auth)
 	if err != nil {
 		return []int{1}
 	}
@@ -127,9 +181,8 @@ func getGuardsServiceIDs(nodeURL, token string) []int {
 }
 
 // createGuardsSubscription ساخت اشتراک در Guards (GoGuard 1.0)
-// payload: تک object (نه آرایه)
-func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit int64, expireTimestamp int64) (string, error) {
-	serviceIDs := getGuardsServiceIDs(nodeURL, token)
+func createGuardsSubscription(panel db.PanelConfig, auth map[string]string, username string, nodeVolumeLimit int64, expireTimestamp int64) (string, error) {
+	serviceIDs := getGuardsServiceIDs(panel, auth)
 
 	payload := map[string]interface{}{
 		"username":     username,
@@ -140,15 +193,7 @@ func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit i
 
 	jsonData, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest("POST", nodeURL+"/api/subscriptions", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := guardsRequest("POST", panel.URL+"/api/subscriptions", jsonData, auth)
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +205,6 @@ func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit i
 		return "", fmt.Errorf("Guards create failed, status: %d, detail: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	// پاسخ می‌تونه آرایه باشه یا تک object
 	var rawResult interface{}
 	if err := json.Unmarshal(bodyBytes, &rawResult); err != nil {
 		return "", fmt.Errorf("Guards: خطا در پارس پاسخ: %v", err)
@@ -174,23 +218,20 @@ func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit i
 	}
 
 	if firstResult != nil {
-		// GoGuard 1.0: subscription_link
 		if link, ok := firstResult["subscription_link"].(string); ok && link != "" {
 			return link, nil
 		}
-		// fallback برای نسخه‌های قدیمی‌تر
 		if link, ok := firstResult["link"].(string); ok && link != "" {
 			return link, nil
 		}
-		// ساخت دستی از access_key + tag
 		accessKey, _ := firstResult["access_key"].(string)
 		tag, _ := firstResult["tag"].(string)
 		serverKey, _ := firstResult["server_key"].(string)
 		if serverKey != "" && accessKey != "" {
-			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), serverKey, accessKey), nil
+			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(panel.URL, "/"), serverKey, accessKey), nil
 		}
 		if tag != "" && accessKey != "" {
-			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), tag, accessKey), nil
+			return fmt.Sprintf("%s/%s/%s", strings.TrimRight(panel.URL, "/"), tag, accessKey), nil
 		}
 	}
 	return "", fmt.Errorf("Guards: could not extract subscription link")
@@ -198,7 +239,7 @@ func createGuardsSubscription(nodeURL, token, username string, nodeVolumeLimit i
 
 // CreateGuardsUser ساخت کاربر در پنل Guards
 func CreateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
-	token, err := getGuardsToken(panel.URL, panel.Username, panel.Password)
+	auth, err := guardsAuthHeaders(panel)
 	if err != nil {
 		return "", err
 	}
@@ -206,8 +247,8 @@ func CreateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days 
 	limitUsage := int64(volumeGB) * 1073741824
 	limitExpire := time.Now().AddDate(0, 0, days).Unix()
 
-	log.Printf("🔄 [Guards] تلاش برای ساخت کاربر: %s", username)
-	link, err := createGuardsSubscription(panel.URL, token, username, limitUsage, limitExpire)
+	log.Printf("🔄 [Guards] تلاش برای ساخت کاربر: %s (auth: %s)", username, authMode(panel))
+	link, err := createGuardsSubscription(panel, auth, username, limitUsage, limitExpire)
 	if err != nil {
 		return "", err
 	}
@@ -227,14 +268,9 @@ func FormatGuardsConfig(panel db.PanelConfig, link string, volumeGB int) string 
 	return fmt.Sprintf("=== 🛡️ %s (%dGB) ===\n%s", panelName, volumeGB, link)
 }
 
-// getGuardsSubscription دریافت اطلاعات اشتراک از پنل Guards (GoGuard 1.0)
-// endpoint مستقیم برای یک کاربر حذف شده؛ از لیست همه + فیلتر استفاده می‌کنیم
-func getGuardsSubscription(nodeURL, token, username string) (map[string]interface{}, error) {
-	req, _ := http.NewRequest("GET", nodeURL+"/api/subscriptions", nil)
-	req.Header.Add("Authorization", "Bearer "+token)
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+// getGuardsSubscription دریافت اطلاعات اشتراک (لیست + فیلتر)
+func getGuardsSubscription(panel db.PanelConfig, auth map[string]string, username string) (map[string]interface{}, error) {
+	resp, err := guardsRequest("GET", panel.URL+"/api/subscriptions", nil, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +283,6 @@ func getGuardsSubscription(nodeURL, token, username string) (map[string]interfac
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
-	// پاسخ می‌تونه مستقیم آرایه باشه، یا داخل یه object مثل {data: [...]}
 	var rawResult interface{}
 	if err := json.Unmarshal(bodyBytes, &rawResult); err != nil {
 		return nil, fmt.Errorf("Guards: خطا در پارس پاسخ: %v", err)
@@ -277,8 +312,7 @@ func getGuardsSubscription(nodeURL, token, username string) (map[string]interfac
 }
 
 // updateGuardsSubscription بروزرسانی اشتراک (تمدید) - Bulk Update
-// payload: { "usernames": [...], "limit_usage": ..., "limit_expire": ... }
-func updateGuardsSubscription(nodeURL, token, username string, newLimitUsage int64, newLimitExpire int64) (string, error) {
+func updateGuardsSubscription(panel db.PanelConfig, auth map[string]string, username string, newLimitUsage int64, newLimitExpire int64) (string, error) {
 	payload := map[string]interface{}{
 		"usernames":    []string{username},
 		"limit_usage":  newLimitUsage,
@@ -286,12 +320,7 @@ func updateGuardsSubscription(nodeURL, token, username string, newLimitUsage int
 	}
 
 	jsonData, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("PUT", nodeURL+"/api/subscriptions", bytes.NewBuffer(jsonData))
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := guardsRequest("PUT", panel.URL+"/api/subscriptions", jsonData, auth)
 	if err != nil {
 		return "", err
 	}
@@ -303,8 +332,7 @@ func updateGuardsSubscription(nodeURL, token, username string, newLimitUsage int
 		return "", fmt.Errorf("Guards: تمدید ناموفق، status: %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	// گرفتن لینک بعد از آپدیت
-	sub, err := getGuardsSubscription(nodeURL, token, username)
+	sub, err := getGuardsSubscription(panel, auth, username)
 	if err != nil {
 		return "", fmt.Errorf("تمدید شد ولی خواندن اشتراک ناموفق: %v", err)
 	}
@@ -320,10 +348,10 @@ func updateGuardsSubscription(nodeURL, token, username string, newLimitUsage int
 	serverKey, _ := sub["server_key"].(string)
 	tag, _ := sub["tag"].(string)
 	if serverKey != "" && accessKey != "" {
-		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), serverKey, accessKey), nil
+		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(panel.URL, "/"), serverKey, accessKey), nil
 	}
 	if tag != "" && accessKey != "" {
-		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(nodeURL, "/"), tag, accessKey), nil
+		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(panel.URL, "/"), tag, accessKey), nil
 	}
 
 	return "", fmt.Errorf("تمدید شد ولی link استخراج نشد")
@@ -331,17 +359,16 @@ func updateGuardsSubscription(nodeURL, token, username string, newLimitUsage int
 
 // UpdateGuardsUser تمدید اشتراک در پنل Guards
 func UpdateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
-	token, err := getGuardsToken(panel.URL, panel.Username, panel.Password)
+	auth, err := guardsAuthHeaders(panel)
 	if err != nil {
 		return "", err
 	}
 
-	// محاسبه حجم و انقضای جدید
 	newLimitUsage := int64(volumeGB) * 1073741824
 	newLimitExpire := time.Now().AddDate(0, 0, days).Unix()
 
-	log.Printf("🔄 [Guards] تمدید کاربر %s: حجم=%dGB, روز=%d", username, volumeGB, days)
-	link, err := updateGuardsSubscription(panel.URL, token, username, newLimitUsage, newLimitExpire)
+	log.Printf("🔄 [Guards] تمدید کاربر %s: حجم=%dGB, روز=%d (auth: %s)", username, volumeGB, days, authMode(panel))
+	link, err := updateGuardsSubscription(panel, auth, username, newLimitUsage, newLimitExpire)
 	if err != nil {
 		return "", err
 	}
@@ -350,14 +377,13 @@ func UpdateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days 
 }
 
 // GetGuardsUserUsage دریافت حجم و روز باقیمانده از پنل Guards
-// GoGuard 1.0: total_usage به جای current_usage
 func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64, totalUsage int64, limitExpire int64, err error) {
-	token, err := getGuardsToken(panel.URL, panel.Username, panel.Password)
+	auth, err := guardsAuthHeaders(panel)
 	if err != nil {
 		return 0, 0, 0, err
 	}
 
-	sub, err := getGuardsSubscription(panel.URL, token, username)
+	sub, err := getGuardsSubscription(panel, auth, username)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -365,11 +391,9 @@ func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64
 	if v, ok := sub["limit_usage"].(float64); ok {
 		limitUsage = int64(v)
 	}
-	// GoGuard 1.0: total_usage
 	if v, ok := sub["total_usage"].(float64); ok {
 		totalUsage = int64(v)
 	}
-	// fallback برای نسخه‌های قدیمی‌تر
 	if totalUsage == 0 {
 		if v, ok := sub["current_usage"].(float64); ok {
 			totalUsage = int64(v)
