@@ -96,6 +96,7 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 	url := r.FormValue("panel_url")
 	username := r.FormValue("panel_username")
 	password := r.FormValue("panel_password")
+	apiKey := r.FormValue("panel_api_key")
 
 	if url == "" || password == "" || panelType == "" {
 		http.Error(w, "فیلدهای اجباری را پر کنید", http.StatusBadRequest)
