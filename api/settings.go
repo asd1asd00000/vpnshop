@@ -113,7 +113,7 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case "guards":
 		// Guards: یا API Key، یا نام کاربری + رمز عبور
-		if apiKey == "" && (username == "" || password == "" {
+		if apiKey == "" && (username == "" || password == "") {
 			http.Error(w, "برای پنل Guards یا API Key وارد کنید یا نام کاربری و رمز عبور", http.StatusBadRequest)
 			return
 		}
