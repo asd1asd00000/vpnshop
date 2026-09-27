@@ -96,7 +96,9 @@ func AdminBasePath() string {
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/shop.html")
 	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
+		renderErrorPage(w, "خطا در بارگذاری صفحه فروشگاه",
+			"سرور در آماده‌سازی صفحه فروشگاه به مشکل خورد. نگران نباشید؛ صفحه به‌صورت خودکار دوباره تلاش می‌کند.",
+			"/", 5)
 		return
 	}
 
@@ -159,7 +161,9 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if selectedPlan == nil {
-			http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
+			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
+				"پلنی که انتخاب کرده‌اید در سیستم یافت نشد. لطفاً یک پلن دیگر را انتخاب کنید.",
+				"/", 0)
 			return
 		}
 
@@ -172,7 +176,9 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
 
 		if err != nil {
-			http.Error(w, "خطا در ثبت فاکتور", http.StatusInternalServerError)
+			renderErrorPage(w, "خطا در ایجاد فاکتور",
+				"سرور نتوانست فاکتور شما را ثبت کند. این مشکل معمولاً موقتی است. لطفاً دوباره تلاش کنید.",
+				"/", 5)
 			return
 		}
 
@@ -217,7 +223,9 @@ func formatPrice(n int) string {
 func TrackHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/track.html")
 	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب صفحه", http.StatusInternalServerError)
+		renderErrorPage(w, "خطا در بارگذاری صفحه پیگیری",
+			"سرور در آماده‌سازی صفحه پیگیری به مشکل خورد. صفحه به‌صورت خودکار دوباره تلاش می‌کند.",
+			"/track", 5)
 		return
 	}
 
@@ -385,7 +393,9 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 
 	tmpl, err := template.ParseFiles("templates/admin.html")
 	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب ادمین", http.StatusInternalServerError)
+		renderErrorPage(w, "خطا در بارگذاری پنل ادمین",
+			"قالب پنل ادمین در دسترس نیست. صفحه به‌صورت خودکار دوباره تلاش می‌کند.",
+			AdminBasePath(), 5)
 		return
 	}
 
@@ -417,7 +427,9 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		       IFNULL(admin_note, ''), IFNULL(renew_username, ''), IFNULL(stats_fixed, 0)
 		FROM orders WHERE IFNULL(archived, 0) = 0 ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
-		http.Error(w, "خطا در خواندن دیتابیس", http.StatusInternalServerError)
+		renderErrorPage(w, "خطا در خواندن دیتابیس",
+			"سرور در خواندن لیست سفارش‌ها به مشکل خورد. معمولاً با تلاش دوباره حل می‌شود.",
+			AdminBasePath(), 5)
 		return
 	}
 	defer rows.Close()
@@ -574,7 +586,9 @@ func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
 func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/shop.html")
 	if err != nil {
-		http.Error(w, "خطا در بارگذاری قالب", http.StatusInternalServerError)
+		renderErrorPage(w, "خطا در بارگذاری صفحه تمدید",
+			"سرور در آماده‌سازی صفحه تمدید به مشکل خورد. صفحه به‌صورت خودکار دوباره تلاش می‌کند.",
+			"/renew", 5)
 		return
 	}
 
@@ -630,7 +644,9 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if selectedPlan == nil {
-			http.Error(w, "پلن نامعتبر", http.StatusBadRequest)
+			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
+				"پلنی که برای تمدید انتخاب کرده‌اید در سیستم یافت نشد.",
+				"/renew", 0)
 			return
 		}
 
@@ -649,7 +665,9 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 			VALUES (?, ?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, renewUsername, carryGB)
 
 		if err != nil {
-			http.Error(w, "خطا در ثبت فاکتور تمدید", http.StatusInternalServerError)
+			renderErrorPage(w, "خطا در ایجاد فاکتور تمدید",
+				"سرور نتوانست فاکتور تمدید را ثبت کند. این مشکل معمولاً موقتی است.",
+				"/renew", 5)
 			return
 		}
 
