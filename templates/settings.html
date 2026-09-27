@@ -254,8 +254,8 @@
         // مدیریت required فیلدهای فرم پنل بر اساس نوع پنل و API Key
         (function() {
             const typeSelect = document.querySelector('select[name="panel_type"]');
-            const usernameInput = document.getElementById('panel_username_input');
-            const passwordInput = document.getElementById('panel_password_input');
+            const usernameInput = document.querySelector('input[name="panel_username"]');
+            const passwordInput = document.querySelector('input[name="panel_password"]');
             const apiKeyInput = document.querySelector('input[name="panel_api_key"]');
             if (!typeSelect) return;
 
@@ -264,15 +264,12 @@
                 const hasApiKey = apiKeyInput && apiKeyInput.value.trim() !== '';
 
                 if (type === 'conf') {
-                    // Conf: فقط رمز عبور (به عنوان API Key)
                     if (usernameInput) { usernameInput.required = false; usernameInput.value = ''; usernameInput.placeholder = 'خالی بگذارید (نیازی نیست)'; }
                     if (passwordInput) { passwordInput.required = true; passwordInput.placeholder = 'API Key پنل Conf'; }
                 } else if (type === 'guards' && hasApiKey) {
-                    // Guards با API Key: یوزر/پسورد لازم نیست
                     if (usernameInput) { usernameInput.required = false; usernameInput.placeholder = 'نیازی نیست (API Key دارید)'; }
                     if (passwordInput) { passwordInput.required = false; passwordInput.placeholder = 'نیازی نیست (API Key دارید)'; }
                 } else {
-                    // بقیه حالت‌ها: یوزر + پسورد
                     if (usernameInput) { usernameInput.required = true; usernameInput.placeholder = 'نام کاربری'; }
                     if (passwordInput) { passwordInput.required = true; passwordInput.placeholder = 'رمز عبور / API Key'; }
                 }
