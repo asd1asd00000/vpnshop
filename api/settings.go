@@ -105,24 +105,30 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// اعتبارسنجی بر اساس نوع پنل:
 	switch panelType {
-	case "conf":
-		// Conf: فقط API Key (در فیلد رمز عبور)
-		if password == "" {
-			http.Error(w, "برای پنل Conf، API Key (فیلد رمز عبور) الزامی است", http.StatusBadRequest)
+	case "conf", "guards":
+		// Conf و Guards: فقط API Key
+		if apiKey == "" && password == "" {
+			http.Error(w, "برای پنل‌های Guards و Conf، API Key الزامی است", http.StatusBadRequest)
 			return
 		}
-	case "guards":
-		// Guards: یا API Key، یا نام کاربری + رمز عبور
-		if apiKey == "" && (username == "" || password == "") {
-			http.Error(w, "برای پنل Guards یا API Key وارد کنید یا نام کاربری و رمز عبور", http.StatusBadRequest)
+		if apiKey == "" {
+			apiKey = password // سازگاری با فرم قدیمی
+		}
+		username = ""
+		password = ""
+	case "marzban":
+		// Pasarguard: فقط نام کاربری + رمز عبور
+		if username == "" || password == "" {
+			http.Error(w, "برای پنل Pasarguard، نام کاربری و رمز عبور الزامی است", http.StatusBadRequest)
 			return
 		}
+		apiKey = ""
 	default:
-		// بقیه پنل‌ها: نام کاربری + رمز عبور
 		if username == "" || password == "" {
 			http.Error(w, "نام کاربری و رمز عبور برای این نوع پنل الزامی است", http.StatusBadRequest)
 			return
 		}
+		apiKey = ""
 	}
 
 	if role == "" {
