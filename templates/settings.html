@@ -251,7 +251,7 @@
             return confirm('⚠️ آیا از تغییر اطلاعات ورود اطمینان دارید؟');
         }
     <script>
-        // مدیریت required فیلدهای فرم پنل بر اساس نوع پنل و API Key
+        // مدیریت فیلدهای فرم پنل بر اساس نوع پنل
         (function() {
             const typeSelect = document.querySelector('select[name="panel_type"]');
             const usernameInput = document.querySelector('input[name="panel_username"]');
@@ -259,25 +259,41 @@
             const apiKeyInput = document.querySelector('input[name="panel_api_key"]');
             if (!typeSelect) return;
 
-            function updateRequired() {
-                const type = typeSelect.value;
-                const hasApiKey = apiKeyInput && apiKeyInput.value.trim() !== '';
-
-                if (type === 'conf') {
-                    if (usernameInput) { usernameInput.required = false; usernameInput.value = ''; usernameInput.placeholder = 'خالی بگذارید (نیازی نیست)'; }
-                    if (passwordInput) { passwordInput.required = true; passwordInput.placeholder = 'API Key پنل Conf'; }
-                } else if (type === 'guards' && hasApiKey) {
-                    if (usernameInput) { usernameInput.required = false; usernameInput.placeholder = 'نیازی نیست (API Key دارید)'; }
-                    if (passwordInput) { passwordInput.required = false; passwordInput.placeholder = 'نیازی نیست (API Key دارید)'; }
+            function setFieldState(input, disabled, required, placeholder) {
+                if (!input) return;
+                input.disabled = disabled;
+                input.required = required;
+                input.placeholder = placeholder;
+                if (disabled) {
+                    input.value = '';
+                    input.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
                 } else {
-                    if (usernameInput) { usernameInput.required = true; usernameInput.placeholder = 'نام کاربری'; }
-                    if (passwordInput) { passwordInput.required = true; passwordInput.placeholder = 'رمز عبور / API Key'; }
+                    input.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
                 }
             }
 
-            typeSelect.addEventListener('change', updateRequired);
-            if (apiKeyInput) apiKeyInput.addEventListener('input', updateRequired);
-            updateRequired();
+            function updateFields() {
+                const type = typeSelect.value;
+
+                if (type === 'guards' || type === 'conf') {
+                    // فقط API Key
+                    setFieldState(apiKeyInput, false, true, 'API Key پنل (الزامی)');
+                    setFieldState(usernameInput, true, false, 'نیازی نیست — فقط API Key');
+                    setFieldState(passwordInput, true, false, 'نیازی نیست — فقط API Key');
+                } else if (type === 'marzban') {
+                    // Pasarguard: فقط یوزرنیم + پسورد
+                    setFieldState(apiKeyInput, true, false, 'نیازی نیست — یوزرنیم/پسورد');
+                    setFieldState(usernameInput, false, true, 'نام کاربری');
+                    setFieldState(passwordInput, false, true, 'رمز عبور');
+                } else {
+                    setFieldState(apiKeyInput, true, false, 'نیازی نیست');
+                    setFieldState(usernameInput, false, true, 'نام کاربری');
+                    setFieldState(passwordInput, false, true, 'رمز عبور');
+                }
+            }
+
+            typeSelect.addEventListener('change', updateFields);
+            updateFields();
         })();
     </script>
     </script>
