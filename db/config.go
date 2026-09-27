@@ -15,8 +15,8 @@ type PanelConfig struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Role     string `json:"role"` // "main" | "backup" | "gift"
-
-	IsBackup bool `json:"is_backup,omitempty"` // legacy
+	IsBackup bool   `json:"is_backup,omitempty"` // legacy
+	APIKey   string `json:"api_key"`
 }
 
 // CardInfo یک شماره کارت برای واریز
