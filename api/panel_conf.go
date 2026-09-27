@@ -20,6 +20,11 @@ const confDaysPerGB = 1
 // ───────────── توابع اختصاصی پنل Conf-to-Sub ─────────────
 
 // confBaseURL نرمال‌سازی URL پایه پنل Conf
+// هر نوع ورودی رو به پایه تبدیل می‌کنه:
+//   http://x/api/users  →  http://x
+//   http://x/api/       →  http://x
+//   http://x/           →  http://x
+//   http://x            →  http://x
 func confBaseURL(raw string) string {
 	u := strings.TrimSpace(raw)
 	u = strings.TrimRight(u, "/")
@@ -29,7 +34,29 @@ func confBaseURL(raw string) string {
 	return u
 }
 
-// getConfToken احراز هویت با API Key
+// confAPIKey کلید API پنل Conf رو برمی‌گردونه
+// اولویت با فیلد جدید APIKey هست؛ اگه خالی بود از فیلد قدیمی password می‌خونه (سازگاری عقب‌مانده)
+func confAPIKey(panel db.PanelConfig) string {
+	if key := strings.TrimSpace(panel.APIKey); key != "" {
+		return key
+	}
+	return strings.TrimSpace(panel.Password)
+}
+
+// confVolumeDesc عبارت توضیح برای پنل Conf (حجم نامحدود + روز)
+func confVolumeDesc(gb int) string {
+	return fmt.Sprintf("حجم: نامحدود | مدت: %d روز", gb*confDaysPerGB)
+}
+
+// formatVolumeForPanel برای پنل Conf حجم رو به روز تبدیل می‌کنه، بقیه همون GB
+func formatVolumeForPanel(panelType string, gb int) string {
+	if panelType == "conf" {
+		return fmt.Sprintf("%d روز", gb*confDaysPerGB)
+	}
+	return fmt.Sprintf("%dGB", gb)
+}
+
+// getConfToken بررسی سلامت پنل قبل از ارسال درخواست
 func getConfToken(panelURL, apiKey string) error {
 	req, _ := http.NewRequest("GET", confBaseURL(panelURL)+"/api/health", nil)
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -42,11 +69,11 @@ func getConfToken(panelURL, apiKey string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("Conf: پنل پاسخ نداد، status: %d", resp.StatusCode)
 	}
-	_ = apiKey
 	return nil
 }
 
 // createConfUserRequest ساخت کاربر در Conf-to-Sub
+// body: {"username": "x", "days": 30}
 func createConfUserRequest(panelURL, apiKey, username string, days int) (string, int, error) {
 	payload := map[string]interface{}{
 		"username": username,
@@ -151,7 +178,7 @@ func getConfUserByID(panelURL, apiKey string, userID int) (map[string]interface{
 	return result, nil
 }
 
-// renewConfUser تمدید کاربر
+// renewConfUser تمدید کاربر - افزودن روز به انقضای فعلی
 func renewConfUser(panelURL, apiKey string, userID int, days int) (string, error) {
 	payload := map[string]interface{}{
 		"days":    days,
@@ -190,8 +217,9 @@ func renewConfUser(panelURL, apiKey string, userID int, days int) (string, error
 }
 
 // CreateConfUser ساخت کاربر در پنل Conf-to-Sub
+// تبدیل: volumeGB × confDaysPerGB → روزهای انقضا
 func CreateConfUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
-	apiKey := panel.Password
+	apiKey := confAPIKey(panel)
 
 	if err := getConfToken(panel.URL, apiKey); err != nil {
 		return "", err
@@ -200,6 +228,7 @@ func CreateConfUser(panel db.PanelConfig, username string, volumeGB int, days in
 	// 🎯 تبدیل حجم پلن به روز برای پنل Conf
 	confDays := volumeGB * confDaysPerGB
 	if confDays <= 0 {
+		// fallback: اگه volumeGB صفر بود، از days اصلی پلن استفاده کن
 		confDays = days
 	}
 	if confDays <= 0 {
@@ -216,8 +245,9 @@ func CreateConfUser(panel db.PanelConfig, username string, volumeGB int, days in
 }
 
 // UpdateConfUser تمدید اشتراک در پنل Conf-to-Sub
+// تبدیل: volumeGB × confDaysPerGB → روزهای اضافه به انقضا
 func UpdateConfUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
-	apiKey := panel.Password
+	apiKey := confAPIKey(panel)
 
 	if err := getConfToken(panel.URL, apiKey); err != nil {
 		return "", err
@@ -247,8 +277,9 @@ func UpdateConfUser(panel db.PanelConfig, username string, volumeGB int, days in
 }
 
 // GetConfUserUsage گرفتن روزهای باقیمانده از پنل Conf-to-Sub
+// این پنل حجم نداره، فقط روزها
 func GetConfUserUsage(panel db.PanelConfig, username string) (limitUsage int64, totalUsage int64, limitExpire int64, err error) {
-	apiKey := panel.Password
+	apiKey := confAPIKey(panel)
 
 	if err := getConfToken(panel.URL, apiKey); err != nil {
 		return 0, 0, 0, err
@@ -264,6 +295,7 @@ func GetConfUserUsage(panel db.PanelConfig, username string) (limitUsage int64, 
 		return 0, 0, 0, err
 	}
 
+	// expire_date (ISO 8601) برای محاسبه timestamp
 	expireDate, _ := user["expire_date"].(string)
 	var expireUnix int64
 	if expireDate != "" {
@@ -271,24 +303,15 @@ func GetConfUserUsage(panel db.PanelConfig, username string) (limitUsage int64, 
 			expireUnix = t.Unix()
 		} else if t, perr := time.Parse("2006-01-02T15:04:05", expireDate); perr == nil {
 			expireUnix = t.Unix()
+		} else {
+			log.Printf("⚠️ [Conf] فرمت تاریخ نامعتبر: %s", expireDate)
 		}
 	}
 
+	// این پنل حجم نداره → مقادیر حجم صفر، ولی تاریخ انقضا برگردونده میشه
 	limitUsage = 0
 	totalUsage = 0
 	limitExpire = expireUnix
 
 	return limitUsage, totalUsage, limitExpire, nil
-}
-
-// formatVolumeForPanel برای پنل conf حجم رو به روز تبدیل می‌کنه، بقیه همون GB
-func formatVolumeForPanel(panelType string, gb int) string {
-	if panelType == "conf" {
-		return fmt.Sprintf("%d روز", gb*confDaysPerGB)
-	}
-	return fmt.Sprintf("%dGB", gb)
-}
-// confVolumeDesc عبارت توضیح برای پنل Conf (حجم نامحدود + روز)
-func confVolumeDesc(gb int) string {
-	return fmt.Sprintf("حجم: نامحدود | مدت: %d روز", gb*confDaysPerGB)
 }
