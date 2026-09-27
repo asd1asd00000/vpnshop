@@ -120,6 +120,7 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 		URL:      url,
 		Username: username,
 		Password: password,
+		APIKey:   apiKey,
 	})
 
 	if err := db.SaveConfig(cfg); err != nil {
