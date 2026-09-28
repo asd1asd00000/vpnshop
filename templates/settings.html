@@ -247,11 +247,12 @@
     </div>
 
     <script>
+        // ── توابع عمومی ──
         function confirmAdminChange() {
             return confirm('⚠️ آیا از تغییر اطلاعات ورود اطمینان دارید؟');
         }
-    <script>
-        // مدیریت فیلدهای فرم پنل بر اساس نوع پنل
+
+        // ── مدیریت فیلدهای فرم پنل بر اساس نوع پنل ──
         (function() {
             const typeSelect = document.querySelector('select[name="panel_type"]');
             const usernameInput = document.querySelector('input[name="panel_username"]');
@@ -295,7 +296,6 @@
             typeSelect.addEventListener('change', updateFields);
             updateFields();
         })();
-    </script>
     </script>
 </body>
 </html>
