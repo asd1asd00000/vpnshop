@@ -15,6 +15,15 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
+// getFromAddress آدرس فرستنده رو بر اساس نوع SMTP server انتخاب می‌کنه
+// برای Resend باید onboarding@resend.dev باشه، برای بقیه همون SMTPUser
+func getFromAddress(config db.EmailBackupConfig) string {
+	if strings.Contains(strings.ToLower(config.SMTPServer), "resend") {
+		return "onboarding@resend.dev"
+	}
+	return config.SMTPUser
+}
+
 // SendEmailBackup ارسال بکاپ به ایمیل (با زیپ رمزدار اختیاری)
 func SendEmailBackup(config db.EmailBackupConfig) error {
 	if config.Email == "" || config.SMTPServer == "" {
@@ -53,12 +62,14 @@ func SendEmailBackup(config db.EmailBackupConfig) error {
 		body += "\n\n🔒 این فایل با رمز عبور محافظت شده است.\n   رمز عبور در تنظیمات سیستم شما ذخیره شده است."
 	}
 
-	msg := buildEmailWithAttachment(config.Email, subject, body, fmt.Sprintf("vpnshop_backup_%s.zip", timestamp), zipData)
+	// 🎯 انتخاب From هوشمند بر اساس نوع SMTP server
+	from := getFromAddress(config)
+	msg := buildEmailWithAttachment(from, config.Email, subject, body, fmt.Sprintf("vpnshop_backup_%s.zip", timestamp), zipData)
 
 	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPass, config.SMTPServer)
 	addr := fmt.Sprintf("%s:%d", config.SMTPServer, config.SMTPPort)
 
-	if err := smtp.SendMail(addr, auth, config.SMTPUser, []string{config.Email}, msg); err != nil {
+	if err := smtp.SendMail(addr, auth, from, []string{config.Email}, msg); err != nil {
 		return fmt.Errorf("خطا در ارسال ایمیل: %v", err)
 	}
 
@@ -156,20 +167,24 @@ func SendTestEmail(config db.EmailBackupConfig) error {
 	}
 	subject := "✅ تست ایمیل VPNShop"
 	body := "این یک ایمیل تست است.\nاگر این ایمیل را دریافت کردید، تنظیمات SMTP شما درست است."
-	msg := buildSimpleEmail(config.Email, subject, body)
+
+	// 🎯 انتخاب From هوشمند بر اساس نوع SMTP server
+	from := getFromAddress(config)
+	msg := buildSimpleEmail(from, config.Email, subject, body)
+
 	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPass, config.SMTPServer)
 	addr := fmt.Sprintf("%s:%d", config.SMTPServer, config.SMTPPort)
-	return smtp.SendMail(addr, auth, config.SMTPUser, []string{config.Email}, msg)
+	return smtp.SendMail(addr, auth, from, []string{config.Email}, msg)
 }
 
-func buildSimpleEmail(to, subject, body string) []byte {
-	return []byte(fmt.Sprintf("From: VPNShop Backup\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", to, subject, body))
+func buildSimpleEmail(from, to, subject, body string) []byte {
+	return []byte(fmt.Sprintf("From: VPNShop Backup <%s>\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", from, to, subject, body))
 }
 
-func buildEmailWithAttachment(to, subject, body, filename string, attachment []byte) []byte {
+func buildEmailWithAttachment(from, to, subject, body, filename string, attachment []byte) []byte {
 	boundary := "BOUNDARY" + fmt.Sprintf("%d", time.Now().UnixNano())
 	var msg strings.Builder
-	msg.WriteString("From: VPNShop Backup\r\n")
+	msg.WriteString(fmt.Sprintf("From: VPNShop Backup <%s>\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
