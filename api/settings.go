@@ -1,11 +1,15 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/asd1asd00000/vpnshop/db"
 )
@@ -28,6 +32,8 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 		flash = "✅ بکاپ خودکار به ایمیل فعال شد و تنظیمات ذخیره گردید"
 	case "email_test":
 		flash = "📧 ایمیل تست در پس‌زمینه ارسال شد — اینباکس را بررسی کنید"
+	case "groups_saved":
+		flash = "✅ گروه‌های پنل ذخیره شد"
 	}
 
 	cfg := db.GetConfig()
@@ -144,6 +150,7 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 		Username: username,
 		Password: password,
 		APIKey:   apiKey,
+		// 🆕 GroupIDs اینجا خالی می‌مونه - بعداً از UI گروه‌ها اضافه می‌شن
 	})
 
 	if err := db.SaveConfig(cfg); err != nil {
@@ -189,6 +196,191 @@ func DeletePanelHandler(w http.ResponseWriter, r *http.Request) {
 
 	db.LogEventf("general", "warning", "🗑️ پنل حذف شد: %s", name)
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
+}
+
+// 🆕 FetchPanelGroupsHandler لیست گروه‌های یک پنل Pasarguard رو از API می‌گیره
+func FetchPanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PanelID int `json:"panel_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "درخواست نامعتبر",
+		})
+		return
+	}
+
+	cfg := db.GetConfig()
+	if req.PanelID < 0 || req.PanelID >= len(cfg.Panels) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "پنل یافت نشد",
+		})
+		return
+	}
+
+	panel := cfg.Panels[req.PanelID]
+	if panel.Type != "marzban" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "این قابلیت فقط برای پنل Pasarguard است",
+		})
+		return
+	}
+
+	// 🎯 گرفتن توکن با credentials پنل
+	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "احراز هویت ناموفق: " + err.Error(),
+		})
+		return
+	}
+
+	baseURL := strings.TrimRight(panel.URL, "/")
+	// 🎯 endpoint بدون query params (چون Pasarguard با ?limit خطا می‌ده)
+	reqHTTP, _ := http.NewRequest("GET", baseURL+"/api/groups", nil)
+	reqHTTP.Header.Add("Authorization", "Bearer "+token)
+	reqHTTP.Header.Add("Accept", "application/json")
+
+	client := makeHTTPClient(15 * time.Second)
+	resp, err := client.Do(reqHTTP)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "خطا در اتصال: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("پاسخ %d از پنل: %s", resp.StatusCode, truncateBody(bodyBytes, 300)),
+		})
+		return
+	}
+
+	// 🎯 پارس پاسخ - ممکنه array یا object با فیلد groups باشه
+	type GroupInfo struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+
+	var result []GroupInfo
+
+	var groups []map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &groups); err == nil {
+		// پاسخ مستقیم array هست
+		for _, g := range groups {
+			id, _ := g["id"].(float64)
+			name, _ := g["name"].(string)
+			if name == "" {
+				name = fmt.Sprintf("Group-%d", int(id))
+			}
+			result = append(result, GroupInfo{ID: int(id), Name: name})
+		}
+	} else {
+		// شاید wrapper هست
+		var wrapper map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &wrapper); err == nil {
+			if g, ok := wrapper["groups"].([]interface{}); ok {
+				for _, item := range g {
+					if m, ok := item.(map[string]interface{}); ok {
+						id, _ := m["id"].(float64)
+						name, _ := m["name"].(string)
+						if name == "" {
+							name = fmt.Sprintf("Group-%d", int(id))
+						}
+						result = append(result, GroupInfo{ID: int(id), Name: name})
+					}
+				}
+			}
+		}
+	}
+
+	log.Printf("✅ [گروه‌ها] %d گروه از %s بارگذاری شد", len(result), panel.URL)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"groups":  result,
+	})
+}
+
+// 🆕 SavePanelGroupsHandler ذخیره group_ids برای یک پنل
+func SavePanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PanelID  int   `json:"panel_id"`
+		GroupIDs []int `json:"group_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "درخواست نامعتبر",
+		})
+		return
+	}
+
+	cfg := db.GetConfig()
+	if req.PanelID < 0 || req.PanelID >= len(cfg.Panels) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "پنل یافت نشد",
+		})
+		return
+	}
+
+	// ذخیره group_ids در پنل
+	cfg.Panels[req.PanelID].GroupIDs = req.GroupIDs
+
+	if err := db.SaveConfig(cfg); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "خطا در ذخیره تنظیمات",
+		})
+		return
+	}
+
+	panelName := cfg.Panels[req.PanelID].Name
+	db.LogEventf("general", "success", "✅ گروه‌های پنل %s ذخیره شد (%d گروه)", panelName, len(req.GroupIDs))
+	log.Printf("✅ [گروه‌ها] %d گروه برای پنل %s ذخیره شد", len(req.GroupIDs), panelName)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("%d گروه ذخیره شد", len(req.GroupIDs)),
+	})
 }
 
 // EmailBackupHandler ذخیره تنظیمات ایمیل بکاپ + تست ارسال
@@ -252,6 +444,7 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_saved", http.StatusSeeOther)
 }
+
 // AddCardHandler افزودن شماره کارت
 func AddCardHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
@@ -310,6 +503,7 @@ func DeleteCardHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
+
 // UpdateCleanupHandler تنظیم مهلت حذف سفارش‌های پرداخت‌نشده
 func UpdateCleanupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
