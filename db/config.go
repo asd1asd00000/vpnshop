@@ -10,13 +10,17 @@ import (
 // PanelConfig اطلاعات یک پنل VPN
 type PanelConfig struct {
 	Name     string `json:"name"`
-	Type     string `json:"type"` // "guards" | "marzban"
+	Type     string `json:"type"` // "guards" | "marzban" | "conf"
 	URL      string `json:"url"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Role     string `json:"role"` // "main" | "backup" | "gift"
 	IsBackup bool   `json:"is_backup,omitempty"` // legacy
 	APIKey   string `json:"api_key"`
+	// 🆕 شناسه گروه‌های انتخاب‌شده برای پنل‌های Marzban/Pasarguard
+	// اگه پر باشه، مستقیم استفاده می‌شه (بدون نیاز به API call)
+	// اگه خالی باشه، از کش قدیمی استفاده می‌شه (backward compatibility)
+	GroupIDs []int `json:"group_ids,omitempty"`
 }
 
 // CardInfo یک شماره کارت برای واریز
@@ -49,7 +53,7 @@ type AppConfig struct {
 	Panels      []PanelConfig     `json:"panels"`
 	Cards       []CardInfo        `json:"cards"`
 	EmailBackup EmailBackupConfig `json:"email_backup"`
-		Cleanup     CleanupConfig     `json:"cleanup"`
+	Cleanup     CleanupConfig     `json:"cleanup"`
 }
 
 var (
@@ -94,7 +98,7 @@ func LoadConfig() *AppConfig {
 	if config.Cleanup.OrderExpireHours <= 0 {
 		config.Cleanup.OrderExpireHours = 48
 	}
-		if config.EmailBackup.IntervalHours <= 0 {
+	if config.EmailBackup.IntervalHours <= 0 {
 		config.EmailBackup.IntervalHours = 24
 	}
 
