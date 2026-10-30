@@ -176,7 +176,7 @@
                 </form>
             </section>
 
-            <!-- بخش: کش گروه‌های پنل‌ها (Legacy - برای backward compatibility) -->
+            <!-- بخش: کش گروه‌های پنل‌ها (Legacy) -->
             <section class="border border-gray-200 rounded-xl p-4 md:p-6 bg-gray-50">
                 <h2 class="text-lg font-bold text-gray-800 mb-2">🧹 کش گروه‌های پنل‌ها (Legacy)</h2>
                 <p class="text-sm text-gray-500 mb-4">
@@ -283,7 +283,7 @@
                 </p>
 
                 <!-- دکمه بارگذاری -->
-                <div class="mb-4 flex gap-2">
+                <div class="mb-4 flex gap-2 flex-wrap">
                     <button id="fetchBtn" onclick="fetchGroups()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg transition">
                         🔄 بارگذاری گروه‌ها از پنل
                     </button>
@@ -300,6 +300,23 @@
 
                 <!-- لیست گروه‌ها -->
                 <div id="groupsList" class="space-y-2"></div>
+
+                <!-- 🆕 ورود دستی -->
+                <div class="mt-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">✍️ ورود دستی شناسه گروه‌ها</label>
+                    <p class="text-xs text-gray-600 mb-2">
+                        اگه دکمه بارگذاری خطای <code>403 Permission denied</code> داد، می‌تونید ID گروه‌ها رو دستی وارد کنید.
+                        <br>
+                        ID ها رو از پنل پاسارگاد (بخش Groups) ببینید و اینجا با کاما یا space جدا کنید.
+                    </p>
+                    <div class="flex gap-2">
+                        <input type="text" id="manualGroupsInput" placeholder="مثال: 1, 2, 3"
+                               class="flex-1 border border-gray-300 rounded-lg p-2 text-sm font-mono">
+                        <button onclick="addManualGroups()" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-4 py-2 rounded-lg transition">
+                            ➕ افزودن
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Footer Modal -->
@@ -370,7 +387,7 @@
             updateFields();
         })();
 
-        // ── 🆕 مدیریت Modal گروه‌ها ──
+        // ──  مدیریت Modal گروه‌ها ──
         let currentPanelId = null;
         let currentGroups = [];
         let currentSelected = [];
@@ -380,7 +397,7 @@
             currentPanelId = panelId;
             document.getElementById('panelName').textContent = panelName;
             document.getElementById('groupsModal').classList.remove('hidden');
-            document.getElementById('groupsList').innerHTML = '<div class="text-center text-gray-500 py-8">روی «بارگذاری گروه‌ها از پنل» کلیک کنید</div>';
+            document.getElementById('groupsList').innerHTML = '<div class="text-center text-gray-500 py-8">روی «بارگذاری گروه‌ها از پنل» کلیک کنید یا ID ها رو دستی وارد کنید</div>';
             document.getElementById('statusMsg').innerHTML = '';
             document.getElementById('selectedCount').textContent = '0';
             currentGroups = [];
@@ -392,14 +409,41 @@
             currentPanelId = null;
         }
 
+        function showStatus(msg, color) {
+            const colors = {
+                green: 'bg-green-50 border-green-300 text-green-800',
+                red: 'bg-red-50 border-red-300 text-red-800',
+                yellow: 'bg-yellow-50 border-yellow-300 text-yellow-800'
+            };
+            document.getElementById('statusMsg').innerHTML =
+                `<div class="${colors[color]} border rounded-lg p-3 text-sm">${msg}</div>`;
+        }
+
+        function renderGroupsList() {
+            const list = document.getElementById('groupsList');
+            if (currentGroups.length === 0) {
+                list.innerHTML = '<div class="text-center text-gray-500 py-8">هیچ گروهی در لیست نیست</div>';
+                return;
+            }
+            list.innerHTML = currentGroups.map(g => `
+                <label class="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg p-3 cursor-pointer transition">
+                    <input type="checkbox" class="group-checkbox w-5 h-5" value="${g.id}" ${currentSelected.includes(g.id) ? 'checked' : ''} onchange="updateSelectedCount()">
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800">${escapeHtml(g.name)}</div>
+                        <div class="text-xs text-gray-500 font-mono">ID: ${g.id}</div>
+                    </div>
+                </label>
+            `).join('');
+            updateSelectedCount();
+        }
+
         async function fetchGroups() {
             const btn = document.getElementById('fetchBtn');
-            const status = document.getElementById('statusMsg');
             const list = document.getElementById('groupsList');
 
             btn.disabled = true;
             btn.textContent = '⏳ در حال بارگذاری...';
-            status.innerHTML = '';
+            document.getElementById('statusMsg').innerHTML = '';
             list.innerHTML = '<div class="text-center py-8"><div class="animate-spin inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div></div>';
 
             try {
@@ -412,45 +456,58 @@
 
                 if (!data.success) {
                     list.innerHTML = '';
-                    status.innerHTML = `<div class="bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm">❌ ${data.error}</div>`;
+                    showStatus(`❌ ${data.error} — می‌تونید ID ها رو دستی وارد کنید`, 'red');
                     return;
                 }
 
                 currentGroups = data.groups || [];
                 if (currentGroups.length === 0) {
-                    list.innerHTML = '<div class="text-center text-yellow-600 py-4">⚠️ هیچ گروهی در این پنل یافت نشد</div>';
+                    list.innerHTML = '';
+                    showStatus('⚠️ هیچ گروهی در این پنل یافت نشد', 'yellow');
                     return;
                 }
 
-                // render چک‌باکس‌ها
-                list.innerHTML = currentGroups.map(g => `
-                    <label class="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg p-3 cursor-pointer transition">
-                        <input type="checkbox" class="group-checkbox w-5 h-5" value="${g.id}" ${currentSelected.includes(g.id) ? 'checked' : ''} onchange="updateSelectedCount()">
-                        <div class="flex-1">
-                            <div class="font-bold text-gray-800">${escapeHtml(g.name)}</div>
-                            <div class="text-xs text-gray-500 font-mono">ID: ${g.id}</div>
-                        </div>
-                    </label>
-                `).join('');
-
-                // بارگذاری گروه‌های ذخیره‌شده قبلی (اگه اولین بار نیست)
-                if (currentSelected.length === 0) {
-                    // از پنل فعلی بخون (اگه داشت)
-                    try {
-                        const cfgResp = await fetch(adminBase + '/settings');
-                        // fallback: همه تیک نخورده
-                    } catch (e) {}
-                }
-
-                updateSelectedCount();
-                status.innerHTML = `<div class="bg-green-50 border border-green-300 text-green-800 rounded-lg p-3 text-sm">✅ ${currentGroups.length} گروه بارگذاری شد</div>`;
+                renderGroupsList();
+                showStatus(`✅ ${currentGroups.length} گروه بارگذاری شد`, 'green');
             } catch (err) {
                 list.innerHTML = '';
-                status.innerHTML = `<div class="bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm">❌ خطا در ارتباط: ${err.message}</div>`;
+                showStatus(`❌ خطا در ارتباط: ${err.message}`, 'red');
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🔄 بارگذاری گروه‌ها از پنل';
             }
+        }
+
+        // 🆕 افزودن گروه‌های دستی
+        function addManualGroups() {
+            const input = document.getElementById('manualGroupsInput');
+            const raw = input.value.trim();
+            if (!raw) return;
+
+            // parse ID ها (با کاما، space، یا newline جدا شدن)
+            const ids = raw.split(/[\s,،]+/)
+                .map(s => parseInt(s))
+                .filter(n => !isNaN(n) && n > 0);
+
+            if (ids.length === 0) {
+                showStatus('❌ شناسه معتبری وارد نشد', 'red');
+                return;
+            }
+
+            // merge با لیست فعلی (بدون تکرار)
+            const existing = new Set(currentGroups.map(g => g.id));
+            let added = 0;
+            for (const id of ids) {
+                if (!existing.has(id)) {
+                    currentGroups.push({id: id, name: `Group-${id} (دستی)`});
+                    existing.add(id);
+                    added++;
+                }
+            }
+
+            renderGroupsList();
+            input.value = '';
+            showStatus(`✅ ${added} گروه دستی اضافه شد`, 'green');
         }
 
         function escapeHtml(s) {
@@ -475,7 +532,6 @@
 
         async function saveGroups() {
             const saveBtn = document.getElementById('saveBtn');
-            const status = document.getElementById('statusMsg');
 
             saveBtn.disabled = true;
             saveBtn.textContent = '⏳ در حال ذخیره...';
@@ -492,17 +548,17 @@
                 const data = await resp.json();
 
                 if (!data.success) {
-                    status.innerHTML = `<div class="bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm">❌ ${data.error}</div>`;
+                    showStatus(`❌ ${data.error}`, 'red');
                     return;
                 }
 
-                status.innerHTML = `<div class="bg-green-50 border border-green-300 text-green-800 rounded-lg p-3 text-sm">✅ ${data.message}</div>`;
+                showStatus(`✅ ${data.message}`, 'green');
                 setTimeout(() => {
                     closeGroupsModal();
                     window.location.reload();
                 }, 1500);
             } catch (err) {
-                status.innerHTML = `<div class="bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm">❌ خطا: ${err.message}</div>`;
+                showStatus(`❌ خطا: ${err.message}`, 'red');
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.textContent = '💾 ذخیره';
