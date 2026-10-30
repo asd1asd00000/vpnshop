@@ -16,7 +16,7 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
-// ───────────── 🧠 کش گروه‌ها با نوسازی پس‌زمینه ─────────────
+// ───────────── 🧠 کش گروه‌ها با نوسازی پس‌زمینه (Legacy - برای backward compatibility) ─────────────
 
 type groupCacheEntry struct {
 	ids       []int
@@ -31,7 +31,7 @@ var (
 // 🎯 زمان نوسازی کش: هر ۱ ساعت
 const groupRefreshInterval = 1 * time.Hour
 
-// StartGroupCache نوسازی متناوب گروه‌ها (مستقل از خرید)
+// StartGroupCache نوسازی متناوب گروه‌ها (مستقل از خرید) - فقط برای پنل‌های بدون GroupIDs
 func StartGroupCache() {
 	go func() {
 		refreshAllGroups() // بار اول، همین الان
@@ -47,6 +47,11 @@ func refreshAllGroups() {
 	cfg := db.GetConfig()
 	for _, panel := range cfg.Panels {
 		if panel.Type != "marzban" {
+			continue
+		}
+		// 🎯 فقط پنل‌هایی که GroupIDs ندارن رو نوسازی کن (backward compatibility)
+		if len(panel.GroupIDs) > 0 {
+			log.Printf("ℹ️ [کش گروه] %s → GroupIDs تنظیم شده، نیازی به کش نیست", panel.URL)
 			continue
 		}
 		ids := fetchGroupsWithRetry(panel)
@@ -91,6 +96,7 @@ func getCachedGroups(url string) []int {
 	}
 	return nil
 }
+
 // clearGroupCache خالی کردن کامل کش
 func clearGroupCache() {
 	groupCacheMu.Lock()
@@ -123,6 +129,7 @@ func ClearGroupCacheHandler(w http.ResponseWriter, r *http.Request) {
 	// ۳) بلافاصله redirect کن (کمتر از ۵۰ میلی‌ثانیه)
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
+
 // ───────────── 🔧 HTTP Transport سفارشی ─────────────
 
 func makeHTTPClient(timeout time.Duration) *http.Client {
@@ -180,12 +187,11 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 	return "", fmt.Errorf("پاسارگاد: توکن در پاسخ یافت نشد")
 }
 
+// 🎯 getPasarguardGroupIDs - فقط endpoint صحیح (بدون query params)
 func getPasarguardGroupIDs(baseURL, token string) []int {
+	// 🎯 فقط endpoint صحیح (Pasarguard با ?limit خطا می‌ده)
 	endpoints := []string{
-		"/api/groups?limit=1000&offset=0",
-		"/api/user_groups?limit=1000&offset=0",
-		"/api/admin/groups?limit=1000&offset=0",
-		"/api/nodes/groups?limit=1000&offset=0",
+		"/api/groups",
 	}
 
 	client := makeHTTPClient(20 * time.Second)
@@ -351,7 +357,7 @@ func finishCreate(baseURL, token, username string, result map[string]interface{}
 	return "", fmt.Errorf("پاسارگاد: کاربر ساخته شد اما لینک اشتراک استخراج نشد")
 }
 
-// CreateMarzbanUser ساخت کاربر با کش + خودترمیمی (۳ تلاش)
+// 🎯 CreateMarzbanUser ساخت کاربر با اولویت: GroupIDs → کش قدیمی → بدون گروه
 func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -387,38 +393,41 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		return payload
 	}
 
-	// 🎯 ۱) گروه‌ها از کش
-	groupIDs := getCachedGroups(panel.URL)
-
-	// 🎯 ) اگه کش خالی بود، همین الان بگیر
-	if len(groupIDs) == 0 {
-		groupIDs = fetchGroupsWithRetry(panel)
-		if len(groupIDs) > 0 {
-			storeGroupCache(panel.URL, groupIDs)
+	// 🎯 اولویت ۱: استفاده از GroupIDs ذخیره‌شده در تنظیمات
+	var groupIDs []int
+	if len(panel.GroupIDs) > 0 {
+		groupIDs = panel.GroupIDs
+		log.Printf("📋 [پاسارگاد] استفاده از %d گروه ذخیره‌شده در تنظیمات", len(groupIDs))
+	} else {
+		// 🎯 اولویت ۲: استفاده از کش قدیمی (backward compatibility)
+		groupIDs = getCachedGroups(panel.URL)
+		if len(groupIDs) == 0 {
+			// اگه کش هم خالی بود، همین الان بگیر
+			groupIDs = fetchGroupsWithRetry(panel)
+			if len(groupIDs) > 0 {
+				storeGroupCache(panel.URL, groupIDs)
+			}
 		}
 	}
 
-	// 🎯 تلاش ۱: با گروه‌های کش
+	// 🎯 تلاش ۱: با گروه‌ها
 	if len(groupIDs) > 0 {
 		result, err := doCreateUser(baseURL, token, buildPayload(groupIDs))
 		if err == nil {
 			return finishCreate(baseURL, token, username, result)
 		}
-		log.Printf("⚠️ [پاسارگاد] ساخت با گروه‌های کش ناموفق (%v) — احتمالاً گروهی حذف شده، نوسازی کش...", err)
-
-		// 🎯 تلاش : با گروه‌های تازه (خودترمیمی کش کهنه)
-		fresh := fetchGroupsWithRetry(panel)
-		if len(fresh) > 0 {
-			storeGroupCache(panel.URL, fresh)
-			result, err = doCreateUser(baseURL, token, buildPayload(fresh))
-			if err == nil {
-				return finishCreate(baseURL, token, username, result)
-			}
-			log.Printf("⚠️ [پاسارگاد] ساخت با گروه‌های تازه هم ناموفق (%v)", err)
+		
+		// 🎯 اگه خطای "Invalid group ID" بود، fallback به ساخت بدون گروه
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "group") || strings.Contains(errMsg, "400") {
+			log.Printf("⚠️ [پاسارگاد] خطای گروه: %v — ساخت بدون گروه ادامه می‌یابد", err)
+			db.LogEventf("general", "warning", "⚠️ گروه‌های پنل %s نامعتبر هستند. لطفاً از تنظیمات گروه‌ها را دوباره بارگذاری کنید.", panel.Name)
+		} else {
+			log.Printf("⚠️ [پاسارگاد] ساخت با گروه‌ها ناموفق (%v)", err)
 		}
 	}
 
-	// 🎯 تلاش ۳: بدون group_ids (تضمین ساخت اشتراک)
+	// 🎯 تلاش ۲: بدون group_ids (fallback)
 	log.Printf("⚠️ [پاسارگاد] تلاش نهایی بدون group_ids برای %s", username)
 	result, err := doCreateUser(baseURL, token, buildPayload(nil))
 	if err != nil {
@@ -492,6 +501,7 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 
 	return "", nil
 }
+
 // RenewMarzbanUser تمدید کاربر Marzban با ریست هوشمند حجم
 // سقف جدید = مصرف‌شده + حجم پلن  →  باقیمانده واقعی = حجم پلن
 // انقضای جدید = الان + روزهای پلن  →  بدون جمع باقیمانده قبلی
