@@ -16,10 +16,10 @@ func main() {
 	db.LoadConfig()
 
 	db.StartLogCleanup()
-    db.StartOrderCleanup()
-		api.StartGroupCache()
-		api.StartBackupCleanup()
-		api.StartAutoEmailBackup()
+	db.StartOrderCleanup()
+	api.StartGroupCache()
+	api.StartBackupCleanup()
+	api.StartAutoEmailBackup()
 
 	// 🌐 مسیرهای عمومی
 	http.HandleFunc("/", api.ShopHandler)
@@ -33,7 +33,7 @@ func main() {
 	adminBase := api.AdminBasePath()
 	http.HandleFunc(adminBase, api.AdminHandler)
 	http.HandleFunc(adminBase+"/backup", api.BackupHandler)
-		http.HandleFunc(adminBase+"/backup/download/", api.BackupFileHandler)
+	http.HandleFunc(adminBase+"/backup/download/", api.BackupFileHandler)
 	http.HandleFunc(adminBase+"/confirm", api.AdminConfirmHandler)
 	http.HandleFunc(adminBase+"/restore", api.RestoreHandler)
 	http.HandleFunc(adminBase+"/logs", api.AdminLogsHandler)
@@ -43,7 +43,7 @@ func main() {
 	http.HandleFunc(adminBase+"/login", api.LoginHandler)
 	http.HandleFunc(adminBase+"/logout", api.LogoutHandler)
 	http.HandleFunc(adminBase+"/stats", api.StatsHandler)
-		http.HandleFunc(adminBase+"/stats-fixed", api.AdminStatsFixedHandler)
+	http.HandleFunc(adminBase+"/stats-fixed", api.AdminStatsFixedHandler)
 
 	// ⚙️ مسیرهای تنظیمات
 	http.HandleFunc(adminBase+"/settings", api.SettingsHandler)
@@ -55,6 +55,10 @@ func main() {
 	http.HandleFunc(adminBase+"/settings/delete-card", api.DeleteCardHandler)
 	http.HandleFunc(adminBase+"/settings/update-cleanup", api.UpdateCleanupHandler)
 	http.HandleFunc(adminBase+"/settings/clear-cache", api.ClearGroupCacheHandler)
+
+	// 🆕 مسیرهای مدیریت گروه‌های Pasarguard
+	http.HandleFunc(adminBase+"/settings/fetch-groups", api.FetchPanelGroupsHandler)
+	http.HandleFunc(adminBase+"/settings/save-groups", api.SavePanelGroupsHandler)
 
 	port := ":8080"
 	log.Printf("سرور VPNShop روی پورت %s در حال اجرا است...", port)
