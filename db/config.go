@@ -17,10 +17,7 @@ type PanelConfig struct {
 	Role     string `json:"role"` // "main" | "backup" | "gift"
 	IsBackup bool   `json:"is_backup,omitempty"` // legacy
 	APIKey   string `json:"api_key"`
-	// 🆕 شناسه گروه‌های انتخاب‌شده برای پنل‌های Marzban/Pasarguard
-	// اگه پر باشه، مستقیم استفاده می‌شه (بدون نیاز به API call)
-	// اگه خالی باشه، از کش قدیمی استفاده می‌شه (backward compatibility)
-	GroupIDs []int `json:"group_ids,omitempty"`
+	GroupIDs []int  `json:"group_ids,omitempty"`
 }
 
 // CardInfo یک شماره کارت برای واریز
@@ -44,16 +41,35 @@ type EmailBackupConfig struct {
 	IntervalHours int    `json:"interval_hours"`
 	ZipPassword   string `json:"zip_password"`
 }
+
+// 🆕 ساختار بکاپ تلگرام
+type TelegramBackupConfig struct {
+	Enabled       bool   `json:"enabled"`
+	BotToken      string `json:"bot_token"`
+	ChatID        string `json:"chat_id"`
+	IntervalHours int    `json:"interval_hours"`
+	ZipPassword   string `json:"zip_password"`
+}
+
+// 🆕 ساختار ذخیره وضعیت آخرین بکاپ‌ها
+type BackupLog struct {
+	Time    string `json:"time"`
+	Success bool   `json:"success"`
+	Details string `json:"details"`
+}
+
 type CleanupConfig struct {
 	OrderExpireHours int `json:"order_expire_hours"`
 }
 
 type AppConfig struct {
-	Admin       AdminConfig       `json:"admin"`
-	Panels      []PanelConfig     `json:"panels"`
-	Cards       []CardInfo        `json:"cards"`
-	EmailBackup EmailBackupConfig `json:"email_backup"`
-	Cleanup     CleanupConfig     `json:"cleanup"`
+	Admin          AdminConfig          `json:"admin"`
+	Panels         []PanelConfig        `json:"panels"`
+	Cards          []CardInfo           `json:"cards"`
+	EmailBackup    EmailBackupConfig    `json:"email_backup"`
+	TelegramBackup TelegramBackupConfig `json:"telegram_backup"` // 🆕
+	BackupLogs     []BackupLog          `json:"backup_logs"`     // 🆕 لیست ۳ بکاپ اخیر
+	Cleanup        CleanupConfig        `json:"cleanup"`
 }
 
 var (
@@ -67,10 +83,12 @@ func LoadConfig() *AppConfig {
 	defer configMu.Unlock()
 
 	config = &AppConfig{
-		Admin:       AdminConfig{},
-		Panels:      []PanelConfig{},
-		Cards:       []CardInfo{},
-		EmailBackup: EmailBackupConfig{SMTPPort: 587},
+		Admin:          AdminConfig{},
+		Panels:         []PanelConfig{},
+		Cards:          []CardInfo{},
+		EmailBackup:    EmailBackupConfig{SMTPPort: 587},
+		TelegramBackup: TelegramBackupConfig{},
+		BackupLogs:     []BackupLog{},
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -94,12 +112,14 @@ func LoadConfig() *AppConfig {
 		}
 	}
 
-	// مقدار پیش‌فرض زمان انقضای سفارش
 	if config.Cleanup.OrderExpireHours <= 0 {
 		config.Cleanup.OrderExpireHours = 48
 	}
 	if config.EmailBackup.IntervalHours <= 0 {
 		config.EmailBackup.IntervalHours = 24
+	}
+	if config.TelegramBackup.IntervalHours <= 0 {
+		config.TelegramBackup.IntervalHours = 24
 	}
 
 	return config
@@ -129,4 +149,24 @@ func GetConfig() *AppConfig {
 		LoadConfig()
 	}
 	return config
+}
+
+// 🆕 تابع کمکی برای ذخیره ۳ لاگ اخیر بکاپ‌ها
+func AddBackupLog(log BackupLog) {
+	configMu.Lock()
+	defer configMu.Unlock()
+	
+	// اضافه کردن به ابتدای لیست
+	config.BackupLogs = append([]BackupLog{log}, config.BackupLogs...)
+	
+	// نگهداری فقط ۳ تای اول
+	if len(config.BackupLogs) > 3 {
+		config.BackupLogs = config.BackupLogs[:3]
+	}
+	
+	// ذخیره مستقیم
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err == nil {
+		os.WriteFile(configPath, data, 0600)
+	}
 }
