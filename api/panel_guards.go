@@ -357,17 +357,33 @@ func updateGuardsSubscription(panel db.PanelConfig, auth map[string]string, user
 	return "", fmt.Errorf("تمدید شد ولی link استخراج نشد")
 }
 
-// UpdateGuardsUser تمدید اشتراک در پنل Guards
+// UpdateGuardsUser تمدید اشتراک در پنل Guards با محاسبه حجم مصرف‌شده قبلی
 func UpdateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	auth, err := guardsAuthHeaders(panel)
 	if err != nil {
 		return "", err
 	}
 
-	newLimitUsage := int64(volumeGB) * 1073741824
+	// خواندن اطلاعات فعلی کاربر در پنل برای دریافت حجم مصرف‌شده
+	_, usedBytes, _, err := GetGuardsUserUsage(panel, username)
+	if err != nil {
+		// اگر کاربر روی این پنل (مثلاً پنل زاپاس/هدیه جدید) وجود نداشت، ساخته شود
+		log.Printf("⚠️ [Guards-تمدید] کاربر %s در پنل %s یافت نشد (%v)، در حال ساخت خودکار...", username, panel.Name, err)
+		return CreateGuardsUser(panel, username, volumeGB, days)
+	}
+	if usedBytes < 0 {
+		usedBytes = 0
+	}
+
+	// 🎯 سقف جدید = حجم مصرف‌شده تا این لحظه + حجم دوره جدید (شامل پلن جدید + حجم انتقالی مجاز)
+	// به این ترتیب چه کاربر کل حجم قبلی را مصرف کرده باشد (carry=0) و چه حجم انتقالی داشته باشد،
+	// دقیقاً به اندازه volumeGB حجم قابل مصرف در پنل خواهد داشت و زمان هم معادل days پلن جدید تنظیم می‌شود.
+	newLimitUsage := usedBytes + int64(volumeGB)*1073741824
 	newLimitExpire := time.Now().AddDate(0, 0, days).Unix()
 
-	log.Printf("🔄 [Guards] تمدید کاربر %s: حجم=%dGB, روز=%d (auth: %s)", username, volumeGB, days, authMode(panel))
+	log.Printf("🔄 [Guards] تمدید کاربر %s: مصرف قبلی=%d بایت | حجم جدید=%dGB | سقف کل=%d بایت | روز=%d (auth: %s)",
+		username, usedBytes, volumeGB, newLimitUsage, days, authMode(panel))
+
 	link, err := updateGuardsSubscription(panel, auth, username, newLimitUsage, newLimitExpire)
 	if err != nil {
 		return "", err
@@ -391,13 +407,10 @@ func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64
 	if v, ok := sub["limit_usage"].(float64); ok {
 		limitUsage = int64(v)
 	}
-	if v, ok := sub["total_usage"].(float64); ok {
+	if v, ok := sub["current_usage"].(float64); ok && v > 0 {
 		totalUsage = int64(v)
-	}
-	if totalUsage == 0 {
-		if v, ok := sub["current_usage"].(float64); ok {
-			totalUsage = int64(v)
-		}
+	} else if v, ok := sub["total_usage"].(float64); ok {
+		totalUsage = int64(v)
 	}
 	if v, ok := sub["limit_expire"].(float64); ok {
 		limitExpire = int64(v)
