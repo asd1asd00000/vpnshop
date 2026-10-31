@@ -2,9 +2,12 @@ package api
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
+	"net/http"
 	"net/smtp"
 	"os"
 	"strings"
@@ -15,8 +18,16 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
-// getFromAddress آدرس فرستنده رو بر اساس نوع SMTP server انتخاب می‌کنه
-// برای Resend باید onboarding@resend.dev باشه، برای بقیه همون SMTPUser
+// 🎯 ساخت نام فایل بر اساس روز، ماه، سال، ساعت و دقیقه شمسی
+func generateJalaliFilename() string {
+	now := db.TehranNow()
+	jy, jm, jd := jalali(now.Year(), int(now.Month()), now.Day())
+	// فرمت: روز-ماه-سال_ساعت-دقیقه (مثلاً 10-08-1402_15-45)
+	return fmt.Sprintf("%02d-%02d-%04d_%02d-%02d", jd, jm, jy, now.Hour(), now.Minute())
+}
+
+// ───────────── بکاپ ایمیل ─────────────
+
 func getFromAddress(config db.EmailBackupConfig) string {
 	if strings.Contains(strings.ToLower(config.SMTPServer), "resend") {
 		return "onboarding@resend.dev"
@@ -24,15 +35,14 @@ func getFromAddress(config db.EmailBackupConfig) string {
 	return config.SMTPUser
 }
 
-// SendEmailBackup ارسال بکاپ به ایمیل (با زیپ رمزدار اختیاری)
 func SendEmailBackup(config db.EmailBackupConfig) error {
 	if config.Email == "" || config.SMTPServer == "" {
 		return fmt.Errorf("تنظیمات ایمیل ناقص است")
 	}
 
-	timestamp := time.Now().Format("20060102_150405")
-	tmpDB := fmt.Sprintf("/tmp/vpnshop_email_backup_%s.db", timestamp)
-	zipPath := fmt.Sprintf("/tmp/vpnshop_email_backup_%s.zip", timestamp)
+	filename := "vpnshop_" + generateJalaliFilename() + ".zip"
+	tmpDB := fmt.Sprintf("/tmp/vpnshop_email_%d.db", time.Now().Unix())
+	zipPath := fmt.Sprintf("/tmp/%s", filename)
 
 	defer os.Remove(tmpDB)
 	defer os.Remove(zipPath)
@@ -56,15 +66,14 @@ func SendEmailBackup(config db.EmailBackupConfig) error {
 		return fmt.Errorf("خطا در خواندن zip: %v", err)
 	}
 
-	subject := fmt.Sprintf("📦 بکاپ VPNShop - %s", timestamp)
-	body := fmt.Sprintf("بکاپ کامل دیتابیس و تنظیمات VPNShop\nتاریخ: %s\n\nشامل:\n- vpnshop.db\n- config.json", timestamp)
+	subject := "📦 بکاپ VPNShop"
+	body := fmt.Sprintf("بکاپ کامل دیتابیس و تنظیمات\nتاریخ و زمان: %s\n\nشامل فایل‌ها:\n- vpnshop.db\n- config.json", generateJalaliFilename())
 	if config.ZipPassword != "" {
-		body += "\n\n🔒 این فایل با رمز عبور محافظت شده است.\n   رمز عبور در تنظیمات سیستم شما ذخیره شده است."
+		body += "\n\n🔒 این فایل با رمز عبور محافظت شده است."
 	}
 
-	// 🎯 انتخاب From هوشمند بر اساس نوع SMTP server
 	from := getFromAddress(config)
-	msg := buildEmailWithAttachment(from, config.Email, subject, body, fmt.Sprintf("vpnshop_backup_%s.zip", timestamp), zipData)
+	msg := buildEmailWithAttachment(from, config.Email, subject, body, filename, zipData)
 
 	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPass, config.SMTPServer)
 	addr := fmt.Sprintf("%s:%d", config.SMTPServer, config.SMTPPort)
@@ -77,7 +86,152 @@ func SendEmailBackup(config db.EmailBackupConfig) error {
 	return nil
 }
 
-// createEncryptedBackupZip ساخت زیپ رمزدار (با AES-256)
+// ───────────── بکاپ تلگرام ─────────────
+
+func SendTelegramBackup(config db.TelegramBackupConfig) error {
+	if config.BotToken == "" || config.ChatID == "" {
+		return fmt.Errorf("تنظیمات تلگرام ناقص است")
+	}
+
+	filename := "vpnshop_" + generateJalaliFilename() + ".zip"
+	tmpDB := fmt.Sprintf("/tmp/vpnshop_tg_%d.db", time.Now().Unix())
+	zipPath := fmt.Sprintf("/tmp/%s", filename)
+
+	defer os.Remove(tmpDB)
+	defer os.Remove(zipPath)
+
+	if _, err := db.DB.Exec(fmt.Sprintf("VACUUM INTO '%s'", tmpDB)); err != nil {
+		return fmt.Errorf("خطا در گرفتن بکاپ: %v", err)
+	}
+
+	var err error
+	if config.ZipPassword != "" {
+		err = createEncryptedBackupZip(zipPath, tmpDB, config.ZipPassword)
+	} else {
+		err = createBackupZipForEmail(zipPath, tmpDB)
+	}
+	if err != nil {
+		return fmt.Errorf("خطا در ساخت zip: %v", err)
+	}
+
+	caption := fmt.Sprintf("📦 **بکاپ خودکار VPNShop**\n\n📅 زمان: `%s`\n\nشامل: `vpnshop.db` و `config.json`", generateJalaliFilename())
+	if config.ZipPassword != "" {
+		caption += "\n\n🔒 فایل زیپ دارای رمز است."
+	}
+
+	return sendDocumentToTelegram(config.BotToken, config.ChatID, zipPath, filename, caption)
+}
+
+func sendDocumentToTelegram(token, chatID, filePath, filename, caption string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.WriteField("chat_id", chatID)
+	writer.WriteField("caption", caption)
+	writer.WriteField("parse_mode", "Markdown")
+
+	part, err := writer.CreateFormFile("document", filename)
+	if err != nil {
+		return err
+	}
+	io.Copy(part, file)
+	writer.Close()
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendDocument", token)
+	req, _ := http.NewRequest("POST", url, body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("وضعیت %d، پاسخ تلگرام: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// ───────────── تایمر مشترک خودکار ─────────────
+
+// StartAutoBackups تایمر بکاپ خودکار تلگرام و ایمیل
+func StartAutoBackups() {
+	go func() {
+		var lastEmailRun, lastTgRun time.Time
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			cfg := db.GetConfig()
+			now := time.Now()
+
+			// ایمیل
+			if cfg.EmailBackup.Enabled && cfg.EmailBackup.Email != "" {
+				h := cfg.EmailBackup.IntervalHours
+				if h <= 0 {
+					h = 24
+				}
+				if lastEmailRun.IsZero() || now.Sub(lastEmailRun) >= time.Duration(h)*time.Hour {
+					if lastEmailRun.IsZero() {
+						lastEmailRun = now
+					} else {
+						lastEmailRun = now
+						log.Printf("📧 در حال ارسال بکاپ خودکار به ایمیل...")
+						err := SendEmailBackup(cfg.EmailBackup)
+						logBackupAutoStatus("ایمیل", err)
+					}
+				}
+			}
+
+			// تلگرام
+			if cfg.TelegramBackup.Enabled && cfg.TelegramBackup.BotToken != "" {
+				h := cfg.TelegramBackup.IntervalHours
+				if h <= 0 {
+					h = 24
+				}
+				if lastTgRun.IsZero() || now.Sub(lastTgRun) >= time.Duration(h)*time.Hour {
+					if lastTgRun.IsZero() {
+						lastTgRun = now
+					} else {
+						lastTgRun = now
+						log.Printf("✈️ در حال ارسال بکاپ خودکار به تلگرام...")
+						err := SendTelegramBackup(cfg.TelegramBackup)
+						logBackupAutoStatus("تلگرام", err)
+					}
+				}
+			}
+		}
+	}()
+	log.Println("🔄 سیستم بکاپ خودکار (ایمیل و تلگرام) فعال شد")
+}
+
+func logBackupAutoStatus(dest string, err error) {
+	success := err == nil
+	msg := fmt.Sprintf("ارسال بکاپ خودکار به %s", dest)
+	if !success {
+		msg += fmt.Sprintf(" ناموفق بود: %v", err)
+		db.LogEventf("general", "error", "❌ %s", msg)
+	} else {
+		msg += " با موفقیت انجام شد."
+		db.LogEvent("general", "success", "✅ "+msg)
+	}
+	db.AddBackupLog(db.BackupLog{
+		Time:    db.FormatTehranUTC(time.Now().UTC().Format(time.RFC3339)),
+		Success: success,
+		Details: msg,
+	})
+}
+
+// ───────────── توابع فشرده‌سازی و زیپ ─────────────
+
 func createEncryptedBackupZip(zipPath, dbPath, password string) error {
 	f, err := os.Create(zipPath)
 	if err != nil {
@@ -98,7 +252,6 @@ func createEncryptedBackupZip(zipPath, dbPath, password string) error {
 			continue
 		}
 
-		// ساخت FileHeader با رمز عبور
 		header := &enczip.FileHeader{
 			Name:   item.name,
 			Method: enczip.Deflate,
@@ -160,27 +313,6 @@ func addFileToZipForEmail(zw *zip.Writer, srcPath, nameInZip string) error {
 	return err
 }
 
-// SendTestEmail ارسال ایمیل تست
-func SendTestEmail(config db.EmailBackupConfig) error {
-	if config.Email == "" || config.SMTPServer == "" {
-		return fmt.Errorf("تنظیمات ایمیل ناقص است")
-	}
-	subject := "✅ تست ایمیل VPNShop"
-	body := "این یک ایمیل تست است.\nاگر این ایمیل را دریافت کردید، تنظیمات SMTP شما درست است."
-
-	// 🎯 انتخاب From هوشمند بر اساس نوع SMTP server
-	from := getFromAddress(config)
-	msg := buildSimpleEmail(from, config.Email, subject, body)
-
-	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPass, config.SMTPServer)
-	addr := fmt.Sprintf("%s:%d", config.SMTPServer, config.SMTPPort)
-	return smtp.SendMail(addr, auth, from, []string{config.Email}, msg)
-}
-
-func buildSimpleEmail(from, to, subject, body string) []byte {
-	return []byte(fmt.Sprintf("From: VPNShop Backup <%s>\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", from, to, subject, body))
-}
-
 func buildEmailWithAttachment(from, to, subject, body, filename string, attachment []byte) []byte {
 	boundary := "BOUNDARY" + fmt.Sprintf("%d", time.Now().UnixNano())
 	var msg strings.Builder
@@ -232,34 +364,4 @@ func base64Encode(data []byte) string {
 		}
 	}
 	return result.String()
-}
-
-// StartAutoEmailBackup تایمر بکاپ خودکار با بازه قابل تنظیم (ساعت)
-func StartAutoEmailBackup() {
-	go func() {
-		lastRun := time.Now()
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			cfg := db.GetConfig()
-			if !cfg.EmailBackup.Enabled || cfg.EmailBackup.Email == "" {
-				continue
-			}
-			hours := cfg.EmailBackup.IntervalHours
-			if hours <= 0 {
-				hours = 24
-			}
-			if time.Since(lastRun) >= time.Duration(hours)*time.Hour {
-				lastRun = time.Now()
-				log.Printf("📧 ارسال بکاپ خودکار به %s (بازه: %d ساعت)", cfg.EmailBackup.Email, hours)
-				if err := SendEmailBackup(cfg.EmailBackup); err != nil {
-					db.LogEventf("general", "error", "❌ خطا در بکاپ خودکار: %v", err)
-				} else {
-					db.LogEvent("general", "success", "✅ بکاپ خودکار با موفقیت ارسال شد")
-				}
-			}
-		}
-	}()
-	log.Println("📧 تایمر بکاپ خودکار ایمیل فعال شد")
 }
