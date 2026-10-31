@@ -16,11 +16,21 @@ import (
 	"github.com/asd1asd00000/vpnshop/db"
 )
 
-// ───────────── 🧠 کش گروه‌ها با نوسازی پس‌زمینه (Legacy - برای backward compatibility) ─────────────
+// ─────────────  مدل گروه ────────────
+
+// GroupInfo اطلاعات یک گروه (id + name)
+type GroupInfo struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// ───────────── 🧠 کش گروه‌ها با نوسازی پس‌زمینه ─────────────
 
 type groupCacheEntry struct {
 	ids       []int
+	names     map[int]string // 🆕 نام گروه‌ها هم کش می‌شه
 	fetchedAt time.Time
+	source    string // "simple" | "groups" | "manual"
 }
 
 var (
@@ -31,7 +41,8 @@ var (
 // 🎯 زمان نوسازی کش: هر ۱ ساعت
 const groupRefreshInterval = 1 * time.Hour
 
-// StartGroupCache نوسازی متناوب گروه‌ها (مستقل از خرید) - فقط برای پنل‌های بدون GroupIDs
+// StartGroupCache نوسازی خودکار گروه‌ها (مستقل از خرید)
+// 🆕 الان با /api/groups/simple کار می‌کنه → خودکار لود می‌شه
 func StartGroupCache() {
 	go func() {
 		refreshAllGroups() // بار اول، همین الان
@@ -49,42 +60,143 @@ func refreshAllGroups() {
 		if panel.Type != "marzban" {
 			continue
 		}
-		// 🎯 فقط پنل‌هایی که GroupIDs ندارن رو نوسازی کن (backward compatibility)
+		// 🎯 احترام به انتخاب دستی ادمین: اگه GroupIDs تنظیم شده، کش نزن
 		if len(panel.GroupIDs) > 0 {
-			log.Printf("ℹ️ [کش گروه] %s → GroupIDs تنظیم شده، نیازی به کش نیست", panel.URL)
+			log.Printf("ℹ️ [کش گروه] %s → انتخاب دستی ادمین فعال است، کش خودکار نادیده گرفته شد", panel.URL)
 			continue
 		}
-		ids := fetchGroupsWithRetry(panel)
-		if len(ids) > 0 {
-			storeGroupCache(panel.URL, ids)
-			log.Printf("🧠 [کش گروه] %s → %d گروه ذخیره شد", panel.URL, len(ids))
-		} else {
-			log.Printf("⚠️ [کش گروه] %s → نوسازی ناموفق، کش قبلی نگه داشته شد", panel.URL)
+		// 🆕 استفاده از تابع مشترک (simple → groups fallback)
+		groups, source, err := fetchPasarguardGroups(panel)
+		if err != nil || len(groups) == 0 {
+			log.Printf("⚠️ [کش گروه] %s → نوسازی ناموفق (%v)، کش قبلی نگه داشته شد", panel.URL, err)
+			continue
 		}
+		ids := make([]int, len(groups))
+		names := make(map[int]string, len(groups))
+		for i, g := range groups {
+			ids[i] = g.ID
+			names[g.ID] = g.Name
+		}
+		storeGroupCache(panel.URL, ids, names, source)
+		log.Printf("🧠 [کش گروه] %s → %d گروه از %s ذخیره شد", panel.URL, len(ids), source)
 	}
 }
 
-func fetchGroupsWithRetry(panel db.PanelConfig) []int {
-	baseURL := strings.TrimRight(panel.URL, "/")
+// ─────────────  تابع مشترک: گرفتن گروه‌ها با زنجیره fallback ─────────────
+
+// fetchPasarguardGroups گروه‌ها رو با اولویت:
+//  1. /api/groups/simple  (سبک، مخصوص ربات‌ها، بدون scope سنگین)
+//  2. /api/groups         (fallback برای پنل‌های قدیمی)
+// برمی‌گردونه. source نشون می‌ده کدوم endpoint جواب داده.
+func fetchPasarguardGroups(panel db.PanelConfig) ([]GroupInfo, string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
-		log.Printf("⚠️ [کش گروه] احراز هویت ناموفق برای %s: %v", panel.URL, err)
-		return nil
+		return nil, "", fmt.Errorf("احراز هویت ناموفق: %v", err)
 	}
-	for attempt := 1; attempt <= 3; attempt++ {
-		ids := getPasarguardGroupIDs(baseURL, token)
-		if len(ids) > 0 {
-			return ids
-		}
-		log.Printf("⚠️ [کش گروه] تلاش %d/3 برای %s ناموفق", attempt, panel.URL)
-		time.Sleep(time.Duration(attempt) * time.Second)
+	baseURL := strings.TrimRight(panel.URL, "/")
+
+	// 🥇 تلاش ۱: /api/groups/simple
+	groups, err := fetchGroupsFromEndpoint(baseURL, token, "/api/groups/simple")
+	if err == nil && len(groups) > 0 {
+		return groups, "simple", nil
 	}
-	return nil
+	// اگه 404 بود (پنل قدیمی)، لاگ کن و ادامه بده
+	if err != nil && !strings.Contains(err.Error(), "404") {
+		log.Printf("⚠️ [پاسارگاد] /api/groups/simple خطا داد: %v — تلاش /api/groups", err)
+	} else {
+		log.Printf("ℹ️ [پاسارگاد] /api/groups/simple موجود نیست (404) — تلاش /api/groups")
+	}
+
+	// 🥈 تلاش ۲: /api/groups (قدیمی)
+	groups, err2 := fetchGroupsFromEndpoint(baseURL, token, "/api/groups")
+	if err2 == nil && len(groups) > 0 {
+		return groups, "groups", nil
+	}
+
+	// هر دو ناموفق
+	if err2 != nil {
+		return nil, "", fmt.Errorf("هر دو endpoint ناموفق: simple=%v, groups=%v", err, err2)
+	}
+	return nil, "", fmt.Errorf("پاسخ خالی از هر دو endpoint")
 }
 
-func storeGroupCache(url string, ids []int) {
+// fetchGroupsFromEndpoint یک endpoint خاص رو می‌زنه و گروه‌ها رو استخراج می‌کنه
+func fetchGroupsFromEndpoint(baseURL, token, endpoint string) ([]GroupInfo, error) {
+	req, _ := http.NewRequest("GET", baseURL+endpoint, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Accept", "application/json")
+
+	client := makeHTTPClient(20 * time.Second)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("خطای شبکه: %v", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("404 endpoint موجود نیست")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("وضعیت %d: %s", resp.StatusCode, truncateBody(bodyBytes, 200))
+	}
+
+	return parseGroupsResponse(bodyBytes), nil
+}
+
+// parseGroupsResponse پاسخ JSON رو پارس می‌کنه (هر دو فرمت: آرایه خالی یا wrapper)
+func parseGroupsResponse(body []byte) []GroupInfo {
+	var result []GroupInfo
+
+	// 🥇 فرمت آرایه خالی: [{"id":1,"name":"..."}, ...]
+	var arr []map[string]interface{}
+	if err := json.Unmarshal(body, &arr); err == nil {
+		for _, g := range arr {
+			id, _ := g["id"].(float64)
+			name, _ := g["name"].(string)
+			if id > 0 {
+				if name == "" {
+					name = fmt.Sprintf("Group-%d", int(id))
+				}
+				result = append(result, GroupInfo{ID: int(id), Name: name})
+			}
+		}
+		if len(result) > 0 {
+			return result
+		}
+	}
+
+	// 🥈 فرمت wrapper: {"groups": [...], "total": 6}
+	var wrapper map[string]interface{}
+	if err := json.Unmarshal(body, &wrapper); err == nil {
+		for _, key := range []string{"groups", "items", "data", "results"} {
+			if list, ok := wrapper[key].([]interface{}); ok {
+				for _, item := range list {
+					if m, ok := item.(map[string]interface{}); ok {
+						id, _ := m["id"].(float64)
+						name, _ := m["name"].(string)
+						if id > 0 {
+							if name == "" {
+								name = fmt.Sprintf("Group-%d", int(id))
+							}
+							result = append(result, GroupInfo{ID: int(id), Name: name})
+						}
+					}
+				}
+				if len(result) > 0 {
+					return result
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func storeGroupCache(url string, ids []int, names map[int]string, source string) {
 	groupCacheMu.Lock()
-	groupCache[url] = groupCacheEntry{ids: ids, fetchedAt: time.Now()}
+	groupCache[url] = groupCacheEntry{ids: ids, names: names, fetchedAt: time.Now(), source: source}
 	groupCacheMu.Unlock()
 }
 
@@ -93,6 +205,16 @@ func getCachedGroups(url string) []int {
 	defer groupCacheMu.Unlock()
 	if e, ok := groupCache[url]; ok {
 		return e.ids
+	}
+	return nil
+}
+
+// getCachedGroupNames نام گروه‌های کش‌شده رو برمی‌گردونه (برای UI)
+func getCachedGroupNames(url string) map[int]string {
+	groupCacheMu.Lock()
+	defer groupCacheMu.Unlock()
+	if e, ok := groupCache[url]; ok {
+		return e.names
 	}
 	return nil
 }
@@ -114,19 +236,16 @@ func ClearGroupCacheHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ۱) کش رو بلافاصله خالی کن
 	clearGroupCache()
 
-	db.LogEvent("general", "success", "🧹 کش گروه‌ها پاک شد — نوسازی در پس‌زمینه شروع شد")
-	log.Printf("🧹 [کش گروه] نوسازی غیرهمزمان شروع شد (در پس‌زمینه)")
+	db.LogEvent("general", "success", "🧹 کش گروه‌ها پاک شد — نوسازی خودکار در پس‌زمینه شروع شد")
+	log.Printf("🧹 [کش گروه] نوسازی خودکار شروع شد (با /api/groups/simple)")
 
-	// ۲) نوسازی در goroutine (مرورگر منتظر نمی‌مونه)
 	go func() {
 		refreshAllGroups()
-		log.Printf("🧹 [کش گروه] نوسازی غیرهمزمان کامل شد")
+		log.Printf("🧹 [کش گروه] نوسازی خودکار کامل شد")
 	}()
 
-	// ۳) بلافاصله redirect کن (کمتر از ۵۰ میلی‌ثانیه)
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
 
@@ -187,82 +306,40 @@ func getPasarguardToken(panelURL, username, password string) (string, error) {
 	return "", fmt.Errorf("پاسارگاد: توکن در پاسخ یافت نشد")
 }
 
-// 🎯 getPasarguardGroupIDs - فقط endpoint صحیح (بدون query params)
+// 🆕 getPasarguardGroupIDs (نگه‌داشته برای سازگاری) — الان از تابع مشترک استفاده می‌کنه
 func getPasarguardGroupIDs(baseURL, token string) []int {
-	// 🎯 فقط endpoint صحیح (Pasarguard با ?limit خطا می‌ده)
-	endpoints := []string{
-		"/api/groups",
-	}
+	// این تابع دیگه مستقیم استفاده نمی‌شه، ولی اگه جایی صداش زد،
+	// از endpoint قدیمی استفاده می‌کنه (بدون fallback)
+	req, _ := http.NewRequest("GET", baseURL+"/api/groups", nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Accept", "application/json")
 
 	client := makeHTTPClient(20 * time.Second)
+	resp, err := client.Do(req)
+	if err != nil {
+		return []int{}
+	}
+	defer resp.Body.Close()
 
-	for _, ep := range endpoints {
-		req, _ := http.NewRequest("GET", baseURL+ep, nil)
-		req.Header.Add("Authorization", "Bearer "+token)
-		req.Header.Add("Accept", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("⚠️ [پاسارگاد] خطا در فراخوانی %s: %v", ep, err)
-			continue
-		}
-
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("⚠️ [پاسارگاد] پاسخ ناموفق از %s | Status: %d | Body: %s",
-				ep, resp.StatusCode, truncateBody(bodyBytes, 300))
-			continue
-		}
-
-		ids, total := extractGroupIDsWithTotal(bodyBytes)
-		if len(ids) > 0 {
-			log.Printf("🔍 [پاسارگاد] گروه‌های یافت شده از %s: %v (total: %d)", ep, ids, total)
-			return ids
-		}
-
-		log.Printf("⚠️ [پاسارگاد] پاسخ %s موفق بود ولی هیچ groupID استخراج نشد | Body: %s",
-			ep, truncateBody(bodyBytes, 300))
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return []int{}
 	}
 
-	log.Printf("⚠️ [پاسارگاد] هیچ گروهی یافت نشد")
-	return []int{}
+	groups := parseGroupsResponse(bodyBytes)
+	ids := make([]int, len(groups))
+	for i, g := range groups {
+		ids[i] = g.ID
+	}
+	return ids
 }
 
 func extractGroupIDs(body []byte) []int {
-	var ids []int
-
-	var arr []map[string]interface{}
-	if err := json.Unmarshal(body, &arr); err == nil {
-		for _, g := range arr {
-			if id, ok := g["id"].(float64); ok {
-				ids = append(ids, int(id))
-			}
-		}
-		if len(ids) > 0 {
-			return ids
-		}
+	groups := parseGroupsResponse(body)
+	ids := make([]int, len(groups))
+	for i, g := range groups {
+		ids[i] = g.ID
 	}
-
-	var wrapper map[string]interface{}
-	if err := json.Unmarshal(body, &wrapper); err == nil {
-		for _, key := range []string{"items", "groups", "data", "results"} {
-			if list, ok := wrapper[key].([]interface{}); ok {
-				for _, item := range list {
-					if m, ok := item.(map[string]interface{}); ok {
-						if id, ok := m["id"].(float64); ok {
-							ids = append(ids, int(id))
-						}
-					}
-				}
-				if len(ids) > 0 {
-					return ids
-				}
-			}
-		}
-	}
-
 	return ids
 }
 
@@ -357,7 +434,44 @@ func finishCreate(baseURL, token, username string, result map[string]interface{}
 	return "", fmt.Errorf("پاسارگاد: کاربر ساخته شد اما لینک اشتراک استخراج نشد")
 }
 
-// 🎯 CreateMarzbanUser ساخت کاربر با اولویت: GroupIDs → کش قدیمی → بدون گروه
+// 🎯 resolveGroupIDs تعیین گروه‌ها با زنجیره اولویت:
+//  1. panel.GroupIDs (انتخاب دستی ادمین)
+//  2. کش خودکار (از /api/groups/simple)
+//  3. fetch زنده (اگه کش خالی بود)
+//  4. خالی (بدون گروه)
+func resolveGroupIDs(panel db.PanelConfig) ([]int, string) {
+	// 🥇 انتخاب دستی ادمین
+	if len(panel.GroupIDs) > 0 {
+		log.Printf("📋 [پاسارگاد] استفاده از %d گروه (انتخاب دستی ادمین)", len(panel.GroupIDs))
+		return panel.GroupIDs, "manual"
+	}
+
+	// 🥈 کش خودکار
+	cached := getCachedGroups(panel.URL)
+	if len(cached) > 0 {
+		log.Printf(" [پاسارگاد] استفاده از %d گروه (کش خودکار)", len(cached))
+		return cached, "cache"
+	}
+
+	// 🥉 fetch زنده با fallback
+	groups, source, err := fetchPasarguardGroups(panel)
+	if err == nil && len(groups) > 0 {
+		ids := make([]int, len(groups))
+		names := make(map[int]string, len(groups))
+		for i, g := range groups {
+			ids[i] = g.ID
+			names[g.ID] = g.Name
+		}
+		storeGroupCache(panel.URL, ids, names, source)
+		log.Printf("🌐 [پاسارگاد] fetch زنده موفق از %s → %d گروه", source, len(ids))
+		return ids, source
+	}
+
+	log.Printf("⚠️ [پاسارگاد] هیچ گروهی در دسترس نیست (manual/cache/live هم ناموفق)")
+	return nil, "none"
+}
+
+// 🎯 CreateMarzbanUser ساخت کاربر با زنجیره گروه‌ها + fallback
 func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -393,41 +507,34 @@ func CreateMarzbanUser(panel db.PanelConfig, username string, volumeGB int, days
 		return payload
 	}
 
-	// 🎯 اولویت ۱: استفاده از GroupIDs ذخیره‌شده در تنظیمات
-	var groupIDs []int
-	if len(panel.GroupIDs) > 0 {
-		groupIDs = panel.GroupIDs
-		log.Printf("📋 [پاسارگاد] استفاده از %d گروه ذخیره‌شده در تنظیمات", len(groupIDs))
-	} else {
-		// 🎯 اولویت ۲: استفاده از کش قدیمی (backward compatibility)
-		groupIDs = getCachedGroups(panel.URL)
-		if len(groupIDs) == 0 {
-			// اگه کش هم خالی بود، همین الان بگیر
-			groupIDs = fetchGroupsWithRetry(panel)
-			if len(groupIDs) > 0 {
-				storeGroupCache(panel.URL, groupIDs)
-			}
-		}
-	}
+	// 🎯 تعیین گروه‌ها با زنجیره اولویت
+	groupIDs, source := resolveGroupIDs(panel)
 
 	// 🎯 تلاش ۱: با گروه‌ها
 	if len(groupIDs) > 0 {
 		result, err := doCreateUser(baseURL, token, buildPayload(groupIDs))
 		if err == nil {
+			log.Printf("✅ [پاسارگاد] کاربر %s با %d گروه (%s) ساخته شد", username, len(groupIDs), source)
 			return finishCreate(baseURL, token, username, result)
 		}
-		
-		// 🎯 اگه خطای "Invalid group ID" بود، fallback به ساخت بدون گروه
+
+		// 🎯 اگه خطای گروه بود، کش رو باطل کن و fallback
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "group") || strings.Contains(errMsg, "400") {
-			log.Printf("⚠️ [پاسارگاد] خطای گروه: %v — ساخت بدون گروه ادامه می‌یابد", err)
-			db.LogEventf("general", "warning", "⚠️ گروه‌های پنل %s نامعتبر هستند. لطفاً از تنظیمات گروه‌ها را دوباره بارگذاری کنید.", panel.Name)
+			log.Printf("⚠️ [پاسارگاد] خطای گروه (%s): %v — کش باطل شد", source, err)
+			// اگه از کش بود، پاکش کن تا دفعه بعد fetch زنده بزنه
+			if source == "cache" || source == "manual" {
+				groupCacheMu.Lock()
+				delete(groupCache, panel.URL)
+				groupCacheMu.Unlock()
+			}
+			db.LogEventf("general", "warning", "⚠️ گروه‌های پنل %s نامعتبر شدند (منبع: %s). کش باطل شد.", panel.Name, source)
 		} else {
 			log.Printf("⚠️ [پاسارگاد] ساخت با گروه‌ها ناموفق (%v)", err)
 		}
 	}
 
-	// 🎯 تلاش ۲: بدون group_ids (fallback)
+	// 🎯 تلاش : بدون group_ids (fallback نهایی)
 	log.Printf("⚠️ [پاسارگاد] تلاش نهایی بدون group_ids برای %s", username)
 	result, err := doCreateUser(baseURL, token, buildPayload(nil))
 	if err != nil {
@@ -503,8 +610,6 @@ func UpdateMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, da
 }
 
 // RenewMarzbanUser تمدید کاربر Marzban با ریست هوشمند حجم
-// سقف جدید = مصرف‌شده + حجم پلن  →  باقیمانده واقعی = حجم پلن
-// انقضای جدید = الان + روزهای پلن  →  بدون جمع باقیمانده قبلی
 func RenewMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, days int) (string, error) {
 	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
 	if err != nil {
@@ -514,19 +619,14 @@ func RenewMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, day
 	baseURL := strings.TrimRight(panel.URL, "/")
 	client := makeHTTPClient(10 * time.Second)
 
-	// ۱) خواندن مصرف فعلی
 	usedTraffic, err := GetMarzbanUserUsage(panel, targetUser)
 	if err != nil {
-		usedTraffic = 0 // اگه نخوندیم، فرض صفر
+		usedTraffic = 0
 	}
 
-	// ۲) سقف جدید = مصرف + حجم پلن
 	newLimit := usedTraffic + int64(volumeGB)*1073741824
-
-	// ۳) انقضای جدید = الان + روزهای پلن (بدون جمع باقیمانده)
 	newExpire := time.Now().AddDate(0, 0, days).Unix()
 
-	// ۴) GET کاربر فعلی
 	reqGet, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
 	reqGet.Header.Add("Authorization", "Bearer "+token)
 	respGet, err := client.Do(reqGet)
@@ -565,7 +665,6 @@ func RenewMarzbanUser(panel db.PanelConfig, targetUser string, volumeGB int, day
 
 	log.Printf("✅ [پاسارگاد-تمدید] %s تمدید شد | سقف=%d بایت | روز=%d", targetUser, newLimit, days)
 
-	// گرفتن لینک اشتراک
 	reqGetLink, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/user/%s", baseURL, targetUser), nil)
 	reqGetLink.Header.Add("Authorization", "Bearer "+token)
 	respGetLink, err := client.Do(reqGetLink)
