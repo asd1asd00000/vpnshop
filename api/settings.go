@@ -199,6 +199,7 @@ func DeletePanelHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // 🆕 FetchPanelGroupsHandler لیست گروه‌های یک پنل Pasarguard رو از API می‌گیره
+// الان با زنجیره: /api/groups/simple → /api/groups
 func FetchPanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -240,90 +241,24 @@ func FetchPanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🎯 گرفتن توکن با credentials پنل
-	token, err := getPasarguardToken(panel.URL, panel.Username, panel.Password)
+	// 🎯 استفاده از تابع مشترک (simple → groups fallback)
+	groups, source, err := fetchPasarguardGroups(panel)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"error":   "احراز هویت ناموفق: " + err.Error(),
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	baseURL := strings.TrimRight(panel.URL, "/")
-	// 🎯 endpoint بدون query params (چون Pasarguard با ?limit خطا می‌ده)
-	reqHTTP, _ := http.NewRequest("GET", baseURL+"/api/groups", nil)
-	reqHTTP.Header.Add("Authorization", "Bearer "+token)
-	reqHTTP.Header.Add("Accept", "application/json")
-
-	client := makeHTTPClient(15 * time.Second)
-	resp, err := client.Do(reqHTTP)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "خطا در اتصال: " + err.Error(),
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("پاسخ %d از پنل: %s", resp.StatusCode, truncateBody(bodyBytes, 300)),
-		})
-		return
-	}
-
-	// 🎯 پارس پاسخ - ممکنه array یا object با فیلد groups باشه
-	type GroupInfo struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	}
-
-	var result []GroupInfo
-
-	var groups []map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &groups); err == nil {
-		// پاسخ مستقیم array هست
-		for _, g := range groups {
-			id, _ := g["id"].(float64)
-			name, _ := g["name"].(string)
-			if name == "" {
-				name = fmt.Sprintf("Group-%d", int(id))
-			}
-			result = append(result, GroupInfo{ID: int(id), Name: name})
-		}
-	} else {
-		// شاید wrapper هست
-		var wrapper map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &wrapper); err == nil {
-			if g, ok := wrapper["groups"].([]interface{}); ok {
-				for _, item := range g {
-					if m, ok := item.(map[string]interface{}); ok {
-						id, _ := m["id"].(float64)
-						name, _ := m["name"].(string)
-						if name == "" {
-							name = fmt.Sprintf("Group-%d", int(id))
-						}
-						result = append(result, GroupInfo{ID: int(id), Name: name})
-					}
-				}
-			}
-		}
-	}
-
-	log.Printf("✅ [گروه‌ها] %d گروه از %s بارگذاری شد", len(result), panel.URL)
+	log.Printf("✅ [گروه‌ها] %d گروه از %s (%s) بارگذاری شد", len(groups), panel.URL, source)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"groups":  result,
+		"groups":  groups,
+		"source":  source, // 🆕 نشون می‌ده کدوم endpoint جواب داده
 	})
 }
 
