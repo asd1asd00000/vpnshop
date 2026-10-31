@@ -19,7 +19,9 @@ func main() {
 	db.StartOrderCleanup()
 	api.StartGroupCache()
 	api.StartBackupCleanup()
-	api.StartAutoEmailBackup()
+	
+	// 🎯 تایمر بکاپ خودکار (هم برای ایمیل و هم تلگرام)
+	api.StartAutoBackups()
 
 	// 🌐 مسیرهای عمومی
 	http.HandleFunc("/", api.ShopHandler)
@@ -51,6 +53,7 @@ func main() {
 	http.HandleFunc(adminBase+"/settings/add-panel", api.AddPanelHandler)
 	http.HandleFunc(adminBase+"/settings/delete-panel", api.DeletePanelHandler)
 	http.HandleFunc(adminBase+"/settings/email-backup", api.EmailBackupHandler)
+	http.HandleFunc(adminBase+"/settings/telegram-backup", api.TelegramBackupHandler) // 🆕 هندلر بکاپ تلگرام
 	http.HandleFunc(adminBase+"/settings/add-card", api.AddCardHandler)
 	http.HandleFunc(adminBase+"/settings/delete-card", api.DeleteCardHandler)
 	http.HandleFunc(adminBase+"/settings/update-cleanup", api.UpdateCleanupHandler)
