@@ -381,7 +381,7 @@ func buildTelegramText(items []ConfigItem) string {
 		}
 	}
 
-	header.WriteString("----------------------------------------\n")
+	header.WriteString("------------------------------------------------------\n")
 
 	var blocks []string
 
@@ -397,12 +397,12 @@ func buildTelegramText(items []ConfigItem) string {
 
 		switch it.Role {
 		case "backup":
-			b.WriteString("`" + it.Link + "`\n\n")
+			b.WriteString(it.Link + "\n\n")
 			b.WriteString(fmt.Sprintf("✅ %s هدیه-زاپاس ✅\n", volText))
 			b.WriteString("اگه لینک اصلی مشکل پیدا کرد اطلاع بدین\n")
 			b.WriteString("تا مشکل حل بشه از این لینک استفاده کنید")
 		case "gift":
-			b.WriteString("`" + it.Link + "`\n\n")
+			b.WriteString(it.Link + "\n\n")
 			b.WriteString(fmt.Sprintf("✅ %s هدیه ✅\n", volText))
 			b.WriteString("از پنل آزمایشی\n")
 			b.WriteString("تست کنید ببینید در منطقه شما جواب میده ؟\n")
@@ -411,14 +411,14 @@ func buildTelegramText(items []ConfigItem) string {
 				b.WriteString(it.Note)
 			}
 		default: // main (اصلی)
-			b.WriteString("🟢🌟 **لینک اشتراک اصلی (ابتدا این لینک را وارد کنید):** 👇\n\n")
-			b.WriteString("`" + it.Link + "`\n\n")
-			b.WriteString(fmt.Sprintf("🟢🚀 **%s اشتراک اصلی شما** 🚀🟢\n", volText))
-			b.WriteString("⬆️ **برای استفاده اصلی، لینک بالا را در برنامه وارد کنید** ⬆️")
+			b.WriteString(" 👇👇👇**لینک اشتراک اصلی (ابتدا این لینک را وارد کنید):** 👇👇👇\n\n")
+			b.WriteString(it.Link + "\n\n")
+			b.WriteString(fmt.Sprintf("✔️✔️✔️ **%s اشتراک اصلی شما** ✔️✔️✔️\n", volText))
+			b.WriteString("⬆️⬆️⬆️ **لینک بالا اشتراک اصلی شماست ** ⬆️⬆️⬆️")
 		}
 		blocks = append(blocks, b.String())
 	}
 
 	// 3. ترکیب هدر با بقیه متن‌ها
-	return header.String() + strings.Join(blocks, "\n----------------------------------------\n")
+	return header.String() + strings.Join(blocks, "\n------------------------------------------------------\n")
 }
