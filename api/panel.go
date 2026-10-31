@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
 	"github.com/asd1asd00000/vpnshop/db"
@@ -29,6 +30,30 @@ type planVolumes struct {
 	giftGB   int
 	days     int
 	giftNote string
+}
+
+// rolePriority تعیین اولویت نمایش: ۱. اصلی (main) ۲. زاپاس (backup) ۳. هدیه (gift)
+func rolePriority(role string) int {
+	switch role {
+	case "main", "":
+		return 1
+	case "backup":
+		return 2
+	case "gift":
+		return 3
+	default:
+		return 4
+	}
+}
+
+// sortConfigItems مرتب‌سازی کانفیگ‌ها به ترتیب: اصلی -> زاپاس -> هدیه
+func sortConfigItems(items []ConfigItem) []ConfigItem {
+	sorted := make([]ConfigItem, len(items))
+	copy(sorted, items)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return rolePriority(sorted[i].Role) < rolePriority(sorted[j].Role)
+	})
+	return sorted
 }
 
 func GenerateConfigFromOrder(order models.Order) (string, error) {
@@ -71,6 +96,7 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 		items, anyDup, err := createOnAllPanels(cfg.Panels, username, pv)
 
 		if len(items) > 0 {
+			items = sortConfigItems(items)
 			jsonData, _ := json.Marshal(items)
 			return string(jsonData), nil
 		}
@@ -175,6 +201,8 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 		})
 	}
 
+	items = sortConfigItems(items)
+
 	if len(items) == 0 {
 		return nil, anyDup, fmt.Errorf("همه پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
 	}
@@ -228,6 +256,7 @@ func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int)
 		log.Printf("⚠️ [تمدید] برخی پنل‌های فرعی خطا دادند اما تمدید انجام شد: %v", err)
 	}
 
+	items = sortConfigItems(items)
 	jsonData, _ := json.Marshal(items)
 	return string(jsonData), nil
 }
@@ -315,6 +344,8 @@ func renewOnAllPanels(panels []db.PanelConfig, username string, mainGB, backupGB
 		})
 	}
 
+	items = sortConfigItems(items)
+
 	if len(items) == 0 {
 		return nil, fmt.Errorf("همه پنل‌ها خطا دادند: %s", strings.Join(errors, " | "))
 	}
@@ -326,20 +357,22 @@ func renewOnAllPanels(panels []db.PanelConfig, username string, mainGB, backupGB
 
 // buildTelegramText متن آماده کپی برای تلگرام می‌سازه
 func buildTelegramText(items []ConfigItem) string {
+	// 🎯 مرتب‌سازی: ۱. اصلی (main) ۲. زاپاس (backup) ۳. هدیه (gift)
+	sortedItems := sortConfigItems(items)
+
 	// 1. ساخت بخش هدر (لوگو و آدرس)
 	var header strings.Builder
 	header.WriteString("🛡️ **Oklavpn** 🛡️\n")
 	header.WriteString("👉 https://t.me/oklavpn\n")
 
 	// 🎯 اضافه کردن نام کاربری و مدت اعتبار به هدر
-	if len(items) > 0 && items[0].Username != "" {
+	if len(sortedItems) > 0 && sortedItems[0].Username != "" {
 		header.WriteString("\n")
-		header.WriteString(fmt.Sprintf("👤 نام کاربری: `%s`\n", items[0].Username))
+		header.WriteString(fmt.Sprintf("👤 نام کاربری: `%s`\n", sortedItems[0].Username))
 
 		// استخراج مدت اعتبار از کانفیگ اصلی (main)
-		for _, it := range items {
-			if it.Role == "main" {
-				// از Description که شامل "مدت: X روز" هست استفاده می‌کنیم
+		for _, it := range sortedItems {
+			if it.Role == "main" || it.Role == "" {
 				if strings.Contains(it.Desc, "روز") {
 					header.WriteString(fmt.Sprintf("📅 اعتبار: %s\n", strings.TrimSpace(it.Desc)))
 				}
@@ -348,14 +381,13 @@ func buildTelegramText(items []ConfigItem) string {
 		}
 	}
 
-	header.WriteString("----------------------------------------\n\n")
+	header.WriteString("----------------------------------------\n")
 
 	var blocks []string
 
-	// 2. حلقه اصلی
-	for _, it := range items {
+	// 2. حلقه ساخت بلاک‌ها به ترتیب (اصلی -> زاپاس -> هدیه)
+	for _, it := range sortedItems {
 		var b strings.Builder
-		b.WriteString("`" + it.Link + "`\n\n")
 
 		// 🎯 برای پنل Conf، حجم به روز تبدیل میشه
 		volText := fmt.Sprintf("%d گیگ", it.Volume)
@@ -365,10 +397,12 @@ func buildTelegramText(items []ConfigItem) string {
 
 		switch it.Role {
 		case "backup":
+			b.WriteString("`" + it.Link + "`\n\n")
 			b.WriteString(fmt.Sprintf("✅ %s هدیه-زاپاس ✅\n", volText))
 			b.WriteString("اگه لینک اصلی مشکل پیدا کرد اطلاع بدین\n")
 			b.WriteString("تا مشکل حل بشه از این لینک استفاده کنید")
 		case "gift":
+			b.WriteString("`" + it.Link + "`\n\n")
 			b.WriteString(fmt.Sprintf("✅ %s هدیه ✅\n", volText))
 			b.WriteString("از پنل آزمایشی\n")
 			b.WriteString("تست کنید ببینید در منطقه شما جواب میده ؟\n")
@@ -376,8 +410,11 @@ func buildTelegramText(items []ConfigItem) string {
 			if it.Note != "" {
 				b.WriteString(it.Note)
 			}
-		default: // main
-			b.WriteString(fmt.Sprintf("✅ **%s اشتراک اصلی شما** ✅", volText))
+		default: // main (اصلی)
+			b.WriteString("🟢🌟 **لینک اشتراک اصلی (ابتدا این لینک را وارد کنید):** 👇\n\n")
+			b.WriteString("`" + it.Link + "`\n\n")
+			b.WriteString(fmt.Sprintf("🟢🚀 **%s اشتراک اصلی شما** 🚀🟢\n", volText))
+			b.WriteString("⬆️ **برای استفاده اصلی، لینک بالا را در برنامه وارد کنید** ⬆️")
 		}
 		blocks = append(blocks, b.String())
 	}
