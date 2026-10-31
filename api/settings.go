@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/asd1asd00000/vpnshop/db"
 )
@@ -27,9 +28,13 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	flash := ""
 	switch r.URL.Query().Get("msg") {
 	case "email_saved":
-		flash = "✅ بکاپ خودکار به ایمیل فعال شد و تنظیمات ذخیره گردید"
+		flash = "✅ تنظیمات بکاپ ایمیل ذخیره گردید"
 	case "email_test":
-		flash = "📧 ایمیل تست در پس‌زمینه ارسال شد — اینباکس را بررسی کنید"
+		flash = "📧 ایمیل تست ارسال شد — وضعیت آن را در باکس تاریخچه پایین صفحه بررسی کنید"
+	case "telegram_saved":
+		flash = "✅ تنظیمات بکاپ تلگرام ذخیره گردید"
+	case "telegram_test":
+		flash = "✈️ فایل تست در حال ارسال به تلگرام است — وضعیت را در تاریخچه پایین صفحه بررسی کنید"
 	case "groups_saved":
 		flash = "✅ گروه‌های پنل ذخیره شد"
 	}
@@ -148,7 +153,6 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 		Username: username,
 		Password: password,
 		APIKey:   apiKey,
-		// 🆕 GroupIDs اینجا خالی می‌مونه - بعداً از UI گروه‌ها اضافه می‌شن
 	})
 
 	if err := db.SaveConfig(cfg); err != nil {
@@ -196,8 +200,7 @@ func DeletePanelHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
 
-// 🆕 FetchPanelGroupsHandler لیست گروه‌های یک پنل Pasarguard رو از API می‌گیره
-// الان با زنجیره: /api/groups/simple → /api/groups
+// FetchPanelGroupsHandler لیست گروه‌های یک پنل Pasarguard رو از API می‌گیره
 func FetchPanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -256,11 +259,11 @@ func FetchPanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"groups":  groups,
-		"source":  source, // 🆕 نشون می‌ده کدوم endpoint جواب داده
+		"source":  source,
 	})
 }
 
-// 🆕 SavePanelGroupsHandler ذخیره group_ids برای یک پنل
+// SavePanelGroupsHandler ذخیره group_ids برای یک پنل
 func SavePanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -341,7 +344,6 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 		intervalHours = 24
 	}
 
-	// 🎯 فعال‌سازی خودکار: اگه فیلدها پر شده باشن
 	enabled := email != "" && smtpServer != "" && smtpUser != ""
 
 	cfg := db.GetConfig()
@@ -365,17 +367,91 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.FormValue("action") == "test" {
 		go func() {
-			if err := SendEmailBackup(cfg.EmailBackup); err != nil {
-				db.LogEventf("general", "error", "❌ خطا در ارسال ایمیل تست: %v", err)
+			err := SendEmailBackup(cfg.EmailBackup)
+			logMsg := "ارسال بکاپ تست ایمیل"
+			success := true
+			if err != nil {
+				success = false
+				logMsg += fmt.Sprintf(" ناموفق بود: %v", err)
+				db.LogEventf("general", "error", "❌ %s", logMsg)
 			} else {
-				db.LogEvent("general", "success", "✅ ایمیل تست با بکاپ واقعی ارسال شد")
+				logMsg += " با موفقیت انجام شد."
+				db.LogEvent("general", "success", "✅ "+logMsg)
 			}
+			db.AddBackupLog(db.BackupLog{
+				Time:    db.FormatTehranUTC(time.Now().UTC().Format(time.RFC3339)),
+				Success: success,
+				Details: logMsg,
+			})
 		}()
 		http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_test", http.StatusSeeOther)
 		return
 	}
 
 	http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_saved", http.StatusSeeOther)
+}
+
+// TelegramBackupHandler تنظیمات و تست بکاپ تلگرام
+func TelegramBackupHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	botToken := strings.TrimSpace(r.FormValue("bot_token"))
+	chatID := strings.TrimSpace(r.FormValue("chat_id"))
+	intervalHours, _ := strconv.Atoi(r.FormValue("interval_hours"))
+	zipPassword := r.FormValue("zip_password")
+
+	if intervalHours <= 0 {
+		intervalHours = 24
+	}
+
+	enabled := botToken != "" && chatID != ""
+
+	cfg := db.GetConfig()
+	cfg.TelegramBackup = db.TelegramBackupConfig{
+		Enabled:       enabled,
+		BotToken:      botToken,
+		ChatID:        chatID,
+		IntervalHours: intervalHours,
+		ZipPassword:   zipPassword,
+	}
+
+	if err := db.SaveConfig(cfg); err != nil {
+		http.Error(w, "خطا در ذخیره تنظیمات", http.StatusInternalServerError)
+		return
+	}
+
+	db.LogEventf("general", "success", "✈️ تنظیمات بکاپ تلگرام ذخیره شد (فعال: %v | بازه: %d ساعت)", enabled, intervalHours)
+
+	if r.FormValue("action") == "test" {
+		go func() {
+			err := SendTelegramBackup(cfg.TelegramBackup)
+			logMsg := "ارسال بکاپ تست تلگرام"
+			success := true
+			if err != nil {
+				success = false
+				logMsg += fmt.Sprintf(" ناموفق بود: %v", err)
+				db.LogEventf("general", "error", "❌ %s", logMsg)
+			} else {
+				logMsg += " با موفقیت انجام شد."
+				db.LogEvent("general", "success", "✅ "+logMsg)
+			}
+			db.AddBackupLog(db.BackupLog{
+				Time:    db.FormatTehranUTC(time.Now().UTC().Format(time.RFC3339)),
+				Success: success,
+				Details: logMsg,
+			})
+		}()
+		http.Redirect(w, r, AdminBasePath()+"/settings?msg=telegram_test", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, AdminBasePath()+"/settings?msg=telegram_saved", http.StatusSeeOther)
 }
 
 // AddCardHandler افزودن شماره کارت
