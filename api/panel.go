@@ -183,6 +183,7 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 	}
 	return items, false, nil
 }
+
 // GenerateConfigFromRenewal تمدید اشتراک با carry-over
 func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int) (string, error) {
 	cfg := db.GetConfig()
@@ -202,6 +203,10 @@ func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int)
 		return "", fmt.Errorf("پلن یافت نشد")
 	}
 
+	if carryGB < 0 {
+		carryGB = 0
+	}
+
 	pv := planVolumes{
 		mainGB:   selectedPlan.VolumeGB,
 		backupGB: selectedPlan.BackupGB,
@@ -210,14 +215,17 @@ func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int)
 		giftNote: selectedPlan.GiftNote,
 	}
 
-	// 🎯 carry-over فقط به پنل اصلی اضافه میشه
+	// 🎯 carry-over فقط به پنل اصلی اضافه می‌شود و زمان همان روزهای پلن جدید (pv.days) است
 	mainVolume := pv.mainGB + carryGB
 	backupVolume := pv.backupGB
 	giftVolume := pv.giftGB
 
 	items, err := renewOnAllPanels(cfg.Panels, renewUsername, mainVolume, backupVolume, giftVolume, pv.days, pv.giftNote)
-	if err != nil {
+	if len(items) == 0 {
 		return "", err
+	}
+	if err != nil {
+		log.Printf("⚠️ [تمدید] برخی پنل‌های فرعی خطا دادند اما تمدید انجام شد: %v", err)
 	}
 
 	jsonData, _ := json.Marshal(items)
