@@ -40,11 +40,13 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := db.GetConfig()
-	tmpl.Execute(w, map[string]interface{}{
+	if err := tmpl.Execute(w, map[string]interface{}{
 		"Config":    cfg,
 		"AdminBase": AdminBasePath(),
 		"Flash":     flash,
-	})
+	}); err != nil {
+		log.Printf("❌ خطای اجرای قالب settings: %v", err)
+	}
 }
 
 // UpdateAdminHandler تغییر یوزرنیم و پسورد ادمین
