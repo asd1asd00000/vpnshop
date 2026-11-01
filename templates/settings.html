@@ -636,40 +636,50 @@
             }
         }
 
-        // ── 🎯 Toggle برای بکاپ ایمیل ──
+        // ── 🎯 Toggle برای بکاپ ایمیل (ذخیره خودکار) ──
         function toggleEmailBackup() {
             const toggle = document.getElementById('emailBackupToggle');
             const section = document.getElementById('emailBackupSection');
             const hiddenInput = document.getElementById('emailEnabledInput');
             const isEnabled = toggle.checked;
             
+            // به‌روزرسانی مقدار مخفی
             hiddenInput.value = isEnabled ? '1' : '0';
             
+            // تغییر ظاهر (بدون استفاده از disabled واقعی تا مقادیر فرم ارسال شوند)
             if (isEnabled) {
                 section.classList.remove('backup-section-disabled');
-                document.querySelectorAll('.email-field').forEach(f => f.disabled = false);
             } else {
                 section.classList.add('backup-section-disabled');
-                document.querySelectorAll('.email-field').forEach(f => f.disabled = true);
             }
+            
+            // ارسال خودکار فرم پس از ۳۰۰ میلی‌ثانیه (برای ذخیره فوری در بک‌اند)
+            setTimeout(() => {
+                document.getElementById('emailBackupForm').submit();
+            }, 300);
         }
 
-        // ── 🎯 Toggle برای بکاپ تلگرام ──
+        // ── 🎯 Toggle برای بکاپ تلگرام (ذخیره خودکار) ──
         function toggleTelegramBackup() {
             const toggle = document.getElementById('telegramBackupToggle');
             const section = document.getElementById('telegramBackupSection');
             const hiddenInput = document.getElementById('telegramEnabledInput');
             const isEnabled = toggle.checked;
             
+            // به‌روزرسانی مقدار مخفی
             hiddenInput.value = isEnabled ? '1' : '0';
             
+            // تغییر ظاهر (بدون استفاده از disabled واقعی تا مقادیر فرم ارسال شوند)
             if (isEnabled) {
                 section.classList.remove('backup-section-disabled');
-                document.querySelectorAll('.telegram-field').forEach(f => f.disabled = false);
             } else {
                 section.classList.add('backup-section-disabled');
-                document.querySelectorAll('.telegram-field').forEach(f => f.disabled = true);
             }
+            
+            // ارسال خودکار فرم پس از ۳۰۰ میلی‌ثانیه (برای ذخیره فوری در بک‌اند)
+            setTimeout(() => {
+                document.getElementById('telegramBackupForm').submit();
+            }, 300);
         }
 
         // ── اجرای اولیه هنگام بارگذاری صفحه ──
