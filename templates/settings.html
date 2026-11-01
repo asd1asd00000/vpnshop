@@ -8,6 +8,37 @@
     <style>
         @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
+
+        /* استایل‌های اکاردئون تنظیمات */
+        .setting-accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .setting-accordion-item {
+            transition: all 0.3s ease;
+        }
+        .setting-accordion-item.open {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            border-color: #cbd5e1;
+            transform: translateY(-2px);
+        }
+        .setting-accordion-item.open .chevron-icon {
+            transform: rotate(180deg);
+        }
+        .setting-accordion-item.open .accordion-header {
+            background-color: #f8fafc;
+        }
+        .icon-box {
+            width: 46px;
+            height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body class="p-3 md:p-8">
@@ -25,404 +56,465 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-b-2xl shadow-xl p-3 md:p-6 space-y-6">
+        <div class="bg-white rounded-b-2xl shadow-xl p-3 md:p-6">
 
             <!-- 📢 پیام فلش -->
             {{if .Flash}}
-            <div class="bg-green-50 border border-green-300 text-green-800 rounded-xl p-4 text-sm font-bold">
+            <div class="bg-green-50 border border-green-300 text-green-800 rounded-xl p-4 text-sm font-bold mb-6 shadow-sm">
                 {{.Flash}}
             </div>
             {{end}}
 
-            <!-- بخش: اطلاعات ورود ادمین -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-2">👤 اطلاعات ورود ادمین</h2>
-                <p class="text-sm text-gray-500 mb-4">نام کاربری و رمز عبور داشبورد مدیریت را تغییر دهید.</p>
-                <form action="{{.AdminBase}}/settings/update-admin" method="POST" class="space-y-3" onsubmit="return confirmAdminChange()">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">نام کاربری</label>
-                            <input type="text" name="admin_username" value="{{.Config.Admin.Username}}" required
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm">
+            <div class="space-y-4">
+
+                <!-- ============================================== -->
+                <!-- بخش ۱: تنظیمات عمومی -->
+                <!-- ============================================== -->
+                <div class="setting-accordion-item open bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box bg-purple-100 text-purple-600">⚙️</div>
+                            <div>
+                                <h2 class="text-base md:text-lg font-bold text-gray-800">تنظیمات عمومی</h2>
+                                <p class="text-[11px] md:text-xs text-gray-500 mt-1">اطلاعات ورود ادمین، پاکسازی سفارش‌ها و کش</p>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">رمز عبور جدید</label>
-                            <input type="password" name="admin_password" placeholder="اگر نمی‌خواهید عوض کنید، خالی بگذارید"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">تکرار رمز عبور</label>
-                            <input type="password" name="admin_password_confirm"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm">
+                        <svg class="chevron-icon w-6 h-6 text-gray-400 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                    <div class="setting-accordion-content" style="max-height: 2000px;"> <!-- باز بودن پیش‌فرض -->
+                        <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
+                            
+                            <!-- اطلاعات ورود ادمین -->
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><span>👤</span> اطلاعات ورود ادمین</h3>
+                                <form action="{{.AdminBase}}/settings/update-admin" method="POST" class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm" onsubmit="return confirmAdminChange()">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                                        <div>
+                                            <label class="block text-xs text-gray-600 mb-1 font-bold">نام کاربری</label>
+                                            <input type="text" name="admin_username" value="{{.Config.Admin.Username}}" required
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-purple-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-600 mb-1 font-bold">رمز عبور جدید</label>
+                                            <input type="password" name="admin_password" placeholder="بدون تغییر، خالی بگذارید"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-purple-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-600 mb-1 font-bold">تکرار رمز عبور</label>
+                                            <input type="password" name="admin_password_confirm"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-purple-400 outline-none">
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-2 rounded-lg transition text-sm">💾 ذخیره مشخصات ادمین</button>
+                                </form>
+                            </div>
+
+                            <hr class="border-gray-200 border-dashed">
+
+                            <!-- پاکسازی خودکار سفارش‌ها -->
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><span>🗑️</span> پاکسازی خودکار سفارش‌ها</h3>
+                                <form action="{{.AdminBase}}/settings/update-cleanup" method="POST" class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm flex items-center gap-3 flex-wrap">
+                                    <span class="text-sm text-gray-600">سفارش‌های پرداخت‌نشده پس از</span>
+                                    <input type="number" name="order_expire_hours" value="{{.Config.Cleanup.OrderExpireHours}}" min="1"
+                                           class="w-20 border border-gray-300 rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-purple-400 outline-none">
+                                    <span class="text-sm text-gray-600">ساعت به صورت خودکار حذف شوند.</span>
+                                    <button type="submit" class="bg-gray-800 hover:bg-gray-900 text-white font-bold px-5 py-2 rounded-lg transition text-sm mr-auto">💾 اعمال تغییر</button>
+                                </form>
+                            </div>
+
+                            <hr class="border-gray-200 border-dashed">
+
+                            <!-- کش گروه‌های پنل‌ها -->
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><span>🧹</span> کش گروه‌های پنل‌ها (Legacy)</h3>
+                                <div class="bg-yellow-50 border border-yellow-200 p-4 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <p class="text-sm text-yellow-800">این بخش برای پاک کردن کش قدیمی گروه‌هاست. برای مدیریت گروه‌های هر پنل، از دکمه «📋 گروه‌ها» در بخش پنل‌ها استفاده کنید.</p>
+                                    <form action="{{.AdminBase}}/settings/clear-cache" method="POST">
+                                        <button type="submit" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-5 py-2 rounded-lg transition text-sm whitespace-nowrap">🧹 پاک کردن کش قدیمی</button>
+                                    </form>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg transition">💾 ذخیره</button>
-                </form>
-            </section>
+                </div>
 
-            <!-- بخش: پنل‌های VPN -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-2">🖥️ پنل‌های VPN</h2>
-                <p class="text-sm text-gray-500 mb-4">پنل‌های اصلی، زاپاس و هدیه را مدیریت کنید.</p>
-
-                <div class="space-y-3 mb-4">
-                    {{range $i, $p := .Config.Panels}}
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                        <div class="text-sm flex-1">
-                            <span class="font-bold text-gray-800">{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Type}}{{end}}</span>
-                            <span class="mx-2 text-xs px-2 py-0.5 rounded-full {{if eq $p.Role "main"}}bg-blue-100 text-blue-700{{else if eq $p.Role "backup"}}bg-green-100 text-green-700{{else}}bg-orange-100 text-orange-700{{end}}">
-                                {{if eq $p.Role "main"}}اصلی{{else if eq $p.Role "backup"}}زاپاس{{else}}هدیه{{end}}
-                            </span>
-                            <span class="text-xs text-gray-500 font-mono" dir="ltr">{{$p.URL}}</span>
-                            {{if eq $p.Type "marzban"}}
-                                {{if $p.GroupIDs}}
-                                    <span class="mr-2 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                                        📋 {{len $p.GroupIDs}} گروه
-                                    </span>
-                                {{else}}
-                                    <span class="mr-2 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-                                        ⚠️ گروه تنظیم نشده
-                                    </span>
-                                {{end}}
-                            {{end}}
+                <!-- ============================================== -->
+                <!-- بخش ۲: پنل‌های VPN -->
+                <!-- ============================================== -->
+                <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box bg-blue-100 text-blue-600">🖥️</div>
+                            <div>
+                                <h2 class="text-base md:text-lg font-bold text-gray-800">پنل‌های VPN</h2>
+                                <p class="text-[11px] md:text-xs text-gray-500 mt-1">{{len .Config.Panels}} پنل تعریف شده — مدیریت پنل‌های اصلی، زاپاس و هدیه</p>
+                            </div>
                         </div>
-                        <div class="flex gap-2 flex-wrap">
-                            {{if eq $p.Type "marzban"}}
-                            <button type="button"
-                                    onclick="openGroupsModal({{$i}}, '{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Type}}{{end}}')"
-                                    class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                                📋 گروه‌ها
-                            </button>
-                            {{end}}
-                            <form action="{{$.AdminBase}}/settings/delete-panel" method="POST" onsubmit="return confirm('آیا از حذف این پنل مطمئن هستید؟')">
-                                <input type="hidden" name="panel_id" value="{{$i}}">
-                                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">🗑️ حذف</button>
+                        <svg class="chevron-icon w-6 h-6 text-gray-400 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                    <div class="setting-accordion-content">
+                        <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30">
+                            
+                            <div class="space-y-3 mb-6">
+                                {{range $i, $p := .Config.Panels}}
+                                <div class="bg-white border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm hover:border-blue-300 transition">
+                                    <div class="text-sm flex-1">
+                                        <span class="font-bold text-gray-800 text-base">{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Type}}{{end}}</span>
+                                        <span class="mx-2 text-xs px-2 py-0.5 rounded-full {{if eq $p.Role "main"}}bg-blue-100 text-blue-700{{else if eq $p.Role "backup"}}bg-green-100 text-green-700{{else}}bg-orange-100 text-orange-700{{end}}">
+                                            {{if eq $p.Role "main"}}اصلی{{else if eq $p.Role "backup"}}زاپاس{{else}}هدیه{{end}}
+                                        </span>
+                                        <div class="text-xs text-gray-500 font-mono mt-1 mb-1" dir="ltr">{{$p.URL}}</div>
+                                        {{if eq $p.Type "marzban"}}
+                                            {{if $p.GroupIDs}}
+                                                <span class="text-xs px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">📋 {{len $p.GroupIDs}} گروه اختصاص‌یافته</span>
+                                            {{else}}
+                                                <span class="text-xs px-2 py-0.5 rounded-md bg-yellow-100 text-yellow-700">⚠️ گروه تنظیم نشده</span>
+                                            {{end}}
+                                        {{end}}
+                                    </div>
+                                    <div class="flex gap-2 flex-wrap">
+                                        {{if eq $p.Type "marzban"}}
+                                        <button type="button"
+                                                onclick="openGroupsModal({{$i}}, '{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Type}}{{end}}')"
+                                                class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
+                                            📋 مدیریت گروه‌ها
+                                        </button>
+                                        {{end}}
+                                        <form action="{{$.AdminBase}}/settings/delete-panel" method="POST" onsubmit="return confirm('آیا از حذف این پنل مطمئن هستید؟')">
+                                            <input type="hidden" name="panel_id" value="{{$i}}">
+                                            <button type="submit" class="bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 text-xs font-bold px-4 py-2 rounded-lg transition">🗑️ حذف</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                {{else}}
+                                <div class="text-center text-gray-400 text-sm py-8 bg-white border border-gray-200 border-dashed rounded-xl">هیچ پنلی تعریف نشده است.</div>
+                                {{end}}
+                            </div>
+
+                            <form action="{{.AdminBase}}/settings/add-panel" method="POST" class="p-5 bg-white rounded-xl shadow-sm border border-gray-200">
+                                <h3 class="text-sm font-bold text-blue-700 mb-4 border-b border-gray-100 pb-2">➕ افزودن پنل جدید</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                    <input type="text" name="panel_name" placeholder="نام پنل (اختیاری)"
+                                           class="border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                    <select name="panel_type" class="border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                        <option value="guards">Guards (نسخه 1)</option>
+                                        <option value="marzban">Pasarguard / Marzban</option>
+                                        <option value="conf">Conf-to-Sub</option>
+                                    </select>
+                                    <select name="panel_role" class="border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                        <option value="main">اصلی (Main)</option>
+                                        <option value="backup">زاپاس (Backup)</option>
+                                        <option value="gift">هدیه (Gift)</option>
+                                    </select>
+                                    <input type="url" name="panel_url" placeholder="URL کامل: https://panel.example.com" required
+                                           class="border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
+                                    <input type="text" name="panel_username" id="panel_username_input" placeholder="نام کاربری ادمین"
+                                           class="border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                    <input type="password" name="panel_password" id="panel_password_input" placeholder="رمز عبور"
+                                           class="border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                    <div class="md:col-span-3">
+                                        <input type="text" name="panel_api_key" placeholder="API Key (فقط برای پنل‌های Guards و Conf)"
+                                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                    </div>
+                                </div>
+                                <div class="text-left">
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">➕ افزودن پنل به سیستم</button>
+                                </div>
                             </form>
                         </div>
                     </div>
-                    {{else}}
-                    <div class="text-center text-gray-400 text-sm py-4">هیچ پنلی تعریف نشده است.</div>
-                    {{end}}
                 </div>
 
-                <form action="{{.AdminBase}}/settings/add-panel" method="POST" class="p-4 space-y-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h3 class="text-sm font-bold text-gray-700">➕ افزودن پنل جدید</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <input type="text" name="panel_name" placeholder="نام پنل"
-                               class="border border-gray-300 rounded-lg p-2 text-sm">
-                        <select name="panel_type" class="border border-gray-300 rounded-lg p-2 text-sm">
-                            <option value="guards">Guards</option>
-                            <option value="marzban">Pasarguard</option>
-                            <option value="conf">Conf-to-Sub</option>
-                        </select>
-                        <select name="panel_role" class="border border-gray-300 rounded-lg p-2 text-sm">
-                            <option value="main">اصلی</option>
-                            <option value="backup">زاپاس</option>
-                            <option value="gift">هدیه</option>
-                        </select>
-                        <input type="url" name="panel_url" placeholder="https://panel.example.com" required
-                               class="border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                        <input type="text" name="panel_username" id="panel_username_input" placeholder="نام کاربری"
-                               class="border border-gray-300 rounded-lg p-2 text-sm">
-                        <input type="password" name="panel_password" id="panel_password_input" placeholder="رمز عبور"
-                               class="border border-gray-300 rounded-lg p-2 text-sm">
-                         <input type="text" name="panel_api_key" placeholder="API Key (برای Guards و Conf)"
-                               class="border border-gray-300 rounded-lg p-2 text-sm">
-                    </div>
-                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg transition">➕ افزودن پنل</button>
-                </form>
-            </section>
-
-            <!-- بخش: شماره کارت‌ها -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-2">💳 شماره کارت‌ها</h2>
-                <p class="text-sm text-gray-500 mb-4">کارت‌هایی که در صفحه خرید به مشتری نمایش داده می‌شوند.</p>
-
-                <div class="space-y-2 mb-4">
-                    {{range $i, $c := .Config.Cards}}
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between gap-2">
-                        <div class="text-sm">
-                            <span class="font-mono font-bold text-gray-800" dir="ltr">{{$c.Number}}</span>
-                            <span class="text-xs text-gray-500 mr-2">به نام: {{$c.Holder}}</span>
-                        </div>
-                        <form action="{{$.AdminBase}}/settings/delete-card" method="POST" onsubmit="return confirm('این کارت حذف شود؟')">
-                            <input type="hidden" name="card_id" value="{{$i}}">
-                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">🗑️ حذف</button>
-                        </form>
-                    </div>
-                    {{else}}
-                    <div class="text-center text-gray-400 text-sm py-4">هیچ کارتی ثبت نشده است.</div>
-                    {{end}}
-                </div>
-
-                <form action="{{.AdminBase}}/settings/add-card" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input type="text" name="card_number" placeholder="شماره کارت" required
-                           class="border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                    <input type="text" name="card_holder" placeholder="به نام"
-                           class="border border-gray-300 rounded-lg p-2 text-sm">
-                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg transition">➕ افزودن کارت</button>
-                </form>
-            </section>
-
-            <!-- بخش: پاکسازی خودکار سفارش‌ها -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-2">🗑️ پاکسازی خودکار سفارش‌ها</h2>
-                <p class="text-sm text-gray-500 mb-4">سفارش‌های پرداخت‌نشده پس از این مدت به صورت خودکار حذف می‌شوند.</p>
-                <form action="{{.AdminBase}}/settings/update-cleanup" method="POST" class="flex items-center gap-3 flex-wrap">
-                    <input type="number" name="order_expire_hours" value="{{.Config.Cleanup.OrderExpireHours}}" min="1"
-                           class="w-24 border border-gray-300 rounded-lg p-2 text-sm">
-                    <span class="text-sm text-gray-600">ساعت</span>
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg transition">💾 ذخیره</button>
-                </form>
-            </section>
-
-            <!-- بخش: کش گروه‌های پنل‌ها (Legacy) -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6 bg-gray-50">
-                <h2 class="text-lg font-bold text-gray-800 mb-2">🧹 کش گروه‌های پنل‌ها (Legacy)</h2>
-                <p class="text-sm text-gray-500 mb-4">
-                    این بخش برای پاک کردن کش قدیمی گروه‌هاست. برای مدیریت گروه‌های هر پنل، از دکمه «📋 گروه‌ها» در لیست پنل‌ها استفاده کنید.
-                </p>
-                <form action="{{.AdminBase}}/settings/clear-cache" method="POST">
-                    <button type="submit" class="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2 rounded-lg transition">
-                        🧹 پاک کردن کش قدیمی
-                    </button>
-                </form>
-            </section>
-
-            <!-- بخش: بکاپ خودکار به ایمیل -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-2">📧 بکاپ خودکار به ایمیل</h2>
-                <p class="text-sm text-gray-500 mb-4">
-                    با ذخیره تنظیمات، بکاپ خودکار به صورت خودکار فعال می‌شود.
-                    <br>
-                    <span class="text-xs text-blue-600">برای Gmail از App Password استفاده کنید (نه رمز اصلی).</span>
-                </p>
-                <form action="{{.AdminBase}}/settings/email-backup" method="POST" class="space-y-3">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">ایمیل مقصد</label>
-                            <input type="email" name="email" value="{{.Config.EmailBackup.Email}}"
-                                   placeholder="example@gmail.com"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">SMTP Server</label>
-                            <input type="text" name="smtp_server" value="{{.Config.EmailBackup.SMTPServer}}"
-                                   placeholder="smtp.gmail.com"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">SMTP Port</label>
-                            <input type="number" name="smtp_port" value="{{.Config.EmailBackup.SMTPPort}}"
-                                   placeholder="587"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">SMTP User</label>
-                            <input type="text" name="smtp_user" value="{{.Config.EmailBackup.SMTPUser}}"
-                                   placeholder="your-email@gmail.com"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">SMTP Password (App Password)</label>
-                            <input type="password" name="smtp_pass" value="{{.Config.EmailBackup.SMTPPass}}"
-                                   placeholder="xxxxxxxxxxxxxxxx"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">🕐 بازه ارسال بکاپ (ساعت)</label>
-                            <select name="interval_hours" class="w-full border border-gray-300 rounded-lg p-2 text-sm">
-                                <option value="1"  {{if eq .Config.EmailBackup.IntervalHours 1}}selected{{end}}>هر 1 ساعت</option>
-                                <option value="2"  {{if eq .Config.EmailBackup.IntervalHours 2}}selected{{end}}>هر 2 ساعت</option>
-                                <option value="3"  {{if eq .Config.EmailBackup.IntervalHours 3}}selected{{end}}>هر 3 ساعت</option>
-                                <option value="6"  {{if eq .Config.EmailBackup.IntervalHours 6}}selected{{end}}>هر 6 ساعت</option>
-                                <option value="12" {{if eq .Config.EmailBackup.IntervalHours 12}}selected{{end}}>هر 12 ساعت</option>
-                                <option value="24" {{if eq .Config.EmailBackup.IntervalHours 24}}selected{{end}}>هر 24 ساعت (روزانه)</option>
-                                <option value="48" {{if eq .Config.EmailBackup.IntervalHours 48}}selected{{end}}>هر 48 ساعت</option>
-                            </select>
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-xs text-gray-600 mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
-                            <input type="text" name="zip_password" value="{{.Config.EmailBackup.ZipPassword}}"
-                                   placeholder="اگر خالی بماند، زیپ بدون رمز است"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                        </div>
-                    </div>
-
-                    <div class="flex gap-3">
-                        <button type="submit" name="action" value="save"
-                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg transition">
-                            💾 ذخیره تنظیمات
-                        </button>
-                        <button type="submit" name="action" value="test"
-                                class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2 rounded-lg transition">
-                            📧 تست ارسال ایمیل
-                        </button>
-                    </div>
-                </form>
-            </section>
-
-            <!-- 🆕 بخش: بکاپ خودکار به تلگرام -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-2">✈️ بکاپ خودکار به تلگرام</h2>
-                <p class="text-sm text-gray-500 mb-4">
-                    با وارد کردن Token ربات و Chat ID، فایل بکاپ به تلگرام شما ارسال می‌شود.
-                </p>
-                <form action="{{.AdminBase}}/settings/telegram-backup" method="POST" class="space-y-3">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">Bot Token (توکن ربات)</label>
-                            <input type="text" name="bot_token" value="{{.Config.TelegramBackup.BotToken}}"
-                                   placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">Chat ID (آیدی عددی کاربر/کانال)</label>
-                            <input type="text" name="chat_id" value="{{.Config.TelegramBackup.ChatID}}"
-                                   placeholder="مثلاً 123456789 یا @mychannel"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">🕐 بازه ارسال بکاپ (ساعت)</label>
-                            <select name="interval_hours" class="w-full border border-gray-300 rounded-lg p-2 text-sm">
-                                <option value="1"  {{if eq .Config.TelegramBackup.IntervalHours 1}}selected{{end}}>هر 1 ساعت</option>
-                                <option value="2"  {{if eq .Config.TelegramBackup.IntervalHours 2}}selected{{end}}>هر 2 ساعت</option>
-                                <option value="3"  {{if eq .Config.TelegramBackup.IntervalHours 3}}selected{{end}}>هر 3 ساعت</option>
-                                <option value="6"  {{if eq .Config.TelegramBackup.IntervalHours 6}}selected{{end}}>هر 6 ساعت</option>
-                                <option value="12" {{if eq .Config.TelegramBackup.IntervalHours 12}}selected{{end}}>هر 12 ساعت</option>
-                                <option value="24" {{if eq .Config.TelegramBackup.IntervalHours 24}}selected{{end}}>هر 24 ساعت (روزانه)</option>
-                                <option value="48" {{if eq .Config.TelegramBackup.IntervalHours 48}}selected{{end}}>هر 48 ساعت</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
-                            <input type="text" name="zip_password" value="{{.Config.TelegramBackup.ZipPassword}}"
-                                   placeholder="اگر خالی بماند، زیپ بدون رمز است"
-                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                        </div>
-                    </div>
-
-                    <div class="flex gap-3 pt-2">
-                        <button type="submit" name="action" value="save"
-                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg transition">
-                            💾 ذخیره تنظیمات تلگرام
-                        </button>
-                        <button type="submit" name="action" value="test"
-                                class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2 rounded-lg transition">
-                            ✈️ تست ارسال تلگرام
-                        </button>
-                    </div>
-                </form>
-            </section>
-
-            <!-- 🆕 بخش: تاریخچه ۳ بکاپ اخیر -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6 bg-gray-50">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-gray-800">🕒 تاریخچه ۳ بکاپ ارسال‌شده اخیر</h2>
-                    <button onclick="window.location.reload()" class="text-sm bg-white border border-gray-300 rounded px-2 py-1 shadow-sm hover:bg-gray-100">
-                        🔄 رفرش
-                    </button>
-                </div>
-                <div class="space-y-3">
-                    {{if .Config.BackupLogs}}
-                        {{range .Config.BackupLogs}}
-                        <div class="bg-white border {{if .Success}}border-green-300{{else}}border-red-300{{end}} rounded-lg p-3 flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-sm">
+                <!-- ============================================== -->
+                <!-- بخش ۳: شماره کارت‌ها -->
+                <!-- ============================================== -->
+                <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box bg-teal-100 text-teal-600">💳</div>
                             <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-sm font-bold {{if .Success}}text-green-700{{else}}text-red-700{{end}}">
-                                        {{if .Success}}✅ وضعیت: موفقیت‌آمیز{{else}}❌ وضعیت: با خطا مواجه شد{{end}}
-                                    </span>
+                                <h2 class="text-base md:text-lg font-bold text-gray-800">شماره کارت‌ها</h2>
+                                <p class="text-[11px] md:text-xs text-gray-500 mt-1">{{len .Config.Cards}} کارت ثبت شده — نمایش در صفحه خرید</p>
+                            </div>
+                        </div>
+                        <svg class="chevron-icon w-6 h-6 text-gray-400 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                    <div class="setting-accordion-content">
+                        <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30">
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                {{range $i, $c := .Config.Cards}}
+                                <div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                                    <div>
+                                        <div class="font-mono font-bold text-gray-800 text-lg mb-1 tracking-wider" dir="ltr">{{$c.Number}}</div>
+                                        <div class="text-xs text-gray-500">به نام: <span class="font-bold">{{$c.Holder}}</span></div>
+                                    </div>
+                                    <form action="{{$.AdminBase}}/settings/delete-card" method="POST" onsubmit="return confirm('این کارت حذف شود؟')">
+                                        <input type="hidden" name="card_id" value="{{$i}}">
+                                        <button type="submit" class="bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 text-xs font-bold w-9 h-9 rounded-full transition flex items-center justify-center" title="حذف کارت">🗑️</button>
+                                    </form>
                                 </div>
-                                <div class="text-xs text-gray-700 font-medium">{{.Details}}</div>
+                                {{else}}
+                                <div class="md:col-span-2 text-center text-gray-400 text-sm py-6 bg-white border border-gray-200 border-dashed rounded-xl">هیچ کارتی ثبت نشده است.</div>
+                                {{end}}
                             </div>
-                            <div class="text-[11px] text-gray-500 font-mono whitespace-nowrap bg-gray-100 px-2 py-1 rounded" dir="ltr">
-                                {{.Time}}
-                            </div>
-                        </div>
-                        {{end}}
-                    {{else}}
-                        <div class="text-center text-gray-500 text-sm py-6 bg-white rounded-lg border border-gray-200 border-dashed">
-                            هنوز هیچ بکاپی ارسال نشده است.
-                        </div>
-                    {{end}}
-                </div>
-            </section>
 
-        </div>  <!-- ✅ بسته شدن div bg-white -->
-    </div>  <!-- ✅ بسته شدن div max-w-5xl -->
+                            <form action="{{.AdminBase}}/settings/add-card" method="POST" class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-3 items-end">
+                                <div class="flex-1 w-full">
+                                    <label class="block text-xs font-bold text-gray-600 mb-1">شماره کارت (۱۶ رقم)</label>
+                                    <input type="text" name="card_number" placeholder="6037-9911-2222-3333" required
+                                           class="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-teal-400 outline-none" dir="ltr">
+                                </div>
+                                <div class="flex-1 w-full">
+                                    <label class="block text-xs font-bold text-gray-600 mb-1">نام صاحب حساب</label>
+                                    <input type="text" name="card_holder" placeholder="نام و نام خانوادگی" required
+                                           class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
+                                </div>
+                                <button type="submit" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">➕ افزودن کارت</button>
+                            </form>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- بخش ۴: بکاپ خودکار -->
+                <!-- ============================================== -->
+                <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box bg-indigo-100 text-indigo-600">📦</div>
+                            <div>
+                                <h2 class="text-base md:text-lg font-bold text-gray-800">بکاپ خودکار</h2>
+                                <p class="text-[11px] md:text-xs text-gray-500 mt-1">تنظیمات ارسال زمان‌بندی‌شده به ایمیل و تلگرام + تاریخچه</p>
+                            </div>
+                        </div>
+                        <svg class="chevron-icon w-6 h-6 text-gray-400 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                    <div class="setting-accordion-content">
+                        <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
+                            
+                            <!-- بکاپ به ایمیل -->
+                            <div>
+                                <div class="flex items-center gap-2 mb-4">
+                                    <span class="text-xl">📧</span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-indigo-800">بکاپ خودکار به ایمیل</h3>
+                                        <p class="text-[11px] text-gray-500">برای Gmail حتماً از App Password به جای رمز اصلی استفاده کنید.</p>
+                                    </div>
+                                </div>
+                                <form action="{{.AdminBase}}/settings/email-backup" method="POST" class="bg-white border border-indigo-100 rounded-xl p-5 shadow-sm space-y-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 mb-1">ایمیل مقصد (گیرنده)</label>
+                                            <input type="email" name="email" value="{{.Config.EmailBackup.Email}}" placeholder="example@gmail.com"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 mb-1">SMTP Server</label>
+                                            <input type="text" name="smtp_server" value="{{.Config.EmailBackup.SMTPServer}}" placeholder="smtp.gmail.com"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 mb-1">SMTP Port</label>
+                                            <input type="number" name="smtp_port" value="{{.Config.EmailBackup.SMTPPort}}" placeholder="587"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 mb-1">SMTP User (فرستنده)</label>
+                                            <input type="text" name="smtp_user" value="{{.Config.EmailBackup.SMTPUser}}" placeholder="your-email@gmail.com"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 mb-1">SMTP Password</label>
+                                            <input type="password" name="smtp_pass" value="{{.Config.EmailBackup.SMTPPass}}" placeholder="App Password"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 mb-1">🕐 بازه ارسال</label>
+                                            <select name="interval_hours" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                                <option value="1"  {{if eq .Config.EmailBackup.IntervalHours 1}}selected{{end}}>هر 1 ساعت</option>
+                                                <option value="3"  {{if eq .Config.EmailBackup.IntervalHours 3}}selected{{end}}>هر 3 ساعت</option>
+                                                <option value="6"  {{if eq .Config.EmailBackup.IntervalHours 6}}selected{{end}}>هر 6 ساعت</option>
+                                                <option value="12" {{if eq .Config.EmailBackup.IntervalHours 12}}selected{{end}}>هر 12 ساعت</option>
+                                                <option value="24" {{if eq .Config.EmailBackup.IntervalHours 24}}selected{{end}}>هر 24 ساعت (روزانه)</option>
+                                            </select>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="block text-xs font-bold text-gray-700 mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
+                                            <input type="text" name="zip_password" value="{{.Config.EmailBackup.ZipPassword}}" placeholder="خالی = بدون رمز"
+                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-3 pt-2">
+                                        <button type="submit" name="action" value="save" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">💾 ذخیره تنظیمات ایمیل</button>
+                                        <button type="submit" name="action" value="test" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">📧 ارسال تست</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <hr class="border-gray-200 border-dashed">
+
+                            <!-- بکاپ به تلگرام -->
+                            <div>
+                                <div class="flex items-center gap-2 mb-4">
+                                    <span class="text-xl">✈️</span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-blue-800">بکاپ خودکار به تلگرام</h3>
+                                        <p class="text-[11px] text-gray-500">فایل بکاپ را به صورت مستقیم در بات یا کانال دریافت کنید.</p>
+                                    </div>
+                                </div>
+                                <form action="{{.AdminBase}}/settings/telegram-backup" method="POST" class="bg-white border border-blue-100 rounded-xl p-5 shadow-sm space-y-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-blue-800 mb-1">Bot Token (توکن ربات)</label>
+                                            <input type="text" name="bot_token" value="{{.Config.TelegramBackup.BotToken}}" placeholder="123456:ABC-DEF1234ghIkl-..."
+                                                   class="w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-blue-800 mb-1">Chat ID (آیدی کاربر/کانال)</label>
+                                            <input type="text" name="chat_id" value="{{.Config.TelegramBackup.ChatID}}" placeholder="123456789 یا @mychannel"
+                                                   class="w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-blue-800 mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
+                                            <input type="text" name="zip_password" value="{{.Config.TelegramBackup.ZipPassword}}" placeholder="خالی = بدون رمز"
+                                                   class="w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-blue-800 mb-1">🕐 بازه ارسال</label>
+                                            <select name="interval_hours" class="w-full border border-blue-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                                <option value="1"  {{if eq .Config.TelegramBackup.IntervalHours 1}}selected{{end}}>هر 1 ساعت</option>
+                                                <option value="3"  {{if eq .Config.TelegramBackup.IntervalHours 3}}selected{{end}}>هر 3 ساعت</option>
+                                                <option value="6"  {{if eq .Config.TelegramBackup.IntervalHours 6}}selected{{end}}>هر 6 ساعت</option>
+                                                <option value="12" {{if eq .Config.TelegramBackup.IntervalHours 12}}selected{{end}}>هر 12 ساعت</option>
+                                                <option value="24" {{if eq .Config.TelegramBackup.IntervalHours 24}}selected{{end}}>هر 24 ساعت (روزانه)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-3 pt-2">
+                                        <button type="submit" name="action" value="save" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">💾 ذخیره تنظیمات تلگرام</button>
+                                        <button type="submit" name="action" value="test" class="bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">✈️ ارسال تست</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <hr class="border-gray-200 border-dashed">
+
+                            <!-- تاریخچه بکاپ‌ها -->
+                            <div>
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2"><span>🕒</span> تاریخچه ۳ بکاپ ارسال‌شده اخیر</h3>
+                                    <button onclick="window.location.reload()" class="text-xs font-bold bg-white border border-gray-300 rounded-md px-3 py-1.5 shadow-sm hover:bg-gray-100 transition">🔄 رفرش تاریخچه</button>
+                                </div>
+                                <div class="space-y-3">
+                                    {{if .Config.BackupLogs}}
+                                        {{range .Config.BackupLogs}}
+                                        <div class="bg-white border-l-4 {{if .Success}}border-green-500{{else}}border-red-500{{end}} rounded-lg p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
+                                            <div>
+                                                <div class="font-bold text-sm mb-1 {{if .Success}}text-green-700{{else}}text-red-700{{end}}">
+                                                    {{if .Success}}✅ موفقیت‌آمیز{{else}}❌ خطا در ارسال{{end}}
+                                                </div>
+                                                <div class="text-xs text-gray-600">{{.Details}}</div>
+                                            </div>
+                                            <div class="text-[11px] text-gray-500 font-mono bg-gray-100 px-2.5 py-1.5 rounded-md whitespace-nowrap text-center border border-gray-200" dir="ltr">
+                                                {{.Time}}
+                                            </div>
+                                        </div>
+                                        {{end}}
+                                    {{else}}
+                                        <div class="text-center text-gray-400 text-xs py-6 bg-white rounded-lg border border-gray-200 border-dashed">هنوز هیچ بکاپی ارسال نشده است.</div>
+                                    {{end}}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
 
     <!-- 🆕 Modal مدیریت گروه‌های Pasarguard -->
-    <div id="groupsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div id="groupsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <!-- هدر Modal -->
             <div class="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4 flex justify-between items-center">
                 <h3 class="text-lg font-bold text-white">📋 مدیریت گروه‌های پنل</h3>
-                <button onclick="closeGroupsModal()" class="text-white hover:bg-purple-800 rounded-full w-8 h-8 flex items-center justify-center">
-                    ✕
-                </button>
+                <button onclick="closeGroupsModal()" class="text-white hover:bg-purple-800 rounded-full w-8 h-8 flex items-center justify-center transition">✕</button>
             </div>
-
-            <!-- بدنه Modal -->
             <div class="p-6 overflow-y-auto flex-1">
-                <p class="text-sm text-gray-600 mb-4">
-                    پنل: <span id="panelName" class="font-bold text-gray-800"></span>
-                </p>
+                <p class="text-sm text-gray-600 mb-4">پنل: <span id="panelName" class="font-bold text-gray-800"></span></p>
 
-                <!-- دکمه بارگذاری -->
                 <div class="mb-4 flex gap-2 flex-wrap">
-                    <button id="fetchBtn" onclick="fetchGroups()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg transition">
-                        🔄 بارگذاری گروه‌ها از پنل
-                    </button>
-                    <button onclick="selectAll()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold px-4 py-2 rounded-lg transition text-sm">
-                        ✅ انتخاب همه
-                    </button>
-                    <button onclick="deselectAll()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold px-4 py-2 rounded-lg transition text-sm">
-                        ❌ حذف انتخاب
-                    </button>
+                    <button id="fetchBtn" onclick="fetchGroups()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg transition text-sm shadow-sm">🔄 بارگذاری گروه‌ها از پنل</button>
+                    <button onclick="selectAll()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold px-4 py-2 rounded-lg transition text-sm shadow-sm">✅ انتخاب همه</button>
+                    <button onclick="deselectAll()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold px-4 py-2 rounded-lg transition text-sm shadow-sm">❌ حذف انتخاب</button>
                 </div>
 
-                <!-- پیام وضعیت -->
                 <div id="statusMsg" class="mb-4"></div>
-
-                <!-- لیست گروه‌ها -->
                 <div id="groupsList" class="space-y-2"></div>
 
-                <!-- 🆕 ورود دستی -->
-                <div class="mt-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+                <div class="mt-6 p-4 bg-yellow-50 border border-yellow-300 rounded-xl shadow-sm">
                     <label class="block text-sm font-bold text-gray-700 mb-2">✍️ ورود دستی شناسه گروه‌ها</label>
-                    <p class="text-xs text-gray-600 mb-2">
+                    <p class="text-[11px] md:text-xs text-gray-600 mb-3 leading-relaxed">
                         اگه دکمه بارگذاری خطای <code>403 Permission denied</code> داد، می‌تونید ID گروه‌ها رو دستی وارد کنید.
-                        <br>
-                        ID ها رو از پنل پاسارگاد (بخش Groups) ببینید و اینجا با کاما یا space جدا کنید.
+                        ID ها رو از پنل پاسارگاد (بخش Groups) ببینید و اینجا با کاما یا فاصله جدا کنید.
                     </p>
                     <div class="flex gap-2">
                         <input type="text" id="manualGroupsInput" placeholder="مثال: 1, 2, 3"
-                               class="flex-1 border border-gray-300 rounded-lg p-2 text-sm font-mono">
-                        <button onclick="addManualGroups()" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-4 py-2 rounded-lg transition">
-                            ➕ افزودن
-                        </button>
+                               class="flex-1 border border-yellow-400 rounded-lg p-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-yellow-500">
+                        <button onclick="addManualGroups()" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-5 py-2.5 rounded-lg transition text-sm shadow-sm">➕ افزودن</button>
                     </div>
                 </div>
             </div>
-
-            <!-- Footer Modal -->
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
-                <div class="text-sm text-gray-600">
-                    <span id="selectedCount">0</span> گروه انتخاب شده
-                </div>
+                <div class="text-sm font-bold text-gray-700"><span id="selectedCount" class="text-purple-700">0</span> گروه انتخاب شده</div>
                 <div class="flex gap-2">
-                    <button onclick="closeGroupsModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold px-4 py-2 rounded-lg transition">
-                        انصراف
-                    </button>
-                    <button id="saveBtn" onclick="saveGroups()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg transition">
-                        💾 ذخیره
-                    </button>
+                    <button onclick="closeGroupsModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold px-5 py-2 rounded-lg transition text-sm">انصراف</button>
+                    <button id="saveBtn" onclick="saveGroups()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg transition text-sm shadow-md">💾 ذخیره گروه‌ها</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // ── کنترل اکاردئون ──
+        function toggleSettingsAccordion(header) {
+            const item = header.closest('.setting-accordion-item');
+            const content = item.querySelector('.setting-accordion-content');
+            
+            // بستن بقیه اکاردئون‌ها (اختیاری)
+            document.querySelectorAll('.setting-accordion-item.open').forEach(opened => {
+                if(opened !== item) {
+                    opened.classList.remove('open');
+                    opened.querySelector('.setting-accordion-content').style.maxHeight = null;
+                }
+            });
+
+            if (item.classList.contains('open')) {
+                // اگر باز بود، ببند
+                content.style.maxHeight = content.scrollHeight + 'px'; // تنظیم دقیق ارتفاع برای انیمیشن
+                requestAnimationFrame(() => {
+                    content.style.maxHeight = null;
+                    item.classList.remove('open');
+                });
+            } else {
+                // اگر بسته بود، باز کن
+                item.classList.add('open');
+                content.style.maxHeight = content.scrollHeight + 1500 + 'px'; // فضای اضافی برای عناصر داخلی (مانند فرم ارورها یا باز شدن select)
+            }
+        }
+
         // ── توابع عمومی ──
         function confirmAdminChange() {
             return confirm('⚠️ آیا از تغییر اطلاعات ورود اطمینان دارید؟');
@@ -451,27 +543,25 @@
 
             function updateFields() {
                 const type = typeSelect.value;
-
                 if (type === 'guards' || type === 'conf') {
                     setFieldState(apiKeyInput, false, true, 'API Key پنل (الزامی)');
                     setFieldState(usernameInput, true, false, 'نیازی نیست — فقط API Key');
                     setFieldState(passwordInput, true, false, 'نیازی نیست — فقط API Key');
                 } else if (type === 'marzban') {
                     setFieldState(apiKeyInput, true, false, 'نیازی نیست — یوزرنیم/پسورد');
-                    setFieldState(usernameInput, false, true, 'نام کاربری');
+                    setFieldState(usernameInput, false, true, 'نام کاربری ادمین');
                     setFieldState(passwordInput, false, true, 'رمز عبور');
                 } else {
                     setFieldState(apiKeyInput, true, false, 'نیازی نیست');
-                    setFieldState(usernameInput, false, true, 'نام کاربری');
+                    setFieldState(usernameInput, false, true, 'نام کاربری ادمین');
                     setFieldState(passwordInput, false, true, 'رمز عبور');
                 }
             }
-
             typeSelect.addEventListener('change', updateFields);
             updateFields();
         })();
 
-        // ──  مدیریت Modal گروه‌ها ──
+        // ── مدیریت Modal گروه‌ها ──
         let currentPanelId = null;
         let currentGroups = [];
         let currentSelected = [];
@@ -481,7 +571,7 @@
             currentPanelId = panelId;
             document.getElementById('panelName').textContent = panelName;
             document.getElementById('groupsModal').classList.remove('hidden');
-            document.getElementById('groupsList').innerHTML = '<div class="text-center text-gray-500 py-8">روی «بارگذاری گروه‌ها از پنل» کلیک کنید یا ID ها رو دستی وارد کنید</div>';
+            document.getElementById('groupsList').innerHTML = '<div class="text-center text-gray-500 py-8 border border-dashed rounded-lg bg-gray-50">روی «بارگذاری گروه‌ها از پنل» کلیک کنید یا ID ها رو دستی وارد کنید</div>';
             document.getElementById('statusMsg').innerHTML = '';
             document.getElementById('selectedCount').textContent = '0';
             currentGroups = [];
@@ -500,21 +590,21 @@
                 yellow: 'bg-yellow-50 border-yellow-300 text-yellow-800'
             };
             document.getElementById('statusMsg').innerHTML =
-                `<div class="${colors[color]} border rounded-lg p-3 text-sm">${msg}</div>`;
+                `<div class="${colors[color]} border rounded-lg p-3 text-sm font-bold shadow-sm">${msg}</div>`;
         }
 
         function renderGroupsList() {
             const list = document.getElementById('groupsList');
             if (currentGroups.length === 0) {
-                list.innerHTML = '<div class="text-center text-gray-500 py-8">هیچ گروهی در لیست نیست</div>';
+                list.innerHTML = '<div class="text-center text-gray-500 py-8 border border-dashed rounded-lg bg-gray-50">هیچ گروهی در لیست نیست</div>';
                 return;
             }
             list.innerHTML = currentGroups.map(g => `
-                <label class="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg p-3 cursor-pointer transition">
-                    <input type="checkbox" class="group-checkbox w-5 h-5" value="${g.id}" ${currentSelected.includes(g.id) ? 'checked' : ''} onchange="updateSelectedCount()">
+                <label class="flex items-center gap-3 bg-white hover:bg-purple-50 border border-gray-200 hover:border-purple-300 rounded-lg p-3 cursor-pointer transition shadow-sm">
+                    <input type="checkbox" class="group-checkbox w-5 h-5 accent-purple-600" value="${g.id}" ${currentSelected.includes(g.id) ? 'checked' : ''} onchange="updateSelectedCount()">
                     <div class="flex-1">
-                        <div class="font-bold text-gray-800">${escapeHtml(g.name)}</div>
-                        <div class="text-xs text-gray-500 font-mono">ID: ${g.id}</div>
+                        <div class="font-bold text-gray-800 text-sm">${escapeHtml(g.name)}</div>
+                        <div class="text-[11px] text-gray-500 font-mono mt-0.5">ID: ${g.id}</div>
                     </div>
                 </label>
             `).join('');
@@ -526,9 +616,9 @@
             const list = document.getElementById('groupsList');
 
             btn.disabled = true;
-            btn.textContent = '⏳ در حال بارگذاری...';
+            btn.innerHTML = '⏳ در حال بارگذاری...';
             document.getElementById('statusMsg').innerHTML = '';
-            list.innerHTML = '<div class="text-center py-8"><div class="animate-spin inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div></div>';
+            list.innerHTML = '<div class="text-center py-8"><div class="animate-spin inline-block w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full"></div></div>';
 
             try {
                 const resp = await fetch(adminBase + '/settings/fetch-groups', {
@@ -552,13 +642,13 @@
                 }
 
                 renderGroupsList();
-                showStatus(`✅ ${currentGroups.length} گروه بارگذاری شد`, 'green');
+                showStatus(`✅ ${currentGroups.length} گروه با موفقیت بارگذاری شد`, 'green');
             } catch (err) {
                 list.innerHTML = '';
-                showStatus(`❌ خطا در ارتباط: ${err.message}`, 'red');
+                showStatus(`❌ خطا در ارتباط با سرور: ${err.message}`, 'red');
             } finally {
                 btn.disabled = false;
-                btn.textContent = '🔄 بارگذاری گروه‌ها از پنل';
+                btn.innerHTML = '🔄 بارگذاری گروه‌ها از پنل';
             }
         }
 
@@ -592,7 +682,7 @@
         }
 
         function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            return String(s).replace(/[&<>"']/g, c => ({'&':'&','<':'<','>':'>','"':'"',"'":'''}[c]));
         }
 
         function updateSelectedCount() {
@@ -613,9 +703,8 @@
 
         async function saveGroups() {
             const saveBtn = document.getElementById('saveBtn');
-
             saveBtn.disabled = true;
-            saveBtn.textContent = '⏳ در حال ذخیره...';
+            saveBtn.innerHTML = '⏳ ذخیره...';
 
             try {
                 const resp = await fetch(adminBase + '/settings/save-groups', {
@@ -642,14 +731,13 @@
                 showStatus(`❌ خطا: ${err.message}`, 'red');
             } finally {
                 saveBtn.disabled = false;
-                saveBtn.textContent = '💾 ذخیره';
+                saveBtn.innerHTML = '💾 ذخیره گروه‌ها';
             }
         }
 
         document.getElementById('groupsModal').addEventListener('click', (e) => {
             if (e.target.id === 'groupsModal') closeGroupsModal();
         });
-
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeGroupsModal();
         });
