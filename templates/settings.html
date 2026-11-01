@@ -17,18 +17,38 @@
         }
         .setting-accordion-item {
             transition: all 0.3s ease;
+            position: relative;
         }
         .setting-accordion-item.open {
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
-            border-color: #cbd5e1;
+            box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.2), 0 8px 16px -8px rgba(0, 0, 0, 0.08);
+            border-color: #818cf8;
             transform: translateY(-2px);
+            z-index: 10;
+            background: white;
         }
         .setting-accordion-item.open .chevron-icon {
             transform: rotate(180deg);
+            color: #6366f1;
         }
         .setting-accordion-item.open .accordion-header {
-            background-color: #f8fafc;
+            background: linear-gradient(to left, #eef2ff, #f8fafc);
+            border-bottom: 2px solid #c7d2fe;
         }
+        
+        /* 🎯 افکت blur روی اکاردئون‌های بسته وقتی یکی بازه */
+        .has-open-accordion .setting-accordion-item:not(.open) {
+            opacity: 0.5;
+            filter: blur(1px);
+            transform: scale(0.98);
+            pointer-events: none;
+        }
+        .has-open-accordion .setting-accordion-item:not(.open):hover {
+            opacity: 0.7;
+            filter: blur(0.5px);
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        
         .icon-box {
             width: 46px;
             height: 46px;
@@ -38,6 +58,81 @@
             border-radius: 12px;
             font-size: 22px;
             flex-shrink: 0;
+        }
+
+        /* 🎯 Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 52px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: .3s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            right: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input:checked + .toggle-slider {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(-24px);
+        }
+        
+        /* 🎯 حالت غیرفعال برای بخش بکاپ */
+        .backup-section-disabled {
+            position: relative;
+        }
+        .backup-section-disabled::after {
+            content: "⏸️ غیرفعال";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg);
+            background: rgba(239, 68, 68, 0.95);
+            color: white;
+            padding: 8px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+            z-index: 5;
+            pointer-events: none;
+        }
+        .backup-section-disabled > form {
+            opacity: 0.3;
+            filter: blur(3px) grayscale(100%);
+            pointer-events: none;
+            user-select: none;
+        }
+        
+        /* انیمیشن transition برای blur */
+        .backup-section {
+            transition: all 0.3s ease;
         }
     </style>
 </head>
@@ -65,12 +160,12 @@
             </div>
             {{end}}
 
-            <div class="space-y-4">
+            <div class="space-y-4" id="accordionContainer">
 
                 <!-- ============================================== -->
                 <!-- بخش ۱: تنظیمات عمومی -->
                 <!-- ============================================== -->
-                <div class="setting-accordion-item open bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
                     <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-general" onclick="toggleSettingsAccordion(this)">
                         <div class="flex items-center gap-4">
                             <div class="icon-box bg-purple-100 text-purple-600">⚙️</div>
@@ -83,7 +178,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
-                    <div id="section-general" class="setting-accordion-content" style="max-height: 2000px;"> <!-- باز بودن پیش‌فرض -->
+                    <div id="section-general" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
                             
                             <!-- اطلاعات ورود ادمین -->
@@ -305,45 +400,52 @@
                     <div id="section-backup" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
                             
-                            <!-- بکاپ به ایمیل -->
-                            <div>
-                                <div class="flex items-center gap-2 mb-4">
-                                    <span class="text-xl">📧</span>
-                                    <div>
-                                        <h3 class="text-sm font-bold text-indigo-800">بکاپ خودکار به ایمیل</h3>
-                                        <p class="text-[11px] text-gray-500">برای Gmail حتماً از App Password به جای رمز اصلی استفاده کنید.</p>
+                            <!-- 🎯 بکاپ به ایمیل با toggle -->
+                            <div class="backup-section" id="emailBackupSection">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xl">📧</span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-indigo-800">بکاپ خودکار به ایمیل</h3>
+                                            <p class="text-[11px] text-gray-500">برای Gmail حتماً از App Password به جای رمز اصلی استفاده کنید.</p>
+                                        </div>
                                     </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="emailBackupToggle" {{if .Config.EmailBackup.Enabled}}checked{{end}} onchange="toggleEmailBackup()">
+                                        <span class="toggle-slider"></span>
+                                    </label>
                                 </div>
-                                <form action="{{.AdminBase}}/settings/email-backup" method="POST" class="bg-white border border-indigo-100 rounded-xl p-5 shadow-sm space-y-4">
+                                <form action="{{.AdminBase}}/settings/email-backup" method="POST" class="bg-white border border-indigo-100 rounded-xl p-5 shadow-sm space-y-4" id="emailBackupForm">
+                                    <input type="hidden" name="email_enabled" id="emailEnabledInput" value="{{if .Config.EmailBackup.Enabled}}1{{else}}0{{end}}">
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label class="block text-xs font-bold text-gray-700 mb-1">ایمیل مقصد (گیرنده)</label>
                                             <input type="email" name="email" value="{{.Config.EmailBackup.Email}}" placeholder="example@gmail.com"
-                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                                   class="email-field w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-gray-700 mb-1">SMTP Server</label>
                                             <input type="text" name="smtp_server" value="{{.Config.EmailBackup.SMTPServer}}" placeholder="smtp.gmail.com"
-                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                                   class="email-field w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-gray-700 mb-1">SMTP Port</label>
                                             <input type="number" name="smtp_port" value="{{.Config.EmailBackup.SMTPPort}}" placeholder="587"
-                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                                   class="email-field w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-gray-700 mb-1">SMTP User (فرستنده)</label>
                                             <input type="text" name="smtp_user" value="{{.Config.EmailBackup.SMTPUser}}" placeholder="your-email@gmail.com"
-                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                                   class="email-field w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-gray-700 mb-1">SMTP Password</label>
                                             <input type="password" name="smtp_pass" value="{{.Config.EmailBackup.SMTPPass}}" placeholder="App Password"
-                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
+                                                   class="email-field w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-gray-700 mb-1">🕐 بازه ارسال</label>
-                                            <select name="interval_hours" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                            <select name="interval_hours" class="email-field w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
                                                 <option value="1"  {{if eq .Config.EmailBackup.IntervalHours 1}}selected{{end}}>هر 1 ساعت</option>
                                                 <option value="3"  {{if eq .Config.EmailBackup.IntervalHours 3}}selected{{end}}>هر 3 ساعت</option>
                                                 <option value="6"  {{if eq .Config.EmailBackup.IntervalHours 6}}selected{{end}}>هر 6 ساعت</option>
@@ -354,47 +456,54 @@
                                         <div class="md:col-span-2">
                                             <label class="block text-xs font-bold text-gray-700 mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
                                             <input type="text" name="zip_password" value="{{.Config.EmailBackup.ZipPassword}}" placeholder="خالی = بدون رمز"
-                                                   class="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
+                                                   class="email-field w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
                                         </div>
                                     </div>
                                     <div class="flex gap-3 pt-2">
-                                        <button type="submit" name="action" value="save" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">💾 ذخیره تنظیمات ایمیل</button>
-                                        <button type="submit" name="action" value="test" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">📧 ارسال تست</button>
+                                        <button type="submit" name="action" value="save" class="email-field bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">💾 ذخیره تنظیمات ایمیل</button>
+                                        <button type="submit" name="action" value="test" class="email-field bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">📧 ارسال تست</button>
                                     </div>
                                 </form>
                             </div>
 
                             <hr class="border-gray-200 border-dashed">
 
-                            <!-- بکاپ به تلگرام -->
-                            <div>
-                                <div class="flex items-center gap-2 mb-4">
-                                    <span class="text-xl">✈️</span>
-                                    <div>
-                                        <h3 class="text-sm font-bold text-blue-800">بکاپ خودکار به تلگرام</h3>
-                                        <p class="text-[11px] text-gray-500">فایل بکاپ را به صورت مستقیم در بات یا کانال دریافت کنید.</p>
+                            <!-- 🎯 بکاپ به تلگرام با toggle -->
+                            <div class="backup-section" id="telegramBackupSection">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xl">✈️</span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-blue-800">بکاپ خودکار به تلگرام</h3>
+                                            <p class="text-[11px] text-gray-500">فایل بکاپ را به صورت مستقیم در بات یا کانال دریافت کنید.</p>
+                                        </div>
                                     </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="telegramBackupToggle" {{if .Config.TelegramBackup.Enabled}}checked{{end}} onchange="toggleTelegramBackup()">
+                                        <span class="toggle-slider"></span>
+                                    </label>
                                 </div>
-                                <form action="{{.AdminBase}}/settings/telegram-backup" method="POST" class="bg-white border border-blue-100 rounded-xl p-5 shadow-sm space-y-4">
+                                <form action="{{.AdminBase}}/settings/telegram-backup" method="POST" class="bg-white border border-blue-100 rounded-xl p-5 shadow-sm space-y-4" id="telegramBackupForm">
+                                    <input type="hidden" name="telegram_enabled" id="telegramEnabledInput" value="{{if .Config.TelegramBackup.Enabled}}1{{else}}0{{end}}">
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label class="block text-xs font-bold text-blue-800 mb-1">Bot Token (توکن ربات)</label>
                                             <input type="text" name="bot_token" value="{{.Config.TelegramBackup.BotToken}}" placeholder="123456:ABC-DEF1234ghIkl-..."
-                                                   class="w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
+                                                   class="telegram-field w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-blue-800 mb-1">Chat ID (آیدی کاربر/کانال)</label>
                                             <input type="text" name="chat_id" value="{{.Config.TelegramBackup.ChatID}}" placeholder="123456789 یا @mychannel"
-                                                   class="w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
+                                                   class="telegram-field w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-blue-800 mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
                                             <input type="text" name="zip_password" value="{{.Config.TelegramBackup.ZipPassword}}" placeholder="خالی = بدون رمز"
-                                                   class="w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
+                                                   class="telegram-field w-full border border-blue-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-400 outline-none">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-blue-800 mb-1">🕐 بازه ارسال</label>
-                                            <select name="interval_hours" class="w-full border border-blue-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                                            <select name="interval_hours" class="telegram-field w-full border border-blue-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
                                                 <option value="1"  {{if eq .Config.TelegramBackup.IntervalHours 1}}selected{{end}}>هر 1 ساعت</option>
                                                 <option value="3"  {{if eq .Config.TelegramBackup.IntervalHours 3}}selected{{end}}>هر 3 ساعت</option>
                                                 <option value="6"  {{if eq .Config.TelegramBackup.IntervalHours 6}}selected{{end}}>هر 6 ساعت</option>
@@ -404,8 +513,8 @@
                                         </div>
                                     </div>
                                     <div class="flex gap-3 pt-2">
-                                        <button type="submit" name="action" value="save" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">💾 ذخیره تنظیمات تلگرام</button>
-                                        <button type="submit" name="action" value="test" class="bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">✈️ ارسال تست</button>
+                                        <button type="submit" name="action" value="save" class="telegram-field bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">💾 ذخیره تنظیمات تلگرام</button>
+                                        <button type="submit" name="action" value="test" class="telegram-field bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-2.5 rounded-lg transition text-sm shadow-md">✈️ ارسال تست</button>
                                     </div>
                                 </form>
                             </div>
@@ -490,11 +599,14 @@
     </div>
 
     <script>
-        // ── کنترل اکاردئون ──
+        // ── 🎯 کنترل اکاردئون با افکت blur ──
         function toggleSettingsAccordion(header) {
             const item = header.closest('.setting-accordion-item');
             const content = item.querySelector('.setting-accordion-content');
+            const container = document.getElementById('accordionContainer');
             const targetId = header.dataset.target;
+            
+            const isOpen = item.classList.contains('open');
             
             // بستن بقیه اکاردئون‌ها
             document.querySelectorAll('.setting-accordion-item.open').forEach(opened => {
@@ -504,24 +616,67 @@
                 }
             });
 
-            if (item.classList.contains('open')) {
-                // اگر باز بود، ببند
+            if (isOpen) {
+                // بستن فعلی
                 content.style.maxHeight = content.scrollHeight + 'px'; 
                 requestAnimationFrame(() => {
                     content.style.maxHeight = null;
                     item.classList.remove('open');
+                    container.classList.remove('has-open-accordion');
                 });
             } else {
-                // اگر بسته بود، باز کن
+                // باز کردن
                 item.classList.add('open');
                 content.style.maxHeight = content.scrollHeight + 1500 + 'px'; 
+                container.classList.add('has-open-accordion');
                 
-                // در موبایل، وقتی باز می‌شه اسکرول کنه که بهتر دیده بشه
                 setTimeout(() => {
                     header.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 300);
             }
         }
+
+        // ── 🎯 Toggle برای بکاپ ایمیل ──
+        function toggleEmailBackup() {
+            const toggle = document.getElementById('emailBackupToggle');
+            const section = document.getElementById('emailBackupSection');
+            const hiddenInput = document.getElementById('emailEnabledInput');
+            const isEnabled = toggle.checked;
+            
+            hiddenInput.value = isEnabled ? '1' : '0';
+            
+            if (isEnabled) {
+                section.classList.remove('backup-section-disabled');
+                document.querySelectorAll('.email-field').forEach(f => f.disabled = false);
+            } else {
+                section.classList.add('backup-section-disabled');
+                document.querySelectorAll('.email-field').forEach(f => f.disabled = true);
+            }
+        }
+
+        // ── 🎯 Toggle برای بکاپ تلگرام ──
+        function toggleTelegramBackup() {
+            const toggle = document.getElementById('telegramBackupToggle');
+            const section = document.getElementById('telegramBackupSection');
+            const hiddenInput = document.getElementById('telegramEnabledInput');
+            const isEnabled = toggle.checked;
+            
+            hiddenInput.value = isEnabled ? '1' : '0';
+            
+            if (isEnabled) {
+                section.classList.remove('backup-section-disabled');
+                document.querySelectorAll('.telegram-field').forEach(f => f.disabled = false);
+            } else {
+                section.classList.add('backup-section-disabled');
+                document.querySelectorAll('.telegram-field').forEach(f => f.disabled = true);
+            }
+        }
+
+        // ── اجرای اولیه هنگام بارگذاری صفحه ──
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleEmailBackup();
+            toggleTelegramBackup();
+        });
 
         // ── توابع عمومی ──
         function confirmAdminChange() {
