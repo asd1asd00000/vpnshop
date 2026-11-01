@@ -411,10 +411,10 @@ func buildTelegramText(items []ConfigItem) string {
 				b.WriteString(it.Note)
 			}
 		default: // main (اصلی)
-			b.WriteString(" 👇👇👇**لینک اشتراک اصلی (ابتدا این لینک را وارد کنید):** 👇👇👇\n\n")
-			b.WriteString(it.Link + "\n\n")
-			b.WriteString(fmt.Sprintf("✔️✔️✔️ **%s اشتراک اصلی شما** ✔️✔️✔️\n", volText))
-			b.WriteString("⬆️⬆️⬆️ **لینک بالا اشتراک اصلی شماست ** ⬆️⬆️⬆️")
+			b.WriteString(" 👇👇👇**لینک اشتراک اصلی (ابتدا این لینک را وارد کنید):** \n\n")
+			b.WriteString("**" + it.Link + "**\n\n")
+			b.WriteString(fmt.Sprintf("✔️ **%s اشتراک اصلی شما** ✔️\n", volText))
+			b.WriteString("⬆️ **لینک بالا اشتراک اصلی شماست ** ⬆️")
 		}
 		blocks = append(blocks, b.String())
 	}
