@@ -262,32 +262,29 @@
                 </form>
             </section>
 
-        </div>
-    </div>
-            
             <!-- 🆕 بخش: بکاپ خودکار به تلگرام -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6 bg-blue-50">
-                <h2 class="text-lg font-bold text-blue-900 mb-2">✈️ بکاپ خودکار به تلگرام</h2>
-                <p class="text-sm text-blue-700 mb-4">
-                    با وارد کردن Token ربات و Chat ID، فایل بکاپ به تلگرام شما ارسال می‌شود. 
+            <section class="border border-gray-200 rounded-xl p-4 md:p-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-2">✈️ بکاپ خودکار به تلگرام</h2>
+                <p class="text-sm text-gray-500 mb-4">
+                    با وارد کردن Token ربات و Chat ID، فایل بکاپ به تلگرام شما ارسال می‌شود.
                 </p>
                 <form action="{{.AdminBase}}/settings/telegram-backup" method="POST" class="space-y-3">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs text-blue-800 font-bold mb-1">Bot Token (توکن ربات)</label>
+                            <label class="block text-xs text-gray-600 mb-1">Bot Token (توکن ربات)</label>
                             <input type="text" name="bot_token" value="{{.Config.TelegramBackup.BotToken}}"
                                    placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-                                   class="w-full border border-blue-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
                         </div>
                         <div>
-                            <label class="block text-xs text-blue-800 font-bold mb-1">Chat ID (آیدی عددی کاربر/کانال)</label>
+                            <label class="block text-xs text-gray-600 mb-1">Chat ID (آیدی عددی کاربر/کانال)</label>
                             <input type="text" name="chat_id" value="{{.Config.TelegramBackup.ChatID}}"
                                    placeholder="مثلاً 123456789 یا @mychannel"
-                                   class="w-full border border-blue-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
                         </div>
                         <div>
-                            <label class="block text-xs text-blue-800 font-bold mb-1">🕐 بازه ارسال بکاپ (ساعت)</label>
-                            <select name="interval_hours" class="w-full border border-blue-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            <label class="block text-xs text-gray-600 mb-1">🕐 بازه ارسال بکاپ (ساعت)</label>
+                            <select name="interval_hours" class="w-full border border-gray-300 rounded-lg p-2 text-sm">
                                 <option value="1"  {{if eq .Config.TelegramBackup.IntervalHours 1}}selected{{end}}>هر 1 ساعت</option>
                                 <option value="2"  {{if eq .Config.TelegramBackup.IntervalHours 2}}selected{{end}}>هر 2 ساعت</option>
                                 <option value="3"  {{if eq .Config.TelegramBackup.IntervalHours 3}}selected{{end}}>هر 3 ساعت</option>
@@ -298,16 +295,16 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs text-blue-800 font-bold mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
+                            <label class="block text-xs text-gray-600 mb-1">🔒 رمز فایل زیپ (اختیاری)</label>
                             <input type="text" name="zip_password" value="{{.Config.TelegramBackup.ZipPassword}}"
                                    placeholder="اگر خالی بماند، زیپ بدون رمز است"
-                                   class="w-full border border-blue-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+                                   class="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono">
                         </div>
                     </div>
 
                     <div class="flex gap-3 pt-2">
                         <button type="submit" name="action" value="save"
-                                class="bg-blue-700 hover:bg-blue-800 text-white font-bold px-6 py-2 rounded-lg transition">
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-lg transition">
                             💾 ذخیره تنظیمات تلگرام
                         </button>
                         <button type="submit" name="action" value="test"
@@ -319,7 +316,7 @@
             </section>
 
             <!-- 🆕 بخش: تاریخچه ۳ بکاپ اخیر -->
-            <section class="border border-gray-200 rounded-xl p-4 md:p-6 bg-gray-50 mt-6">
+            <section class="border border-gray-200 rounded-xl p-4 md:p-6 bg-gray-50">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-gray-800">🕒 تاریخچه ۳ بکاپ ارسال‌شده اخیر</h2>
                     <button onclick="window.location.reload()" class="text-sm bg-white border border-gray-300 rounded px-2 py-1 shadow-sm hover:bg-gray-100">
@@ -350,7 +347,10 @@
                     {{end}}
                 </div>
             </section>
-    
+
+        </div>  <!-- ✅ بسته شدن div bg-white -->
+    </div>  <!-- ✅ بسته شدن div max-w-5xl -->
+
     <!-- 🆕 Modal مدیریت گروه‌های Pasarguard -->
     <div id="groupsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -453,12 +453,10 @@
                 const type = typeSelect.value;
 
                 if (type === 'guards' || type === 'conf') {
-                    // فقط API Key
                     setFieldState(apiKeyInput, false, true, 'API Key پنل (الزامی)');
                     setFieldState(usernameInput, true, false, 'نیازی نیست — فقط API Key');
                     setFieldState(passwordInput, true, false, 'نیازی نیست — فقط API Key');
                 } else if (type === 'marzban') {
-                    // Pasarguard: فقط یوزرنیم + پسورد
                     setFieldState(apiKeyInput, true, false, 'نیازی نیست — یوزرنیم/پسورد');
                     setFieldState(usernameInput, false, true, 'نام کاربری');
                     setFieldState(passwordInput, false, true, 'رمز عبور');
@@ -564,13 +562,11 @@
             }
         }
 
-        // 🆕 افزودن گروه‌های دستی
         function addManualGroups() {
             const input = document.getElementById('manualGroupsInput');
             const raw = input.value.trim();
             if (!raw) return;
 
-            // parse ID ها (با کاما، space، یا newline جدا شدن)
             const ids = raw.split(/[\s,،]+/)
                 .map(s => parseInt(s))
                 .filter(n => !isNaN(n) && n > 0);
@@ -580,7 +576,6 @@
                 return;
             }
 
-            // merge با لیست فعلی (بدون تکرار)
             const existing = new Set(currentGroups.map(g => g.id));
             let added = 0;
             for (const id of ids) {
@@ -651,12 +646,10 @@
             }
         }
 
-        // بستن modal با کلیک بیرون
         document.getElementById('groupsModal').addEventListener('click', (e) => {
             if (e.target.id === 'groupsModal') closeGroupsModal();
         });
 
-        // بستن با Escape
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeGroupsModal();
         });
