@@ -844,9 +844,14 @@
             showStatus(`✅ ${added} گروه دستی اضافه شد`, 'green');
         }
 
-        function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, c => ({'&':'&','<':'<','>':'>','"':'"',"'":'''}[c]));
-        }
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
         function updateSelectedCount() {
             const checkboxes = document.querySelectorAll('.group-checkbox:checked');
