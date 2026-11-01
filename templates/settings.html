@@ -643,17 +643,32 @@
             const hiddenInput = document.getElementById('emailEnabledInput');
             const isEnabled = toggle.checked;
             
-            // به‌روزرسانی مقدار مخفی
-            hiddenInput.value = isEnabled ? '1' : '0';
+            // بررسی اینکه آیا مقدار تغییر کرده است
+            const currentValue = hiddenInput.value;
+            const newValue = isEnabled ? '1' : '0';
             
-            // تغییر ظاهر (بدون استفاده از disabled واقعی تا مقادیر فرم ارسال شوند)
+            // اگر مقدار تغییر نکرده، submit نکن
+            if (currentValue === newValue) {
+                // فقط ظاهر را به‌روز کن
+                if (isEnabled) {
+                    section.classList.remove('backup-section-disabled');
+                } else {
+                    section.classList.add('backup-section-disabled');
+                }
+                return;
+            }
+            
+            // به‌روزرسانی مقدار مخفی
+            hiddenInput.value = newValue;
+            
+            // تغییر ظاهر
             if (isEnabled) {
                 section.classList.remove('backup-section-disabled');
             } else {
                 section.classList.add('backup-section-disabled');
             }
             
-            // ارسال خودکار فرم پس از ۳۰۰ میلی‌ثانیه (برای ذخیره فوری در بک‌اند)
+            // ارسال خودکار فرم پس از 300 میلی‌ثانیه
             setTimeout(() => {
                 document.getElementById('emailBackupForm').submit();
             }, 300);
@@ -666,21 +681,60 @@
             const hiddenInput = document.getElementById('telegramEnabledInput');
             const isEnabled = toggle.checked;
             
-            // به‌روزرسانی مقدار مخفی
-            hiddenInput.value = isEnabled ? '1' : '0';
+            // بررسی اینکه آیا مقدار تغییر کرده است
+            const currentValue = hiddenInput.value;
+            const newValue = isEnabled ? '1' : '0';
             
-            // تغییر ظاهر (بدون استفاده از disabled واقعی تا مقادیر فرم ارسال شوند)
+            // اگر مقدار تغییر نکرده، submit نکن
+            if (currentValue === newValue) {
+                // فقط ظاهر را به‌روز کن
+                if (isEnabled) {
+                    section.classList.remove('backup-section-disabled');
+                } else {
+                    section.classList.add('backup-section-disabled');
+                }
+                return;
+            }
+            
+            // به‌روزرسانی مقدار مخفی
+            hiddenInput.value = newValue;
+            
+            // تغییر ظاهر
             if (isEnabled) {
                 section.classList.remove('backup-section-disabled');
             } else {
                 section.classList.add('backup-section-disabled');
             }
             
-            // ارسال خودکار فرم پس از ۳۰۰ میلی‌ثانیه (برای ذخیره فوری در بک‌اند)
+            // ارسال خودکار فرم پس از 300 میلی‌ثانیه
             setTimeout(() => {
                 document.getElementById('telegramBackupForm').submit();
             }, 300);
         }
+
+        // ── اجرای اولیه هنگام بارگذاری صفحه ──
+        document.addEventListener('DOMContentLoaded', function() {
+            // فقط ظاهر را به‌روز کن، submit نکن
+            const emailToggle = document.getElementById('emailBackupToggle');
+            const emailSection = document.getElementById('emailBackupSection');
+            if (emailToggle && emailSection) {
+                if (emailToggle.checked) {
+                    emailSection.classList.remove('backup-section-disabled');
+                } else {
+                    emailSection.classList.add('backup-section-disabled');
+                }
+            }
+            
+            const telegramToggle = document.getElementById('telegramBackupToggle');
+            const telegramSection = document.getElementById('telegramBackupSection');
+            if (telegramToggle && telegramSection) {
+                if (telegramToggle.checked) {
+                    telegramSection.classList.remove('backup-section-disabled');
+                } else {
+                    telegramSection.classList.add('backup-section-disabled');
+                }
+            }
+        });
 
         // ── اجرای اولیه هنگام بارگذاری صفحه ──
         document.addEventListener('DOMContentLoaded', function() {
