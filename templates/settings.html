@@ -71,7 +71,7 @@
                 <!-- بخش ۱: تنظیمات عمومی -->
                 <!-- ============================================== -->
                 <div class="setting-accordion-item open bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-general" onclick="toggleSettingsAccordion(this)">
                         <div class="flex items-center gap-4">
                             <div class="icon-box bg-purple-100 text-purple-600">⚙️</div>
                             <div>
@@ -83,7 +83,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
-                    <div class="setting-accordion-content" style="max-height: 2000px;"> <!-- باز بودن پیش‌فرض -->
+                    <div id="section-general" class="setting-accordion-content" style="max-height: 2000px;"> <!-- باز بودن پیش‌فرض -->
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
                             
                             <!-- اطلاعات ورود ادمین -->
@@ -145,7 +145,7 @@
                 <!-- بخش ۲: پنل‌های VPN -->
                 <!-- ============================================== -->
                 <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-panels" onclick="toggleSettingsAccordion(this)">
                         <div class="flex items-center gap-4">
                             <div class="icon-box bg-blue-100 text-blue-600">🖥️</div>
                             <div>
@@ -157,7 +157,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
-                    <div class="setting-accordion-content">
+                    <div id="section-panels" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30">
                             
                             <div class="space-y-3 mb-6">
@@ -165,11 +165,11 @@
                                 <div class="bg-white border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm hover:border-blue-300 transition">
                                     <div class="text-sm flex-1">
                                         <span class="font-bold text-gray-800 text-base">{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Type}}{{end}}</span>
-                                        <span class="mx-2 text-xs px-2 py-0.5 rounded-full {{if eq $p.Role "main"}}bg-blue-100 text-blue-700{{else if eq $p.Role "backup"}}bg-green-100 text-green-700{{else}}bg-orange-100 text-orange-700{{end}}">
-                                            {{if eq $p.Role "main"}}اصلی{{else if eq $p.Role "backup"}}زاپاس{{else}}هدیه{{end}}
+                                        <span class="mx-2 text-xs px-2 py-0.5 rounded-full {{if eq $p.Role `main`}}bg-blue-100 text-blue-700{{else if eq $p.Role `backup`}}bg-green-100 text-green-700{{else}}bg-orange-100 text-orange-700{{end}}">
+                                            {{if eq $p.Role `main`}}اصلی{{else if eq $p.Role `backup`}}زاپاس{{else}}هدیه{{end}}
                                         </span>
                                         <div class="text-xs text-gray-500 font-mono mt-1 mb-1" dir="ltr">{{$p.URL}}</div>
-                                        {{if eq $p.Type "marzban"}}
+                                        {{if eq $p.Type `marzban`}}
                                             {{if $p.GroupIDs}}
                                                 <span class="text-xs px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">📋 {{len $p.GroupIDs}} گروه اختصاص‌یافته</span>
                                             {{else}}
@@ -178,9 +178,11 @@
                                         {{end}}
                                     </div>
                                     <div class="flex gap-2 flex-wrap">
-                                        {{if eq $p.Type "marzban"}}
+                                        {{if eq $p.Type `marzban`}}
                                         <button type="button"
-                                                onclick="openGroupsModal({{$i}}, '{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Type}}{{end}}')"
+                                                data-panel-id="{{$i}}"
+                                                data-panel-name="{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Type}}{{end}}"
+                                                onclick="openGroupsModal(this.dataset.panelId, this.dataset.panelName)"
                                                 class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
                                             📋 مدیریت گروه‌ها
                                         </button>
@@ -234,7 +236,7 @@
                 <!-- بخش ۳: شماره کارت‌ها -->
                 <!-- ============================================== -->
                 <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-cards" onclick="toggleSettingsAccordion(this)">
                         <div class="flex items-center gap-4">
                             <div class="icon-box bg-teal-100 text-teal-600">💳</div>
                             <div>
@@ -246,7 +248,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
-                    <div class="setting-accordion-content">
+                    <div id="section-cards" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30">
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
@@ -288,7 +290,7 @@
                 <!-- بخش ۴: بکاپ خودکار -->
                 <!-- ============================================== -->
                 <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsAccordion(this)">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-backup" onclick="toggleSettingsAccordion(this)">
                         <div class="flex items-center gap-4">
                             <div class="icon-box bg-indigo-100 text-indigo-600">📦</div>
                             <div>
@@ -300,7 +302,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
-                    <div class="setting-accordion-content">
+                    <div id="section-backup" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
                             
                             <!-- بکاپ به ایمیل -->
@@ -492,8 +494,9 @@
         function toggleSettingsAccordion(header) {
             const item = header.closest('.setting-accordion-item');
             const content = item.querySelector('.setting-accordion-content');
+            const targetId = header.dataset.target;
             
-            // بستن بقیه اکاردئون‌ها (اختیاری)
+            // بستن بقیه اکاردئون‌ها
             document.querySelectorAll('.setting-accordion-item.open').forEach(opened => {
                 if(opened !== item) {
                     opened.classList.remove('open');
@@ -503,7 +506,7 @@
 
             if (item.classList.contains('open')) {
                 // اگر باز بود، ببند
-                content.style.maxHeight = content.scrollHeight + 'px'; // تنظیم دقیق ارتفاع برای انیمیشن
+                content.style.maxHeight = content.scrollHeight + 'px'; 
                 requestAnimationFrame(() => {
                     content.style.maxHeight = null;
                     item.classList.remove('open');
@@ -511,7 +514,12 @@
             } else {
                 // اگر بسته بود، باز کن
                 item.classList.add('open');
-                content.style.maxHeight = content.scrollHeight + 1500 + 'px'; // فضای اضافی برای عناصر داخلی (مانند فرم ارورها یا باز شدن select)
+                content.style.maxHeight = content.scrollHeight + 1500 + 'px'; 
+                
+                // در موبایل، وقتی باز می‌شه اسکرول کنه که بهتر دیده بشه
+                setTimeout(() => {
+                    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 300);
             }
         }
 
@@ -624,7 +632,7 @@
                 const resp = await fetch(adminBase + '/settings/fetch-groups', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({panel_id: currentPanelId})
+                    body: JSON.stringify({panel_id: parseInt(currentPanelId)})
                 });
                 const data = await resp.json();
 
@@ -711,7 +719,7 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        panel_id: currentPanelId,
+                        panel_id: parseInt(currentPanelId),
                         group_ids: currentSelected
                     })
                 });
