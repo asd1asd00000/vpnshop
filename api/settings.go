@@ -319,7 +319,7 @@ func SavePanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// EmailBackupHandler ذخیره تنظیمات ایمیل بکاپ + تست ارسال
+// 🎯 EmailBackupHandler ذخیره تنظیمات ایمیل بکاپ + تست ارسال (با پشتیبانی از toggle)
 func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -336,6 +336,10 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	smtpPass := r.FormValue("smtp_pass")
 	intervalHours, _ := strconv.Atoi(r.FormValue("interval_hours"))
 	zipPassword := r.FormValue("zip_password")
+	
+	// 🎯 خواندن وضعیت toggle از فرم
+	emailEnabledStr := r.FormValue("email_enabled")
+	enabled := emailEnabledStr == "1"
 
 	if smtpPort <= 0 {
 		smtpPort = 587
@@ -343,8 +347,6 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	if intervalHours <= 0 {
 		intervalHours = 24
 	}
-
-	enabled := email != "" && smtpServer != "" && smtpUser != ""
 
 	cfg := db.GetConfig()
 	cfg.EmailBackup = db.EmailBackupConfig{
@@ -391,7 +393,7 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_saved", http.StatusSeeOther)
 }
 
-// TelegramBackupHandler تنظیمات و تست بکاپ تلگرام
+// 🎯 TelegramBackupHandler تنظیمات و تست بکاپ تلگرام (با پشتیبانی از toggle)
 func TelegramBackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -405,12 +407,14 @@ func TelegramBackupHandler(w http.ResponseWriter, r *http.Request) {
 	chatID := strings.TrimSpace(r.FormValue("chat_id"))
 	intervalHours, _ := strconv.Atoi(r.FormValue("interval_hours"))
 	zipPassword := r.FormValue("zip_password")
+	
+	// 🎯 خواندن وضعیت toggle از فرم
+	telegramEnabledStr := r.FormValue("telegram_enabled")
+	enabled := telegramEnabledStr == "1"
 
 	if intervalHours <= 0 {
 		intervalHours = 24
 	}
-
-	enabled := botToken != "" && chatID != ""
 
 	cfg := db.GetConfig()
 	cfg.TelegramBackup = db.TelegramBackupConfig{
