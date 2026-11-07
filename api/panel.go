@@ -57,8 +57,8 @@ func sortConfigItems(items []ConfigItem) []ConfigItem {
 }
 
 func GenerateConfigFromOrder(order models.Order) (string, error) {
-	// 🎯 اگه RenewUsername خالیه، از دیتابیس بخون
-	if order.RenewUsername == "" {
+	// 🎯 همیشه اطلاعات تمدید (renew_username و carry_gb) را مستقیماً از دیتابیس بخوان
+	if order.ID > 0 {
 		db.DB.QueryRow(`SELECT IFNULL(renew_username, ''), IFNULL(carry_gb, 0) FROM orders WHERE id = ?`, order.ID).
 			Scan(&order.RenewUsername, &order.CarryGB)
 	}
