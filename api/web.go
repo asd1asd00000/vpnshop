@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -172,8 +173,8 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		uniqueAmount := basePrice + rand.Intn(999) + 1
 		trackingCode := generateTrackingCode()
 
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, status) 
-			VALUES (?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount)
+		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, status) 
+			VALUES (?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, selectedPlan.Days)
 
 		if err != nil {
 			renderErrorPage(w, "خطا در ایجاد فاکتور",
@@ -487,34 +488,24 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CheckRenewalHandler بررسی وجود نام کاربری و محاسبه carry-over
-func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+// ───────────── 🔄 منطق محاسبه حجم انتقالی (Carry-Over) ─────────────
 
-	username := r.FormValue("username")
-	if username == "" {
-		http.Error(w, "نام کاربری لازم است", http.StatusBadRequest)
-		return
-	}
-
+// calculateUserCarryOver حجم باقیمانده، روز باقیمانده و حجم قابل انتقال به دوره بعد را محاسبه می‌کند.
+// قوانین:
+//  1. حجم باقیمانده (GB) و زمان باقیمانده (روز) به سمت بالا و به نفع مشتری گرد می‌شوند.
+//  2. به ازای هر 1 گیگ انتقال، حداقل 1 روز زمان باقیمانده نیاز است: carryGB = min(remainingVolumeGB, remainingDays).
+//  3. اگر حجم باقیمانده 0 باشد یا زمان اشتراک به پایان رسیده باشد، carryGB = 0 خواهد بود.
+func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDays int, carryOverGB int, err error) {
 	// پیدا کردن آخرین فاکتور پرداخت‌شده با این username
 	var orderID int
 	var configLink string
-	err := db.DB.QueryRow(`SELECT id, IFNULL(config_link, '') FROM orders 
-	                       WHERE status = 'paid' AND config_link LIKE ?
-	                       ORDER BY id DESC LIMIT 1`, "%\"username\":\""+username+"\"%").
+	err = db.DB.QueryRow(`SELECT id, IFNULL(config_link, '') FROM orders 
+	                      WHERE status = 'paid' AND config_link LIKE ?
+	                      ORDER BY id DESC LIMIT 1`, "%\"username\":\""+username+"\"%").
 		Scan(&orderID, &configLink)
 
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"found": false,
-			"error": "اشتراکی با این نام کاربری یافت نشد",
-		})
-		return
+		return 0, 0, 0, fmt.Errorf("اشتراکی با این نام کاربری یافت نشد")
 	}
 
 	// پیدا کردن پنل اصلی
@@ -526,10 +517,11 @@ func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-
+	if mainPanel == nil && len(cfg.Panels) > 0 {
+		mainPanel = &cfg.Panels[0]
+	}
 	if mainPanel == nil {
-		http.Error(w, "پنل اصلی یافت نشد", http.StatusInternalServerError)
-		return
+		return 0, 0, 0, fmt.Errorf("پنل اصلی در تنظیمات یافت نشد")
 	}
 
 	// خواندن حجم و روز باقیمانده از پنل اصلی
@@ -537,46 +529,83 @@ func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
 	switch mainPanel.Type {
 	case "guards":
 		limitUsage, totalUsage, limitExpire, err = GetGuardsUserUsage(*mainPanel, username)
-	case "marzban":
-		http.Error(w, "تمدید فعلاً فقط برای پنل Guards پشتیبانی می‌شود", http.StatusBadRequest)
-		return
 	default:
-		http.Error(w, "نوع پنل پشتیبانی نمی‌شود", http.StatusBadRequest)
-		return
+		return 0, 0, 0, fmt.Errorf("تمدید فعلاً فقط برای پنل Guards پشتیبانی می‌شود")
 	}
 
 	if err != nil {
+		return 0, 0, 0, fmt.Errorf("خطا در خواندن اطلاعات اشتراک: %v", err)
+	}
+
+	const oneGB = int64(1073741824)
+	const oneDay = int64(86400)
+
+	// ۱. محاسبه حجم باقیمانده و گرد کردن به سمت بالا (به نفع مشتری)
+	remainingBytes := limitUsage - totalUsage
+	if remainingBytes > 0 {
+		remainingVolumeGB = int((remainingBytes + oneGB - 1) / oneGB)
+	} else {
+		remainingVolumeGB = 0
+	}
+
+	// ۲. محاسبه روزهای باقیمانده و گرد کردن به سمت بالا (به نفع مشتری)
+	now := time.Now().Unix()
+	remainingSeconds := limitExpire - now
+	if remainingSeconds > 0 {
+		remainingDays = int((remainingSeconds + oneDay - 1) / oneDay)
+	} else {
+		remainingDays = 0
+	}
+
+	// ۳. قانون انتقال: به ازای هر ۱ گیگ انتقال، حداقل ۱ روز زمان نیاز است
+	if remainingVolumeGB > 0 && remainingDays > 0 {
+		if remainingVolumeGB < remainingDays {
+			carryOverGB = remainingVolumeGB
+		} else {
+			carryOverGB = remainingDays
+		}
+	} else {
+		carryOverGB = 0
+	}
+
+	log.Printf("📊 [محاسبه تمدید] کاربر=%s | سقف=%d | مصرف=%d | مانده=%dGB | زمان‌مانده=%dروز (%dثانیه) | انتقالی=%dGB",
+		username, limitUsage, totalUsage, remainingVolumeGB, remainingDays, remainingSeconds, carryOverGB)
+
+	return remainingVolumeGB, remainingDays, carryOverGB, nil
+}
+
+// CheckRenewalHandler بررسی وجود نام کاربری و محاسبه carry-over
+func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := strings.TrimSpace(r.FormValue("username"))
+	if username == "" {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"found": false,
-			"error": "خطا در خواندن اطلاعات اشتراک: " + err.Error(),
+			"error": "نام کاربری لازم است",
 		})
 		return
 	}
 
-	// محاسبه carry-over
-	now := time.Now().Unix()
-	remainingVolume := limitUsage - totalUsage
-	remainingDays := (limitExpire - now) / 86400
-
-	if remainingDays <= 0 {
-		remainingDays = 0
+	remainingVolumeGB, remainingDays, carryOverGB, err := calculateUserCarryOver(username)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"found": false,
+			"error": err.Error(),
+		})
+		return
 	}
-
-	// نرخ روزانه = حجم کل / 30 روز (فرض)
-	dailyRate := limitUsage / 30
-	carryOverBytes := remainingVolume
-	if remainingDays*dailyRate < carryOverBytes {
-		carryOverBytes = remainingDays * dailyRate
-	}
-
-	carryOverGB := int(carryOverBytes / 1073741824)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"found":            true,
 		"username":         username,
-		"remaining_volume": remainingVolume / 1073741824,
+		"remaining_volume": remainingVolumeGB,
 		"remaining_days":   remainingDays,
 		"carry_gb":         carryOverGB,
 	})
@@ -603,11 +632,18 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		return si > sj
 	})
 
-	// 🎯 غنی‌سازی پلن‌ها (در scope این تابع)
+	panelTypes := make(map[string]string)
+	for _, pn := range cfg.Panels {
+		panelTypes[pn.Role] = pn.Type
+	}
+
+	// 🎯 غنی‌سازی پلن‌ها
 	type shopPlanView struct {
 		models.Plan
 		MonthLabel     string
 		PriceFormatted string
+		BackupDisplay  string
+		GiftDisplay    string
 	}
 	var enrichedPlans []shopPlanView
 	for _, p := range plans {
@@ -619,6 +655,8 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 			Plan:           p,
 			MonthLabel:     ml,
 			PriceFormatted: formatPrice(p.Price),
+			BackupDisplay:  formatVolumeForPanel(panelTypes["backup"], p.BackupGB),
+			GiftDisplay:    formatVolumeForPanel(panelTypes["gift"], p.GiftGB),
 		})
 	}
 
@@ -632,7 +670,7 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		planID := r.FormValue("plan_id")
-		renewUsername := r.FormValue("renew_username")
+		renewUsername := strings.TrimSpace(r.FormValue("renew_username"))
 		carryGBStr := r.FormValue("carry_gb")
 
 		var selectedPlan *models.Plan
@@ -646,13 +684,19 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		if selectedPlan == nil {
 			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
 				"پلنی که برای تمدید انتخاب کرده‌اید در سیستم یافت نشد.",
-				"/renew", 0)
+				"/", 0)
 			return
 		}
 
+		// محاسبه مجدد سمت سرور برای اطمینان از صحت مقدار carry_gb
 		carryGB := 0
-		if carryGBStr != "" {
+		if _, _, serverCarryGB, cerr := calculateUserCarryOver(renewUsername); cerr == nil {
+			carryGB = serverCarryGB
+		} else if carryGBStr != "" {
 			fmt.Sscanf(carryGBStr, "%d", &carryGB)
+		}
+		if carryGB < 0 {
+			carryGB = 0
 		}
 
 		basePrice := selectedPlan.Price
@@ -661,13 +705,13 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		trackingCode := generateTrackingCode()
 
 		// ساخت فاکتور تمدید
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, renew_username, carry_gb, status) 
-			VALUES (?, ?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, renewUsername, carryGB)
+		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, renew_username, carry_gb, status) 
+			VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, selectedPlan.Days, renewUsername, carryGB)
 
 		if err != nil {
 			renderErrorPage(w, "خطا در ایجاد فاکتور تمدید",
 				"سرور نتوانست فاکتور تمدید را ثبت کند. این مشکل معمولاً موقتی است.",
-				"/renew", 5)
+				"/", 5)
 			return
 		}
 
