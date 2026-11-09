@@ -1,15 +1,21 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/asd1asd00000/vpnshop/db"
 )
 
 // renderErrorPage صفحه خطای زیبا با رفرش خودکار و دستی نمایش می‌ده
 // retryURL: آدرسی که دوباره تلاش می‌شه (معمولاً همون صفحه)
 // autoRefreshSec: فاصله رفرش خودکار به ثانیه (0 = بدون رفرش خودکار)
 func renderErrorPage(w http.ResponseWriter, title, message, retryURL string, autoRefreshSec int) {
+	log.Printf("⚠️ [ErrorPage] نمایش صفحه خطا: %s | %s (retry: %s)", title, message, retryURL)
+	db.LogEventf("general", "warning", "⚠️ نمایش صفحه خطا به کاربر: %s — %s", title, message)
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
 
