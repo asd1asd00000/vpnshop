@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>مدیریت فروشگاه | VPNShop</title>
     <script src="https://cdn.tailwindcss.com"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
@@ -54,13 +54,12 @@
                         class="flex-1 md:flex-none bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
                     📜 لاگ
                 </button>
-                                <button type="button" onclick="openStats()"
+                <button type="button" onclick="openStats()"
                         class="flex-1 md:flex-none bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
                     📊 آمار فروش
                 </button>
                 <a href="{{.AdminBase}}/logout"
                    class="flex-1 md:flex-none text-center bg-red-600 hover:bg-red-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
-
                     🚪 خروج
                 </a>
                 <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm whitespace-nowrap">VPNShop</span>
@@ -94,10 +93,39 @@
                 </span>
             </div>
 
+            <!-- 🔍 کادر جستجوی همه‌کاره (شامل فاکتورهای آرشیوشده) -->
+            <form method="GET" action="{{.AdminBase}}" class="mb-4">
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="q" value="{{.SearchQuery}}"
+                               placeholder="جستجو بر اساس نام کاربری، کد پیگیری، مبلغ، شماره فاکتور یا یادداشت (شامل آرشیوها)..."
+                               class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white outline-none transition">
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit"
+                                class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap shadow-sm">
+                            🔍 جستجو
+                        </button>
+                        {{if .SearchQuery}}
+                        <a href="{{.AdminBase}}"
+                           class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center whitespace-nowrap"
+                           title="پاک کردن جستجو">
+                            ✕ نمایش همه
+                        </a>
+                        {{end}}
+                    </div>
+                </div>
+                {{if .SearchQuery}}
+                <div class="mt-2 flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-1.5 text-xs text-indigo-800">
+                    <span>🔎 نتایج جستجو برای <b>«{{.SearchQuery}}»</b> (شامل فاکتورهای آرشیوشده): <b>{{.TotalOrders}}</b> مورد یافت شد</span>
+                </div>
+                {{end}}
+            </form>
+
             <!-- لیست فاکتورها -->
             <div class="space-y-3">
                 {{range .Orders}}
-                <div class="accordion-item border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div class="accordion-item border {{if .Archived}}border-gray-300 bg-gray-50/60{{else}}border-gray-200{{end}} rounded-xl overflow-hidden shadow-sm">
 
                     <!-- هدر کارت: دو ردیفه -->
                     <div onclick="toggleAccordion(this)" role="button" tabindex="0"
@@ -129,6 +157,9 @@
                                 {{if .RenewUsername}}
                                 <span class="bg-teal-100 text-teal-700 px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-bold border border-teal-200 whitespace-nowrap">تمدید</span>
                                 {{end}}
+                                {{if .Archived}}
+                                <span class="bg-gray-200 text-gray-700 px-2 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-bold border border-gray-300 whitespace-nowrap">📦 آرشیوشده</span>
+                                {{end}}
                             </div>
 
                             <svg class="chevron w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,10 +167,10 @@
                             </svg>
                         </div>
 
-                        <!-- ردیف ۲: مبلغ -->
+                        <!-- ردیف ۲: مبلغ (جداسازی سه رقمی با کاما) -->
                         <div class="flex items-center justify-between gap-2 mt-2">
                             <span class="font-bold text-green-600 text-sm md:text-base">
-                                {{.UniqueAmount}} <span class="text-xs text-gray-400 font-normal">تومان</span>
+                                <span dir="ltr">{{.UniqueAmountFmt}}</span> <span class="text-xs text-gray-400 font-normal">تومان</span>
                             </span>
                         </div>
                     </div>
@@ -241,7 +272,7 @@
                                         <input type="text" value="{{.ConfigLink}}" readonly onclick="this.select();"
                                                class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg block w-full p-2.5 cursor-pointer hover:bg-gray-100 transition font-mono">
                                         <button type="button" onclick="copyInput(this)"
-                                                class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
+                                               class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
                                             کپی
                                         </button>
                                     </div>
@@ -279,17 +310,23 @@
                 {{end}}
 
                 {{if not .Orders}}
-                <div class="text-center py-8 text-gray-500">هیچ سفارشی در دیتابیس یافت نشد.</div>
+                <div class="text-center py-8 text-gray-500">
+                    {{if .SearchQuery}}
+                        هیچ سفارشی با عبارت «<b>{{.SearchQuery}}</b>» در دیتابیس یافت نشد.
+                    {{else}}
+                        هیچ سفارشی در دیتابیس یافت نشد.
+                    {{end}}
+                </div>
                 {{end}}
             </div>
 
-            <!-- 📄 نوار صفحه‌بندی -->
+            <!-- 📄 نوار صفحه‌بندی (با حفظ عبارت جستجو) -->
             {{if gt .TotalPages 1}}
             <div class="mt-6 flex items-center justify-center">
                 <div class="bg-gray-50 rounded-2xl shadow-lg px-3 py-2 flex items-center gap-1 md:gap-2 flex-wrap justify-center">
 
                     {{if gt .Page 1}}
-                        <a href="{{.AdminBase}}?page={{.PrevPage}}"
+                        <a href="{{.AdminBase}}?page={{.PrevPage}}{{if .SearchQuery}}&q={{.SearchQuery}}{{end}}"
                            class="flex items-center gap-1 bg-white hover:bg-gray-100 text-gray-600 text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition">
                             → قبلی
                         </a>
@@ -305,7 +342,7 @@
                                 {{.Page}}
                             </span>
                         {{else}}
-                            <a href="{{$.AdminBase}}?page={{.Page}}"
+                            <a href="{{$.AdminBase}}?page={{.Page}}{{if $.SearchQuery}}&q={{$.SearchQuery}}{{end}}"
                                class="w-9 h-9 flex items-center justify-center rounded-full bg-white hover:bg-gray-100 text-gray-600 text-sm font-bold shadow-sm transition">
                                 {{.Page}}
                             </a>
@@ -313,7 +350,7 @@
                     {{end}}
 
                     {{if lt .Page .TotalPages}}
-                        <a href="{{.AdminBase}}?page={{.NextPage}}"
+                        <a href="{{.AdminBase}}?page={{.NextPage}}{{if .SearchQuery}}&q={{.SearchQuery}}{{end}}"
                            class="flex items-center gap-1 bg-white hover:bg-gray-100 text-gray-600 text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition">
                             بعدی ←
                         </a>
@@ -425,7 +462,8 @@
             </div>
         </div>
     </div>
-        <!-- 📊 پاپ‌آپ آمار فروش -->
+
+    <!-- 📊 پاپ‌آپ آمار فروش -->
     <div id="statsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-60 p-3">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             <div class="bg-gray-800 px-4 md:px-6 py-3 flex items-center justify-between gap-2 flex-wrap">
@@ -481,7 +519,8 @@
             </div>
         </div>
     </div>
-        <!-- 🏷️ پاپ‌آپ تایید لیبل اصلاح آمار -->
+
+    <!-- 🏷️ پاپ‌آپ تایید لیبل اصلاح آمار -->
     <div id="statsFixedModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-60 p-3">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div class="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4">
@@ -581,7 +620,7 @@
             });
         }
 
-        // ──  ذخیره یادداشت ادمین (با debounce) ──
+        // ── ذخیره یادداشت ادمین (با debounce) ──
         let noteTimers = {};
 
         function saveNote(id, note) {
@@ -605,7 +644,6 @@
         }
 
         // ── تایید دستی پرداخت + ساخت کانفیگ ──
-
         function openManualConfirm(id, trackingCode) {
             pendingConfirmId = id;
             document.getElementById('confirmTrackingCode').textContent = trackingCode;
@@ -659,7 +697,7 @@
             });
         }
 
-        // ──  ریستور با پاپ‌آپ سفارشی ──
+        // ── ریستور با پاپ‌آپ سفارشی ──
         let restoreInput = null;
 
         function submitRestore(input) {
@@ -697,7 +735,6 @@
         }
 
         // ── لاگ‌ها ──
-
         function openLogs() {
             const m = document.getElementById('logsModal');
             m.classList.remove('hidden');
@@ -751,11 +788,12 @@
                 });
             }
         }
-                // ── 📊 آمار فروش ──
+
+        // ── 📊 آمار فروش ──
         let salesChart = null;
 
         function fmtToman(n) {
-            return Number(n).toLocaleString('fa-IR');
+            return Number(n).toLocaleString('en-US');
         }
 
         function openStats() {
@@ -803,7 +841,7 @@
                             }
                         },
                         scales: {
-                            y: { ticks: { callback: (v) => Number(v).toLocaleString('fa-IR') } },
+                            y: { ticks: { callback: (v) => Number(v).toLocaleString('en-US') } },
                             x: { ticks: { maxRotation: 0, autoSkip: true } }
                         }
                     }
@@ -812,6 +850,7 @@
                 showNotification('❌ خطا در دریافت آمار', 'error');
             });
         }
+
         // ── 🏷️ toggle لیبل «اصلاح آمار فروش» با پاپ‌آپ تایید ──
         let pendingStatsEl = null;
         let pendingStatsId = null;
@@ -860,7 +899,8 @@
                 closeStatsFixed();
             });
         }
-                // ── 📅 تقویم شمسی + ساعت زنده ──
+
+        // ── 📅 تقویم شمسی + ساعت زنده ──
         function updateClock() {
             const now = new Date();
             const dateFmt = new Intl.DateTimeFormat('fa-IR', {
@@ -877,13 +917,13 @@
         updateClock();
         setInterval(updateClock, 1000);
 
-        // ── 💰 آمار فروش روز جاری (بروزرسانی هر ۶۰ ثانیه) ──
+        // ── 💰 آمار فروش روز جاری (بروزرسانی هر ۶۰ ثانیه با جداکننده کاما) ──
         function loadTodayStats() {
             fetch(ADMIN_BASE + '/stats?range=today').then(r => r.json()).then(d => {
                 const s = document.getElementById('todaySales');
                 const n = document.getElementById('todayCount');
-                if (s) s.textContent = Number(d.total).toLocaleString('fa-IR');
-                if (n) n.textContent = Number(d.count).toLocaleString('fa-IR');
+                if (s) s.textContent = Number(d.total).toLocaleString('en-US');
+                if (n) n.textContent = Number(d.count).toLocaleString('en-US');
             }).catch(() => {});
         }
         loadTodayStats();
