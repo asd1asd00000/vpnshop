@@ -26,12 +26,53 @@ import (
 var (
 	rateMu   sync.Mutex
 	attempts = make(map[string][]time.Time)
+	dbInitMu sync.Once
 )
 
 const (
 	rateLimitWindow = 1 * time.Minute
 	rateLimitMax    = 3
 )
+
+func ensureDBPragmas() {
+	dbInitMu.Do(func() {
+		if db.DB != nil {
+			db.DB.Exec("PRAGMA busy_timeout = 5000;")
+			db.DB.Exec("PRAGMA journal_mode = WAL;")
+		}
+	})
+}
+
+// insertOrderWithRetry ثبت مقاوم فاکتور در دیتابیس با تلاش مجدد در صورت قفل بودن لحظه‌ای SQLite
+func insertOrderWithRetry(planID string, basePrice int, days int, renewUsername string, carryGB int) (string, int, error) {
+	ensureDBPragmas()
+
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		uniqueAmount := basePrice + rand.Intn(999) + 1
+		trackingCode := generateTrackingCode()
+
+		var err error
+		if renewUsername != "" {
+			_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, renew_username, carry_gb, status) 
+				VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+				trackingCode, planID, basePrice, uniqueAmount, days, renewUsername, carryGB)
+		} else {
+			_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, status) 
+				VALUES (?, ?, ?, ?, ?, 'pending')`,
+				trackingCode, planID, basePrice, uniqueAmount, days)
+		}
+
+		if err == nil {
+			return trackingCode, uniqueAmount, nil
+		}
+
+		lastErr = err
+		log.Printf("⚠️ [DB-Retry %d/5] خطا در ثبت فاکتور: %v", attempt+1, err)
+		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
+	}
+	return "", 0, lastErr
+}
 
 func clientIP(r *http.Request) string {
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
@@ -95,8 +136,11 @@ func AdminBasePath() string {
 // ───────────── 🛒 فروشگاه ─────────────
 
 func ShopHandler(w http.ResponseWriter, r *http.Request) {
+	ensureDBPragmas()
+
 	tmpl, err := template.ParseFiles("templates/shop.html")
 	if err != nil {
+		log.Printf("❌ خطا در پارس قالب shop.html: %v", err)
 		renderErrorPage(w, "خطا در بارگذاری صفحه فروشگاه",
 			"سرور در آماده‌سازی صفحه فروشگاه به مشکل خورد. نگران نباشید؛ صفحه به‌صورت خودکار دوباره تلاش می‌کند.",
 			"/", 5)
@@ -150,9 +194,9 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// ── بخش POST (checkout) ──
+	// ── بخش POST (checkout خرید جدید) ──
 	if r.Method == http.MethodPost {
-		planID := r.FormValue("plan_id")
+		planID := strings.TrimSpace(r.FormValue("plan_id"))
 		var selectedPlan *models.Plan
 		for _, p := range plans {
 			if p.ID == planID {
@@ -168,14 +212,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		basePrice := selectedPlan.Price
-		rand.Seed(time.Now().UnixNano())
-		uniqueAmount := basePrice + rand.Intn(999) + 1
-		trackingCode := generateTrackingCode()
-
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, status) 
-			VALUES (?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, selectedPlan.Days)
-
+		trackingCode, _, err := insertOrderWithRetry(selectedPlan.ID, selectedPlan.Price, selectedPlan.Days, "", 0)
 		if err != nil {
 			renderErrorPage(w, "خطا در ایجاد فاکتور",
 				"سرور نتوانست فاکتور شما را ثبت کند. این مشکل معمولاً موقتی است. لطفاً دوباره تلاش کنید.",
@@ -183,27 +220,55 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		order := models.Order{
-			TrackingCode: trackingCode,
-			PlanName:     selectedPlan.Title,
-			UniqueAmount: uniqueAmount,
-		}
-
-		tmpl.Execute(w, map[string]interface{}{
-			"CheckoutOrder": order,
-			"Plans":         enrichedPlans,
-			"Cards":         cards,
-			"PanelNames":    panelNames,
-		})
+		// هدایت به آدرس GET فاکتور تا در صورت رفرش صفحه در موبایل خطایی رخ ندهد
+		http.Redirect(w, r, "/?order="+trackingCode, http.StatusSeeOther)
 		return
 	}
 
+	// ── بررسی نمایش فاکتور ثبت‌شده با پارامتر ?order=VPxxxx ──
+	if orderCode := strings.TrimSpace(r.URL.Query().Get("order")); orderCode != "" {
+		var planID, renewUser string
+		var uniqueAmount int
+		err := db.DB.QueryRow(`SELECT plan_name, unique_amount, IFNULL(renew_username, '') FROM orders WHERE tracking_code = ?`, orderCode).
+			Scan(&planID, &uniqueAmount, &renewUser)
+		if err == nil {
+			planTitle := planID
+			for _, p := range plans {
+				if p.ID == planID {
+					planTitle = p.Title
+					break
+				}
+			}
+			order := models.Order{
+				TrackingCode: orderCode,
+				PlanName:     planTitle,
+				UniqueAmount: uniqueAmount,
+			}
+			data := map[string]interface{}{
+				"CheckoutOrder": order,
+				"Plans":         enrichedPlans,
+				"Cards":         cards,
+				"PanelNames":    panelNames,
+			}
+			if renewUser != "" {
+				data["IsRenewal"] = true
+				data["RenewUsername"] = renewUser
+			}
+			if terr := tmpl.Execute(w, data); terr != nil {
+				log.Printf("❌ خطا در اجرای قالب فاکتور: %v", terr)
+			}
+			return
+		}
+	}
+
 	// ── بخش GET (نمایش پلن‌ها) ──
-	tmpl.Execute(w, map[string]interface{}{
+	if terr := tmpl.Execute(w, map[string]interface{}{
 		"Plans":      enrichedPlans,
 		"Cards":      cards,
 		"PanelNames": panelNames,
-	})
+	}); terr != nil {
+		log.Printf("❌ خطا در اجرای قالب فروشگاه: %v", terr)
+	}
 }
 
 // formatPrice جداسازی سه‌رقمی از سمت راست با کاما
@@ -245,7 +310,7 @@ func TrackHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		trackingCode := r.FormValue("tracking_code")
+		trackingCode := strings.TrimSpace(r.FormValue("tracking_code"))
 		var order models.Order
 
 		query := `SELECT id, tracking_code, plan_name, status, IFNULL(config_link, '') 
@@ -274,7 +339,7 @@ func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	trackingCode := r.URL.Query().Get("code")
+	trackingCode := strings.TrimSpace(r.URL.Query().Get("code"))
 	if trackingCode == "" {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
@@ -491,10 +556,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 // ───────────── 🔄 منطق محاسبه حجم انتقالی (Carry-Over) ─────────────
 
 // calculateUserCarryOver حجم باقیمانده، روز باقیمانده و حجم قابل انتقال به دوره بعد را محاسبه می‌کند.
-// قوانین:
-//  1. حجم باقیمانده (GB) و زمان باقیمانده (روز) به سمت بالا و به نفع مشتری گرد می‌شوند.
-//  2. به ازای هر 1 گیگ انتقال، حداقل 1 روز زمان باقیمانده نیاز است: carryGB = min(remainingVolumeGB, remainingDays).
-//  3. اگر حجم باقیمانده 0 باشد یا زمان اشتراک به پایان رسیده باشد، carryGB = 0 خواهد بود.
 func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDays int, carryOverGB int, err error) {
 	// پیدا کردن آخرین فاکتور پرداخت‌شده با این username
 	var orderID int
@@ -534,6 +595,11 @@ func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDa
 	}
 
 	if err != nil {
+		// 🎯 اگر کاربر در دیتابیس فروشگاه بود ولی از پنل Guards (به خاطر انقضای ۱۴ روزه) حذف شده بود:
+		if strings.Contains(err.Error(), "یافت نشد") {
+			log.Printf("ℹ️ [تمدید] کاربر %s در دیتابیس هست اما از پنل حذف شده -> انتقال=0GB", username)
+			return 0, 0, 0, nil
+		}
 		return 0, 0, 0, fmt.Errorf("خطا در خواندن اطلاعات اشتراک: %v", err)
 	}
 
@@ -613,124 +679,58 @@ func CheckRenewalHandler(w http.ResponseWriter, r *http.Request) {
 
 // RenewalHandler ساخت فاکتور تمدید
 func RenewalHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("templates/shop.html")
-	if err != nil {
-		renderErrorPage(w, "خطا در بارگذاری صفحه تمدید",
-			"سرور در آماده‌سازی صفحه تمدید به مشکل خورد. صفحه به‌صورت خودکار دوباره تلاش می‌کند.",
-			"/renew", 5)
+	ensureDBPragmas()
+
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
 	plans, _ := models.LoadPlans()
-	cfg := db.GetConfig()
-	cards := cfg.Cards
+	planID := strings.TrimSpace(r.FormValue("plan_id"))
+	renewUsername := strings.TrimSpace(r.FormValue("renew_username"))
+	carryGBStr := strings.TrimSpace(r.FormValue("carry_gb"))
 
-	// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
-	sort.SliceStable(plans, func(i, j int) bool {
-		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
-		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
-		return si > sj
-	})
-
-	panelTypes := make(map[string]string)
-	for _, pn := range cfg.Panels {
-		panelTypes[pn.Role] = pn.Type
-	}
-
-	// 🎯 غنی‌سازی پلن‌ها
-	type shopPlanView struct {
-		models.Plan
-		MonthLabel     string
-		PriceFormatted string
-		BackupDisplay  string
-		GiftDisplay    string
-	}
-	var enrichedPlans []shopPlanView
-	for _, p := range plans {
-		ml := fmt.Sprintf("%d روز", p.Days)
-		if p.Days >= 30 && p.Days%30 == 0 {
-			ml = fmt.Sprintf("%d ماهه", p.Days/30)
-		}
-		enrichedPlans = append(enrichedPlans, shopPlanView{
-			Plan:           p,
-			MonthLabel:     ml,
-			PriceFormatted: formatPrice(p.Price),
-			BackupDisplay:  formatVolumeForPanel(panelTypes["backup"], p.BackupGB),
-			GiftDisplay:    formatVolumeForPanel(panelTypes["gift"], p.GiftGB),
-		})
-	}
-
-	// ── ساخت panelNames ──
-	panelNames := make(map[string]string)
-	for _, panel := range cfg.Panels {
-		if panel.Role == "backup" || panel.Role == "gift" {
-			panelNames[panel.Role] = panel.Name
-		}
-	}
-
-	if r.Method == http.MethodPost {
-		planID := r.FormValue("plan_id")
-		renewUsername := strings.TrimSpace(r.FormValue("renew_username"))
-		carryGBStr := r.FormValue("carry_gb")
-
-		var selectedPlan *models.Plan
-		for _, p := range plans {
-			if p.ID == planID {
-				selectedPlan = &p
-				break
-			}
-		}
-
-		if selectedPlan == nil {
-			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
-				"پلنی که برای تمدید انتخاب کرده‌اید در سیستم یافت نشد.",
-				"/", 0)
-			return
-		}
-
-		// محاسبه مجدد سمت سرور برای اطمینان از صحت مقدار carry_gb
-		carryGB := 0
-		if _, _, serverCarryGB, cerr := calculateUserCarryOver(renewUsername); cerr == nil {
-			carryGB = serverCarryGB
-		} else if carryGBStr != "" {
-			fmt.Sscanf(carryGBStr, "%d", &carryGB)
-		}
-		if carryGB < 0 {
-			carryGB = 0
-		}
-
-		basePrice := selectedPlan.Price
-		rand.Seed(time.Now().UnixNano())
-		uniqueAmount := basePrice + rand.Intn(999) + 1
-		trackingCode := generateTrackingCode()
-
-		// ساخت فاکتور تمدید
-		_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, renew_username, carry_gb, status) 
-			VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`, trackingCode, selectedPlan.ID, basePrice, uniqueAmount, selectedPlan.Days, renewUsername, carryGB)
-
-		if err != nil {
-			renderErrorPage(w, "خطا در ایجاد فاکتور تمدید",
-				"سرور نتوانست فاکتور تمدید را ثبت کند. این مشکل معمولاً موقتی است.",
-				"/", 5)
-			return
-		}
-
-		order := models.Order{
-			TrackingCode: trackingCode,
-			PlanName:     selectedPlan.Title,
-			UniqueAmount: uniqueAmount,
-		}
-
-		tmpl.Execute(w, map[string]interface{}{
-			"CheckoutOrder": order,
-			"Plans":         enrichedPlans,
-			"Cards":         cards,
-			"PanelNames":    panelNames,
-			"IsRenewal":     true,
-			"RenewUsername": renewUsername,
-		})
+	if renewUsername == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	var selectedPlan *models.Plan
+	for _, p := range plans {
+		if p.ID == planID {
+			selectedPlan = &p
+			break
+		}
+	}
+
+	// اگر کاربر فقط ۱ پلن فعال داشت یا plan_id ارسال نشده بود، اولین پلن موجود را بررسی کن
+	if selectedPlan == nil {
+		renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
+			"لطفاً ابتدا نام کاربری را جستجو کرده و سپس یکی از پلن‌ها را از لیست انتخاب نمایید.",
+			"/", 0)
+		return
+	}
+
+	// محاسبه مجدد سمت سرور برای اطمینان از صحت مقدار carry_gb
+	carryGB := 0
+	if _, _, serverCarryGB, cerr := calculateUserCarryOver(renewUsername); cerr == nil {
+		carryGB = serverCarryGB
+	} else if carryGBStr != "" {
+		fmt.Sscanf(carryGBStr, "%d", &carryGB)
+	}
+	if carryGB < 0 {
+		carryGB = 0
+	}
+
+	trackingCode, _, err := insertOrderWithRetry(selectedPlan.ID, selectedPlan.Price, selectedPlan.Days, renewUsername, carryGB)
+	if err != nil {
+		renderErrorPage(w, "خطا در ایجاد فاکتور تمدید",
+			"سرور نتوانست فاکتور تمدید را ثبت کند. این مشکل معمولاً موقتی است.",
+			"/", 5)
+		return
+	}
+
+	// هدایت به صفحه نمایش فاکتور با کد پیگیری (جلوگیری از خطای رفرش صفحه در موبایل)
+	http.Redirect(w, r, "/?order="+trackingCode, http.StatusSeeOther)
 }
