@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	enczip "github.com/alexmullins/zip"
+
 	"github.com/asd1asd00000/vpnshop/db"
 	"github.com/asd1asd00000/vpnshop/models"
 )
@@ -347,7 +349,7 @@ func addFileToZip(zw *zip.Writer, srcPath, nameInZip string) error {
 	return err
 }
 
-// ───────────── 📤 ریستور (ZIP یا DB) ─────────────
+// ───────────── 📤 ریستور (ZIP معمولی، ZIP رمزدار یا DB) ─────────────
 
 func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
@@ -362,6 +364,8 @@ func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "خطا در پردازش فرم", http.StatusBadRequest)
 		return
 	}
+
+	zipPassword := strings.TrimSpace(r.FormValue("zip_password"))
 
 	file, _, err := r.FormFile("backup_file")
 	if err != nil {
@@ -398,8 +402,8 @@ func RestoreHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case bytes.HasPrefix(data, []byte{0x50, 0x4B, 0x03, 0x04}):
-		if err := restoreFromZip(tmpPath); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err := restoreFromZip(tmpPath, zipPassword); err != nil {
+			renderErrorPage(w, "خطا در بازگردانی بکاپ", err.Error(), AdminBasePath(), 0)
 			return
 		}
 	default:
@@ -424,25 +428,48 @@ func restoreFromDB(tmpPath string) error {
 	return nil
 }
 
-func restoreFromZip(zipPath string) error {
-	zr, err := zip.OpenReader(zipPath)
+// candidateZipPasswords لیست رمزهای کاندید (ابتدا رمز واردشده توسط ادمین، سپس رمزهای ذخیره‌شده در تنظیمات)
+func candidateZipPasswords(userPass string) []string {
+	var list []string
+	seen := make(map[string]bool)
+	add := func(p string) {
+		p = strings.TrimSpace(p)
+		if p != "" && !seen[p] {
+			seen[p] = true
+			list = append(list, p)
+		}
+	}
+	add(userPass)
+	cfg := db.GetConfig()
+	add(cfg.TelegramBackup.ZipPassword)
+	add(cfg.EmailBackup.ZipPassword)
+	return list
+}
+
+func restoreFromZip(zipPath, userPassword string) error {
+	zr, err := enczip.OpenReader(zipPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("فایل زیپ آسیب دیده یا معتبر نیست: %v", err)
 	}
 	defer zr.Close()
 
+	passwords := candidateZipPasswords(userPassword)
 	var dbTmp, cfgTmp string
 
 	for _, f := range zr.File {
 		switch f.Name {
 		case "vpnshop.db":
 			dbTmp = "./restore_db_tmp"
-			if err := extractZipFile(f, dbTmp); err != nil {
+			if err := extractEncZipFile(f, dbTmp, passwords, true); err != nil {
+				os.Remove(dbTmp)
+				os.Remove(cfgTmp)
 				return err
 			}
 		case "config.json":
 			cfgTmp = "./restore_cfg_tmp"
-			if err := extractZipFile(f, cfgTmp); err != nil {
+			if err := extractEncZipFile(f, cfgTmp, passwords, false); err != nil {
+				os.Remove(dbTmp)
+				os.Remove(cfgTmp)
 				return err
 			}
 		}
@@ -455,7 +482,7 @@ func restoreFromZip(zipPath string) error {
 	if data, err := os.ReadFile(dbTmp); err != nil || len(data) < 16 || string(data[:15]) != "SQLite format 3" {
 		os.Remove(dbTmp)
 		os.Remove(cfgTmp)
-		return fmt.Errorf("دیتابیس داخل بکاپ معتبر نیست")
+		return fmt.Errorf("دیتابیس استخراج‌شده معتبر نیست یا رمز فایل زیپ اشتباه است")
 	}
 
 	if cur, err := os.ReadFile("./vpnshop.db"); err == nil {
@@ -482,7 +509,41 @@ func restoreFromZip(zipPath string) error {
 	return nil
 }
 
-func extractZipFile(f *zip.File, dest string) error {
+// extractEncZipFile استخراج فایل از زیپ (پشتیبانی از زیپ معمولی و رمزدار)
+func extractEncZipFile(f *enczip.File, dest string, passwords []string, mustBeSQLite bool) error {
+	if !f.IsEncrypted() {
+		return writeZipEntryToFile(f, dest)
+	}
+
+	if len(passwords) == 0 {
+		return fmt.Errorf("این فایل بکاپ رمزگذاری شده است؛ لطفاً رمز فایل زیپ را وارد کنید")
+	}
+
+	var lastErr error
+	for _, pass := range passwords {
+		f.SetPassword(pass)
+		if err := writeZipEntryToFile(f, dest); err != nil {
+			lastErr = err
+			continue
+		}
+		if mustBeSQLite {
+			data, rerr := os.ReadFile(dest)
+			if rerr != nil || len(data) < 16 || string(data[:15]) != "SQLite format 3" {
+				lastErr = fmt.Errorf("رمز اشتباه")
+				continue
+			}
+		}
+		return nil
+	}
+
+	os.Remove(dest)
+	if lastErr != nil {
+		return fmt.Errorf("رمز فایل زیپ اشتباه است؛ لطفاً رمز صحیح را وارد نمایید")
+	}
+	return fmt.Errorf("خطا در باز کردن فایل زیپ رمزدار")
+}
+
+func writeZipEntryToFile(f *enczip.File, dest string) error {
 	rc, err := f.Open()
 	if err != nil {
 		return err
@@ -550,6 +611,7 @@ func AdminLogsClearHandler(w http.ResponseWriter, r *http.Request) {
 	db.LogEvent("general", "warning", "🗑️ لاگ‌ها توسط ادمین پاک شدند")
 	w.WriteHeader(http.StatusOK)
 }
+
 // ───────────── 🏷️ لیبل دستی «اصلاح آمار فروش» ─────────────
 
 func AdminStatsFixedHandler(w http.ResponseWriter, r *http.Request) {
