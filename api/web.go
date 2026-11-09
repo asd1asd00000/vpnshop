@@ -383,25 +383,27 @@ func CheckOrderStatus(w http.ResponseWriter, r *http.Request) {
 // ───────────── 👨‍💼 داشبورد ادمین ─────────────
 
 type adminOrder struct {
-	ID             int
-	TrackingCode   string
-	PlanName       string
-	UniqueAmount   int
-	Status         string
-	ConfigLink     string
-	AdminConfirmed bool
-	PaymentMethod  string
-	CreatedAt      string
-	PaidAt         string
-	CreatedAtFmt   string
-	PaidAtFmt      string
-	Configs        []ConfigItem
-	TelegramText   string
-	AdminNote      string
-	Username       string
-	RenewUsername  string
-	StatsFixed     bool
-	IsNew          bool
+	ID              int
+	TrackingCode    string
+	PlanName        string
+	UniqueAmount    int
+	UniqueAmountFmt string
+	Status          string
+	ConfigLink      string
+	AdminConfirmed  bool
+	PaymentMethod   string
+	CreatedAt       string
+	PaidAt          string
+	CreatedAtFmt    string
+	PaidAtFmt       string
+	Configs         []ConfigItem
+	TelegramText    string
+	AdminNote       string
+	Username        string
+	RenewUsername   string
+	StatsFixed      bool
+	Archived        bool
+	IsNew           bool
 }
 
 type pageItem struct {
@@ -465,17 +467,45 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── صفحه‌بندی ──
+	// ── جستجوی همه‌کاره و صفحه‌بندی ──
+	searchQuery := strings.TrimSpace(r.URL.Query().Get("q"))
+	// حذف کاما در صورتی که ادمین مبلغ را با کاما سرچ کرده باشد (مثلاً 200,796)
+	cleanSearch := strings.ReplaceAll(searchQuery, ",", "")
+	cleanSearch = strings.TrimPrefix(cleanSearch, "#")
+
 	pageSize := 10
 	page := 1
 	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
 		page = p
 	}
 
+	var whereClause string
+	var queryArgs []interface{}
+
+	if searchQuery != "" {
+		// در حالت جستجو: بررسی تمام فاکتورها (شامل آرشیوشده‌ها) در ۵ فیلد مختلف
+		whereClause = `WHERE (
+			CAST(id AS TEXT) = ? OR
+			tracking_code LIKE ? OR
+			CAST(unique_amount AS TEXT) LIKE ? OR
+			IFNULL(renew_username, '') LIKE ? OR
+			IFNULL(config_link, '') LIKE ? OR
+			IFNULL(admin_note, '') LIKE ?
+		)`
+		likePattern := "%" + searchQuery + "%"
+		cleanLike := "%" + cleanSearch + "%"
+		queryArgs = append(queryArgs, cleanSearch, likePattern, cleanLike, likePattern, likePattern, likePattern)
+	} else {
+		// در حالت عادی: فقط فاکتورهای غیرآرشیوی نمایش داده شوند
+		whereClause = `WHERE IFNULL(archived, 0) = 0`
+	}
+
 	var totalOrders int
-	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE IFNULL(archived, 0) = 0`).Scan(&totalOrders); err != nil {
+	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM orders %s`, whereClause)
+	if err := db.DB.QueryRow(countSQL, queryArgs...).Scan(&totalOrders); err != nil {
 		totalOrders = 0
 	}
+
 	totalPages := (totalOrders + pageSize - 1) / pageSize
 	if totalPages < 1 {
 		totalPages = 1
@@ -485,13 +515,17 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * pageSize
 
-	rows, err := db.DB.Query(`
+	selectSQL := fmt.Sprintf(`
 		SELECT id, tracking_code, plan_name, unique_amount, status, 
 		       IFNULL(config_link, ''), IFNULL(admin_confirmed, 0), 
 		       IFNULL(payment_method, ''),
 		       IFNULL(created_at, ''), IFNULL(paid_at, ''),
-		       IFNULL(admin_note, ''), IFNULL(renew_username, ''), IFNULL(stats_fixed, 0)
-		FROM orders WHERE IFNULL(archived, 0) = 0 ORDER BY id DESC LIMIT ? OFFSET ?`, pageSize, offset)
+		       IFNULL(admin_note, ''), IFNULL(renew_username, ''),
+		       IFNULL(stats_fixed, 0), IFNULL(archived, 0)
+		FROM orders %s ORDER BY id DESC LIMIT ? OFFSET ?`, whereClause)
+
+	selectArgs := append(append([]interface{}{}, queryArgs...), pageSize, offset)
+	rows, err := db.DB.Query(selectSQL, selectArgs...)
 	if err != nil {
 		renderErrorPage(w, "خطا در خواندن دیتابیس",
 			"سرور در خواندن لیست سفارش‌ها به مشکل خورد. معمولاً با تلاش دوباره حل می‌شود.",
@@ -503,18 +537,20 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	var orders []adminOrder
 	for rows.Next() {
 		var o adminOrder
-		var confirmed, statsFixed int
+		var confirmed, statsFixed, archived int
 		var renewUsername string
 		if err := rows.Scan(
 			&o.ID, &o.TrackingCode, &o.PlanName, &o.UniqueAmount, &o.Status,
 			&o.ConfigLink, &confirmed, &o.PaymentMethod, &o.CreatedAt, &o.PaidAt,
-			&o.AdminNote, &renewUsername, &statsFixed,
+			&o.AdminNote, &renewUsername, &statsFixed, &archived,
 		); err != nil {
 			continue
 		}
+		o.UniqueAmountFmt = formatPrice(o.UniqueAmount)
 		o.AdminConfirmed = confirmed == 1
 		o.RenewUsername = renewUsername
 		o.StatsFixed = statsFixed == 1
+		o.Archived = archived == 1
 
 		// 🎯 لیبل «جدید»: ساخته‌شده در ۲۴ ساعت اخیر
 		if o.CreatedAt != "" {
@@ -534,6 +570,8 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 			o.TelegramText = buildTelegramText(o.Configs)
 			// 🎯 نام کاربری از اولین کانفیگ
 			o.Username = o.Configs[0].Username
+		} else if o.RenewUsername != "" {
+			o.Username = o.RenewUsername
 		}
 
 		o.CreatedAtFmt = db.FormatTehranUTC(o.CreatedAt)
@@ -543,13 +581,15 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tmpl.Execute(w, map[string]interface{}{
-		"Orders":     orders,
-		"AdminBase":  AdminBasePath(),
-		"Page":       page,
-		"TotalPages": totalPages,
-		"PrevPage":   page - 1,
-		"NextPage":   page + 1,
-		"Pagination": buildPagination(page, totalPages),
+		"Orders":      orders,
+		"AdminBase":   AdminBasePath(),
+		"Page":        page,
+		"TotalPages":  totalPages,
+		"PrevPage":    page - 1,
+		"NextPage":    page + 1,
+		"Pagination":  buildPagination(page, totalPages),
+		"SearchQuery": searchQuery,
+		"TotalOrders": totalOrders,
 	})
 }
 
@@ -704,7 +744,6 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// اگر کاربر فقط ۱ پلن فعال داشت یا plan_id ارسال نشده بود، اولین پلن موجود را بررسی کن
 	if selectedPlan == nil {
 		renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
 			"لطفاً ابتدا نام کاربری را جستجو کرده و سپس یکی از پلن‌ها را از لیست انتخاب نمایید.",
