@@ -605,14 +605,14 @@
         
         <form id="renewalForm" method="POST" action="/renew" onsubmit="return validateRenewal()">
             
-            <!-- گروه ورودی و دکمه جستجو -->
-            <div class="flex gap-2 mb-3">
+<!-- گروه ورودی و دکمه جستجو (ریسپانسیو برای موبایل و دسکتاپ) -->
+            <div class="flex flex-col sm:flex-row gap-2 mb-3">
                 <input type="text" name="renew_username" id="renewUsername" required
                        placeholder="نام کاربری خود را وارد کنید"
-                       class="flex-1 border border-gray-300 rounded-lg p-3 font-mono text-center focus:ring-2 focus:ring-blue-500 outline-none">
-                
+                       class="w-full sm:flex-1 min-w-0 border border-gray-300 rounded-lg p-3 font-mono text-center focus:ring-2 focus:ring-blue-500 outline-none">
+
                 <button type="button" id="searchBtn" onclick="checkRenewalUser()"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 rounded-lg transition flex items-center gap-2 whitespace-nowrap">
+                        class="w-full sm:w-auto justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition flex items-center gap-2 whitespace-nowrap shrink-0">
                     <i class="fa-solid fa-magnifying-glass"></i>
                     <span>جستجو</span>
                 </button>
