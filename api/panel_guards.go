@@ -63,7 +63,6 @@ func planToVolumeAndDays(planID string) (volumeGB int, days int) {
 const guardsUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 // guardsClient کلاینت مشترک: اجبار به IPv4 + timeout سی ثانیه + بدون keep-alive
-// (DisableKeepAlives جلوی خطاهای EOF ناشی از connection های stale رو می‌گیره)
 var guardsClient = &http.Client{
 	Timeout: 30 * time.Second,
 	Transport: &http.Transport{
@@ -270,7 +269,7 @@ func FormatGuardsConfig(panel db.PanelConfig, link string, volumeGB int) string 
 
 // getGuardsSubscription دریافت اطلاعات اشتراک (لیست + فیلتر)
 func getGuardsSubscription(panel db.PanelConfig, auth map[string]string, username string) (map[string]interface{}, error) {
-	resp, err := guardsRequest("GET", panel.URL+"/api/subscriptions", nil, auth)
+	resp, err := guardsRequest("GET", panel.URL+"/api/subscriptions?limit=5000", nil, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -309,6 +308,30 @@ func getGuardsSubscription(panel db.PanelConfig, auth map[string]string, usernam
 	}
 
 	return nil, fmt.Errorf("Guards: اشتراک %s یافت نشد", username)
+}
+
+// resetGuardsSubscription صفر کردن مصرف دوره قبلی کاربر در پنل Guards هنگام تمدید
+func resetGuardsSubscription(panel db.PanelConfig, auth map[string]string, username string) error {
+	payload := map[string]interface{}{
+		"usernames": []string{username},
+	}
+	jsonData, _ := json.Marshal(payload)
+	resp, err := guardsRequest("POST", panel.URL+"/api/subscriptions/reset", jsonData, auth)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status: %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	enableResp, err := guardsRequest("POST", panel.URL+"/api/subscriptions/enable", jsonData, auth)
+	if err == nil && enableResp != nil {
+		enableResp.Body.Close()
+	}
+	return nil
 }
 
 // updateGuardsSubscription بروزرسانی اشتراک (تمدید) - Bulk Update
@@ -357,32 +380,38 @@ func updateGuardsSubscription(panel db.PanelConfig, auth map[string]string, user
 	return "", fmt.Errorf("تمدید شد ولی link استخراج نشد")
 }
 
-// UpdateGuardsUser تمدید اشتراک در پنل Guards با محاسبه حجم مصرف‌شده قبلی
+// UpdateGuardsUser تمدید اشتراک در پنل Guards با ریست مصرف قبلی و تنظیم دقیق حجم جدید
 func UpdateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days int) (string, error) {
 	auth, err := guardsAuthHeaders(panel)
 	if err != nil {
 		return "", err
 	}
 
-	// خواندن اطلاعات فعلی کاربر در پنل برای دریافت حجم مصرف‌شده
-	_, usedBytes, _, err := GetGuardsUserUsage(panel, username)
+	// بررسی وجود کاربر در پنل و دریافت مصرف واقعی دوره فعلی
+	_, currentPeriodUsedBytes, _, err := GetGuardsUserUsage(panel, username)
 	if err != nil {
-		// اگر کاربر روی این پنل (مثلاً پنل زاپاس/هدیه جدید) وجود نداشت، ساخته شود
 		log.Printf("⚠️ [Guards-تمدید] کاربر %s در پنل %s یافت نشد (%v)، در حال ساخت خودکار...", username, panel.Name, err)
 		return CreateGuardsUser(panel, username, volumeGB, days)
 	}
-	if usedBytes < 0 {
-		usedBytes = 0
-	}
 
-	// 🎯 سقف جدید = حجم مصرف‌شده تا این لحظه + حجم دوره جدید (شامل پلن جدید + حجم انتقالی مجاز)
-	// به این ترتیب چه کاربر کل حجم قبلی را مصرف کرده باشد (carry=0) و چه حجم انتقالی داشته باشد،
-	// دقیقاً به اندازه volumeGB حجم قابل مصرف در پنل خواهد داشت و زمان هم معادل days پلن جدید تنظیم می‌شود.
-	newLimitUsage := usedBytes + int64(volumeGB)*1073741824
 	newLimitExpire := time.Now().AddDate(0, 0, days).Unix()
+	var newLimitUsage int64
 
-	log.Printf("🔄 [Guards] تمدید کاربر %s: مصرف قبلی=%d بایت | حجم جدید=%dGB | سقف کل=%d بایت | روز=%d (auth: %s)",
-		username, usedBytes, volumeGB, newLimitUsage, days, authMode(panel))
+	// ۱. ابتدا مصرف دوره قبل را با اندپوینت رسمی Reset صفر می‌کنیم
+	if rErr := resetGuardsSubscription(panel, auth, username); rErr == nil {
+		// وقتی مصرف کاربر در پنل ریست شد (current_usage = 0)، سقف جدید دقیقاً برابر با حجم درخواستی است
+		newLimitUsage = int64(volumeGB) * 1073741824
+		log.Printf("🔄 [Guards] مصرف کاربر %s ریست شد | تنظیم سقف دقیق=%dGB (%d بایت) | روز=%d (auth: %s)",
+			username, volumeGB, newLimitUsage, days, authMode(panel))
+	} else {
+		// اگر ریست انجام نشد، فقط مصرف دوره فعلی (نه کل مصرف تاریخی ریست‌شده) را با حجم جدید جمع می‌زنیم
+		if currentPeriodUsedBytes < 0 {
+			currentPeriodUsedBytes = 0
+		}
+		newLimitUsage = currentPeriodUsedBytes + int64(volumeGB)*1073741824
+		log.Printf("⚠️ [Guards] ریست مصرف انجام نشد (%v) | مصرف دوره فعلی=%d | حجم جدید=%dGB | سقف کل=%d",
+			rErr, currentPeriodUsedBytes, volumeGB, newLimitUsage)
+	}
 
 	link, err := updateGuardsSubscription(panel, auth, username, newLimitUsage, newLimitExpire)
 	if err != nil {
@@ -392,8 +421,75 @@ func UpdateGuardsUser(panel db.PanelConfig, username string, volumeGB int, days 
 	return link, nil
 }
 
-// GetGuardsUserUsage دریافت حجم و روز باقیمانده از پنل Guards
-func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64, totalUsage int64, limitExpire int64, err error) {
+// fetchPublicSubInfo خواندن مستقیم اطلاعات مصرف از لینک ساب عمومی پنل Guards (به عنوان منبع دقیق صفحه ساب)
+func fetchPublicSubInfo(subLink string) (limitUsage int64, currentUsage int64, limitExpire int64, ok bool) {
+	if subLink == "" {
+		return 0, 0, 0, false
+	}
+	infoURL := strings.TrimRight(subLink, "/") + "/info"
+	req, err := http.NewRequest("GET", infoURL, nil)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	req.Header.Set("User-Agent", guardsUserAgent)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := guardsClient.Do(req)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, 0, false
+	}
+
+	var info map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return 0, 0, 0, false
+	}
+
+	// بررسی فیلدهای احتمالی در خروجی /info صفحه ساب
+	if subObj, exists := info["subscription"].(map[string]interface{}); exists {
+		info = subObj
+	}
+
+	var lim, cur, tot, res, exp int64
+	if v, ok := info["limit_usage"].(float64); ok {
+		lim = int64(v)
+	}
+	if v, ok := info["current_usage"].(float64); ok {
+		cur = int64(v)
+	}
+	if v, ok := info["used_usage"].(float64); ok && cur == 0 {
+		cur = int64(v)
+	}
+	if v, ok := info["usage"].(float64); ok && cur == 0 {
+		cur = int64(v)
+	}
+	if v, ok := info["total_usage"].(float64); ok {
+		tot = int64(v)
+	}
+	if v, ok := info["reset_usage"].(float64); ok {
+		res = int64(v)
+	}
+	if v, ok := info["limit_expire"].(float64); ok {
+		exp = int64(v)
+	}
+
+	if lim > 0 {
+		if cur > 0 {
+			return lim, cur, exp, true
+		}
+		if tot >= res && res > 0 {
+			return lim, tot - res, exp, true
+		}
+	}
+	return 0, 0, 0, false
+}
+
+// GetGuardsUserUsage دریافت حجم و روز باقیمانده واقعی از پنل Guards (مطابق با صفحه ساب مشتری)
+func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64, currentUsage int64, limitExpire int64, err error) {
 	auth, err := guardsAuthHeaders(panel)
 	if err != nil {
 		return 0, 0, 0, err
@@ -407,14 +503,46 @@ func GetGuardsUserUsage(panel db.PanelConfig, username string) (limitUsage int64
 	if v, ok := sub["limit_usage"].(float64); ok {
 		limitUsage = int64(v)
 	}
-	if v, ok := sub["current_usage"].(float64); ok && v > 0 {
-		totalUsage = int64(v)
-	} else if v, ok := sub["total_usage"].(float64); ok {
-		totalUsage = int64(v)
-	}
 	if v, ok := sub["limit_expire"].(float64); ok {
 		limitExpire = int64(v)
 	}
 
-	return limitUsage, totalUsage, limitExpire, nil
+	var totalU, resetU, currentU int64
+	hasCurrent := false
+	if v, ok := sub["current_usage"].(float64); ok {
+		currentU = int64(v)
+		hasCurrent = true
+	}
+	if v, ok := sub["total_usage"].(float64); ok {
+		totalU = int64(v)
+	}
+	if v, ok := sub["reset_usage"].(float64); ok {
+		resetU = int64(v)
+	}
+
+	// ۱. اگر خود API فیلد current_usage داشت یا reset_usage داشت:
+	if hasCurrent && currentU >= 0 && (currentU > 0 || totalU == 0) {
+		currentUsage = currentU
+	} else if resetU > 0 && totalU >= resetU {
+		currentUsage = totalU - resetU
+	} else {
+		// ۲. بررسی مستقیم از لینک ساب عمومی (/info) برای تطابق ۱۰۰٪ با صفحه ساب مشتری
+		subLink, _ := sub["subscription_link"].(string)
+		if lim, cur, exp, ok := fetchPublicSubInfo(subLink); ok {
+			if lim > 0 {
+				limitUsage = lim
+			}
+			if exp > 0 {
+				limitExpire = exp
+			}
+			currentUsage = cur
+		} else {
+			currentUsage = totalU - resetU
+		}
+	}
+
+	log.Printf("🔍 [Guards-Usage] کاربر=%s | limit=%d | total=%d | reset=%d | مصرف‌محاسبه‌شده=%d",
+		username, limitUsage, totalU, resetU, currentUsage)
+
+	return limitUsage, currentUsage, limitExpire, nil
 }
