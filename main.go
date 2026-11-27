@@ -58,6 +58,7 @@ func main() {
 	http.HandleFunc(adminBase+"/settings/delete-card", api.DeleteCardHandler)
 	http.HandleFunc(adminBase+"/settings/update-cleanup", api.UpdateCleanupHandler)
 	http.HandleFunc(adminBase+"/settings/clear-cache", api.ClearGroupCacheHandler)
+	http.HandleFunc(adminBase+"/settings/save-plans", api.SavePlansHandler)
 
 	// 🆕 مسیرهای مدیریت گروه‌های Pasarguard
 	http.HandleFunc(adminBase+"/settings/fetch-groups", api.FetchPanelGroupsHandler)
