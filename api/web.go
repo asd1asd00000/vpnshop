@@ -749,21 +749,20 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var selectedPlan *models.Plan
-	for _, p := range plans {
-		if p.ID == planID {
-			selectedPlan = &p
+	for i := range plans {
+		if plans[i].ID == planID && !plans[i].Disabled {
+			selectedPlan = &plans[i]
 			break
 		}
 	}
 
 	if selectedPlan == nil {
-		renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
-			"لطفاً ابتدا نام کاربری را جستجو کرده و سپس یکی از پلن‌ها را از لیست انتخاب نمایید.",
+		renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست یا غیرفعال است",
+			"لطفاً ابتدا نام کاربری را جستجو کرده و سپس یکی از پلن‌های فعال را از لیست انتخاب نمایید.",
 			"/", 0)
 		return
 	}
 
-	// محاسبه مجدد سمت سرور برای اطمینان از صحت مقدار carry_gb
 	carryGB := 0
 	if _, _, serverCarryGB, cerr := calculateUserCarryOver(renewUsername); cerr == nil {
 		carryGB = serverCarryGB
@@ -774,7 +773,7 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		carryGB = 0
 	}
 
-	trackingCode, _, err := insertOrderWithRetry(selectedPlan.ID, selectedPlan.Price, selectedPlan.Days, renewUsername, carryGB)
+	trackingCode, _, err := insertOrderWithRetry(*selectedPlan, renewUsername, carryGB)
 	if err != nil {
 		renderErrorPage(w, "خطا در ایجاد فاکتور تمدید",
 			"سرور نتوانست فاکتور تمدید را ثبت کند. این مشکل معمولاً موقتی است.",
@@ -782,6 +781,5 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// هدایت به صفحه نمایش فاکتور با کد پیگیری (جلوگیری از خطای رفرش صفحه در موبایل)
 	http.Redirect(w, r, "/?order="+trackingCode, http.StatusSeeOther)
 }
