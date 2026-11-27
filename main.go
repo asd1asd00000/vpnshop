@@ -12,15 +12,15 @@ func main() {
 	db.InitDB("./vpnshop.db")
 	defer db.DB.Close()
 
-	// بارگذاری تنظیمات
+	// بارگذاری تنظیمات (شامل انتقال خودکار پلن‌ها از plans.json)
 	db.LoadConfig()
 
 	db.StartLogCleanup()
 	db.StartOrderCleanup()
 	api.StartGroupCache()
 	api.StartBackupCleanup()
-	
-	// 🎯 تایمر بکاپ خودکار (هم برای ایمیل و هم تلگرام)
+
+	// تایمر بکاپ خودکار (هم برای ایمیل و هم تلگرام)
 	api.StartAutoBackups()
 
 	// 🌐 مسیرهای عمومی
@@ -53,14 +53,18 @@ func main() {
 	http.HandleFunc(adminBase+"/settings/add-panel", api.AddPanelHandler)
 	http.HandleFunc(adminBase+"/settings/delete-panel", api.DeletePanelHandler)
 	http.HandleFunc(adminBase+"/settings/email-backup", api.EmailBackupHandler)
-	http.HandleFunc(adminBase+"/settings/telegram-backup", api.TelegramBackupHandler) // 🆕 هندلر بکاپ تلگرام
+	http.HandleFunc(adminBase+"/settings/telegram-backup", api.TelegramBackupHandler)
 	http.HandleFunc(adminBase+"/settings/add-card", api.AddCardHandler)
 	http.HandleFunc(adminBase+"/settings/delete-card", api.DeleteCardHandler)
 	http.HandleFunc(adminBase+"/settings/update-cleanup", api.UpdateCleanupHandler)
 	http.HandleFunc(adminBase+"/settings/clear-cache", api.ClearGroupCacheHandler)
-	http.HandleFunc(adminBase+"/settings/save-plans", api.SavePlansHandler)
 
-	// 🆕 مسیرهای مدیریت گروه‌های Pasarguard
+	// 🛒 مسیرهای مدیریت پلن‌های فروش
+	http.HandleFunc(adminBase+"/settings/save-plan", api.SavePlanHandler)
+	http.HandleFunc(adminBase+"/settings/toggle-plan", api.TogglePlanHandler)
+	http.HandleFunc(adminBase+"/settings/delete-plan", api.DeletePlanHandler)
+
+	// مسیرهای مدیریت گروه‌های Pasarguard
 	http.HandleFunc(adminBase+"/settings/fetch-groups", api.FetchPanelGroupsHandler)
 	http.HandleFunc(adminBase+"/settings/save-groups", api.SavePanelGroupsHandler)
 
