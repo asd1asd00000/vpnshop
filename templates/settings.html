@@ -1099,11 +1099,11 @@
 
         function escapeHtml(s) {
             return String(s)
-                .replace(/&/g, '&')
-                .replace(/</g, '<')
-                .replace(/>/g, '>')
-                .replace(/"/g, '"')
-                .replace(/'/g, ''');
+                .replace(/&/g, '\x26amp;')
+                .replace(/</g, '\x26lt;')
+                .replace(/>/g, '\x26gt;')
+                .replace(/"/g, '\x26quot;')
+                .replace(/\x27/g, '\x26#39;');
         }
 
         function updateSelectedCount() {
