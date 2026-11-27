@@ -43,7 +43,7 @@ func ensureDBPragmas() {
 	})
 }
 
-// insertOrderWithRetry ثبت مقاوم فاکتور همراه با قفل کردن حجم‌ها و توضیحات پلن در لحظه صدور
+// insertOrderWithRetry ثبت مقاوم فاکتور در دیتابیس همراه با قفل کردن مشخصات پلن (Snapshot)
 func insertOrderWithRetry(plan models.Plan, renewUsername string, carryGB int) (string, int, error) {
 	ensureDBPragmas()
 
@@ -147,18 +147,12 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allPlans, _ := models.LoadPlans()
-	var activePlans []models.Plan
-	for _, p := range allPlans {
-		if !p.Disabled {
-			activePlans = append(activePlans, p)
-		}
-	}
-
+	// فقط پلن‌های فعال برای نمایش و فروش در فروشگاه
+	activePlans, _ := models.LoadActivePlans()
 	cfg := db.GetConfig()
 	cards := cfg.Cards
 
-	// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
+	// مرتب‌سازی: به‌صرفه‌ترین اول
 	sort.SliceStable(activePlans, func(i, j int) bool {
 		pi := activePlans[i].Price
 		pj := activePlans[j].Price
@@ -173,6 +167,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		return si > sj
 	})
 
+	// نقش → نوع پنل (برای تشخیص conf)
 	panelTypes := make(map[string]string)
 	for _, pn := range cfg.Panels {
 		panelTypes[pn.Role] = pn.Type
@@ -200,6 +195,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// ساخت panelNames
 	panelNames := make(map[string]string)
 	for _, panel := range cfg.Panels {
 		if panel.Role == "backup" || panel.Role == "gift" {
@@ -211,16 +207,16 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		planID := strings.TrimSpace(r.FormValue("plan_id"))
 		var selectedPlan *models.Plan
-		for i := range activePlans {
-			if activePlans[i].ID == planID {
-				selectedPlan = &activePlans[i]
+		for _, p := range activePlans {
+			if p.ID == planID {
+				selectedPlan = &p
 				break
 			}
 		}
 
 		if selectedPlan == nil {
-			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست یا غیرفعال است",
-				"پلنی که انتخاب کرده‌اید در حال حاضر در دسترس نیست. لطفاً یک پلن فعال دیگر را انتخاب کنید.",
+			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست یا غیرفعال شده است",
+				"پلنی که انتخاب کرده‌اید در حال حاضر فعال نیست. لطفاً یک پلن دیگر را انتخاب کنید.",
 				"/", 0)
 			return
 		}
@@ -244,6 +240,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		err := db.DB.QueryRow(`SELECT plan_name, unique_amount, IFNULL(renew_username, '') FROM orders WHERE tracking_code = ?`, orderCode).
 			Scan(&planID, &uniqueAmount, &renewUser)
 		if err == nil {
+			allPlans, _ := models.LoadPlans()
 			planTitle := planID
 			for _, p := range allPlans {
 				if p.ID == planID {
@@ -479,9 +476,8 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── جستجوی همه‌کاره و صفحه‌بندی ──
+	// جستجوی همه‌کاره و صفحه‌بندی
 	searchQuery := strings.TrimSpace(r.URL.Query().Get("q"))
-	// حذف کاما در صورتی که ادمین مبلغ را با کاما سرچ کرده باشد (مثلاً 200,796)
 	cleanSearch := strings.ReplaceAll(searchQuery, ",", "")
 	cleanSearch = strings.TrimPrefix(cleanSearch, "#")
 
@@ -495,7 +491,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 	var queryArgs []interface{}
 
 	if searchQuery != "" {
-		// در حالت جستجو: بررسی تمام فاکتورها (شامل آرشیوشده‌ها) در ۵ فیلد مختلف
 		whereClause = `WHERE (
 			CAST(id AS TEXT) = ? OR
 			tracking_code LIKE ? OR
@@ -508,7 +503,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		cleanLike := "%" + cleanSearch + "%"
 		queryArgs = append(queryArgs, cleanSearch, likePattern, cleanLike, likePattern, likePattern, likePattern)
 	} else {
-		// در حالت عادی: فقط فاکتورهای غیرآرشیوی نمایش داده شوند
 		whereClause = `WHERE IFNULL(archived, 0) = 0`
 	}
 
@@ -564,7 +558,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 		o.StatsFixed = statsFixed == 1
 		o.Archived = archived == 1
 
-		// 🎯 لیبل «جدید»: ساخته‌شده در ۲۴ ساعت اخیر
 		if o.CreatedAt != "" {
 			if t, perr := time.Parse("2006-01-02 15:04:05", o.CreatedAt); perr == nil {
 				o.IsNew = time.Now().UTC().Sub(t) < 24*time.Hour
@@ -580,7 +573,6 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 
 		if len(o.Configs) > 0 {
 			o.TelegramText = buildTelegramText(o.Configs)
-			// 🎯 نام کاربری از اولین کانفیگ
 			o.Username = o.Configs[0].Username
 		} else if o.RenewUsername != "" {
 			o.Username = o.RenewUsername
@@ -607,9 +599,7 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 
 // ───────────── 🔄 منطق محاسبه حجم انتقالی (Carry-Over) ─────────────
 
-// calculateUserCarryOver حجم باقیمانده، روز باقیمانده و حجم قابل انتقال به دوره بعد را محاسبه می‌کند.
 func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDays int, carryOverGB int, err error) {
-	// پیدا کردن آخرین فاکتور پرداخت‌شده با این username
 	var orderID int
 	var configLink string
 	err = db.DB.QueryRow(`SELECT id, IFNULL(config_link, '') FROM orders 
@@ -621,7 +611,6 @@ func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDa
 		return 0, 0, 0, fmt.Errorf("اشتراکی با این نام کاربری یافت نشد")
 	}
 
-	// پیدا کردن پنل اصلی
 	cfg := db.GetConfig()
 	var mainPanel *db.PanelConfig
 	for i := range cfg.Panels {
@@ -637,7 +626,6 @@ func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDa
 		return 0, 0, 0, fmt.Errorf("پنل اصلی در تنظیمات یافت نشد")
 	}
 
-	// خواندن حجم و روز باقیمانده از پنل اصلی
 	var limitUsage, totalUsage, limitExpire int64
 	switch mainPanel.Type {
 	case "guards":
@@ -647,7 +635,6 @@ func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDa
 	}
 
 	if err != nil {
-		// 🎯 اگر کاربر در دیتابیس فروشگاه بود ولی از پنل Guards (به خاطر انقضای ۱۴ روزه) حذف شده بود:
 		if strings.Contains(err.Error(), "یافت نشد") {
 			log.Printf("ℹ️ [تمدید] کاربر %s در دیتابیس هست اما از پنل حذف شده -> انتقال=0GB", username)
 			return 0, 0, 0, nil
@@ -658,7 +645,6 @@ func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDa
 	const oneGB = int64(1073741824)
 	const oneDay = int64(86400)
 
-	// ۱. محاسبه حجم باقیمانده و گرد کردن به سمت بالا (به نفع مشتری)
 	remainingBytes := limitUsage - totalUsage
 	if remainingBytes > 0 {
 		remainingVolumeGB = int((remainingBytes + oneGB - 1) / oneGB)
@@ -666,7 +652,6 @@ func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDa
 		remainingVolumeGB = 0
 	}
 
-	// ۲. محاسبه روزهای باقیمانده و گرد کردن به سمت بالا (به نفع مشتری)
 	now := time.Now().Unix()
 	remainingSeconds := limitExpire - now
 	if remainingSeconds > 0 {
@@ -675,7 +660,6 @@ func calculateUserCarryOver(username string) (remainingVolumeGB int, remainingDa
 		remainingDays = 0
 	}
 
-	// ۳. قانون انتقال: به ازای هر ۱ گیگ انتقال، حداقل ۱ روز زمان نیاز است
 	if remainingVolumeGB > 0 && remainingDays > 0 {
 		if remainingVolumeGB < remainingDays {
 			carryOverGB = remainingVolumeGB
@@ -738,7 +722,7 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plans, _ := models.LoadPlans()
+	activePlans, _ := models.LoadActivePlans()
 	planID := strings.TrimSpace(r.FormValue("plan_id"))
 	renewUsername := strings.TrimSpace(r.FormValue("renew_username"))
 	carryGBStr := strings.TrimSpace(r.FormValue("carry_gb"))
@@ -749,15 +733,15 @@ func RenewalHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var selectedPlan *models.Plan
-	for i := range plans {
-		if plans[i].ID == planID && !plans[i].Disabled {
-			selectedPlan = &plans[i]
+	for _, p := range activePlans {
+		if p.ID == planID {
+			selectedPlan = &p
 			break
 		}
 	}
 
 	if selectedPlan == nil {
-		renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست یا غیرفعال است",
+		renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست یا غیرفعال شده است",
 			"لطفاً ابتدا نام کاربری را جستجو کرده و سپس یکی از پلن‌های فعال را از لیست انتخاب نمایید.",
 			"/", 0)
 		return
