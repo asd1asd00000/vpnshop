@@ -147,18 +147,32 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plans, _ := models.LoadPlans()
+	allPlans, _ := models.LoadPlans()
+	var activePlans []models.Plan
+	for _, p := range allPlans {
+		if !p.Disabled {
+			activePlans = append(activePlans, p)
+		}
+	}
+
 	cfg := db.GetConfig()
 	cards := cfg.Cards
 
 	// 🎯 مرتب‌سازی: به‌صرفه‌ترین اول
-	sort.SliceStable(plans, func(i, j int) bool {
-		si := float64(plans[i].VolumeGB*plans[i].Days) / float64(plans[i].Price)
-		sj := float64(plans[j].VolumeGB*plans[j].Days) / float64(plans[j].Price)
+	sort.SliceStable(activePlans, func(i, j int) bool {
+		pi := activePlans[i].Price
+		pj := activePlans[j].Price
+		if pi <= 0 {
+			pi = 1
+		}
+		if pj <= 0 {
+			pj = 1
+		}
+		si := float64(activePlans[i].VolumeGB*activePlans[i].Days) / float64(pi)
+		sj := float64(activePlans[j].VolumeGB*activePlans[j].Days) / float64(pj)
 		return si > sj
 	})
 
-	// نقش → نوع پنل (برای تشخیص conf)
 	panelTypes := make(map[string]string)
 	for _, pn := range cfg.Panels {
 		panelTypes[pn.Role] = pn.Type
@@ -172,7 +186,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		GiftDisplay    string
 	}
 	var enrichedPlans []shopPlanView
-	for _, p := range plans {
+	for _, p := range activePlans {
 		ml := fmt.Sprintf("%d روز", p.Days)
 		if p.Days >= 30 && p.Days%30 == 0 {
 			ml = fmt.Sprintf("%d ماهه", p.Days/30)
@@ -186,7 +200,6 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// ── ساخت panelNames ──
 	panelNames := make(map[string]string)
 	for _, panel := range cfg.Panels {
 		if panel.Role == "backup" || panel.Role == "gift" {
@@ -198,21 +211,21 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		planID := strings.TrimSpace(r.FormValue("plan_id"))
 		var selectedPlan *models.Plan
-		for _, p := range plans {
-			if p.ID == planID {
-				selectedPlan = &p
+		for i := range activePlans {
+			if activePlans[i].ID == planID {
+				selectedPlan = &activePlans[i]
 				break
 			}
 		}
 
 		if selectedPlan == nil {
-			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست",
-				"پلنی که انتخاب کرده‌اید در سیستم یافت نشد. لطفاً یک پلن دیگر را انتخاب کنید.",
+			renderErrorPage(w, "پلن انتخاب‌شده معتبر نیست یا غیرفعال است",
+				"پلنی که انتخاب کرده‌اید در حال حاضر در دسترس نیست. لطفاً یک پلن فعال دیگر را انتخاب کنید.",
 				"/", 0)
 			return
 		}
 
-		trackingCode, _, err := insertOrderWithRetry(selectedPlan.ID, selectedPlan.Price, selectedPlan.Days, "", 0)
+		trackingCode, _, err := insertOrderWithRetry(*selectedPlan, "", 0)
 		if err != nil {
 			renderErrorPage(w, "خطا در ایجاد فاکتور",
 				"سرور نتوانست فاکتور شما را ثبت کند. این مشکل معمولاً موقتی است. لطفاً دوباره تلاش کنید.",
@@ -220,7 +233,6 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// هدایت به آدرس GET فاکتور تا در صورت رفرش صفحه در موبایل خطایی رخ ندهد
 		http.Redirect(w, r, "/?order="+trackingCode, http.StatusSeeOther)
 		return
 	}
@@ -233,7 +245,7 @@ func ShopHandler(w http.ResponseWriter, r *http.Request) {
 			Scan(&planID, &uniqueAmount, &renewUser)
 		if err == nil {
 			planTitle := planID
-			for _, p := range plans {
+			for _, p := range allPlans {
 				if p.ID == planID {
 					planTitle = p.Title
 					break
