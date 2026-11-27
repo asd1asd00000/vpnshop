@@ -57,16 +57,18 @@ func sortConfigItems(items []ConfigItem) []ConfigItem {
 }
 
 func GenerateConfigFromOrder(order models.Order) (string, error) {
-	// 🎯 همیشه اطلاعات تمدید (renew_username و carry_gb) را مستقیماً از دیتابیس بخوان
+	// 🎯 همیشه اطلاعات تمدید و مشخصات قفل‌شده (Snapshot) فاکتور را مستقیماً از دیتابیس بخوان
 	if order.ID > 0 {
-		db.DB.QueryRow(`SELECT IFNULL(renew_username, ''), IFNULL(carry_gb, 0) FROM orders WHERE id = ?`, order.ID).
-			Scan(&order.RenewUsername, &order.CarryGB)
+		db.DB.QueryRow(`SELECT IFNULL(renew_username, ''), IFNULL(carry_gb, 0),
+			IFNULL(plan_days, 0), IFNULL(volume_gb, 0), IFNULL(backup_gb, 0), IFNULL(gift_gb, 0), IFNULL(gift_note, '')
+			FROM orders WHERE id = ?`, order.ID).
+			Scan(&order.RenewUsername, &order.CarryGB, &order.PlanDays, &order.VolumeGB, &order.BackupGB, &order.GiftGB, &order.GiftNote)
 	}
 
 	// 🎯 اگه تمدید هست، از منطق تمدید استفاده کن
 	if order.RenewUsername != "" {
 		log.Printf("🔄 [تمدید] شناسایی شد: username=%s, carry=%dGB", order.RenewUsername, order.CarryGB)
-		return GenerateConfigFromRenewal(order.RenewUsername, order.PlanName, order.CarryGB)
+		return generateConfigFromRenewalOrder(order)
 	}
 
 	cfg := db.GetConfig()
@@ -74,17 +76,33 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
 	}
 
-	// 🎯 خواندن حجم‌ها از پلن
-	pv := planVolumes{mainGB: 20, days: 30}
-	plans, _ := models.LoadPlans()
-	for _, p := range plans {
-		if p.ID == order.PlanName {
-			pv.mainGB = p.VolumeGB
-			pv.days = p.Days
-			pv.backupGB = p.BackupGB
-			pv.giftGB = p.GiftGB
-			pv.giftNote = p.GiftNote
-			break
+	// 🎯 اولویت با مشخصات قفل‌شده در لحظه صدور فاکتور (جلوگیری از تداخل هنگام ویرایش پلن)
+	var pv planVolumes
+	if order.VolumeGB > 0 {
+		days := order.PlanDays
+		if days <= 0 {
+			days = 30
+		}
+		pv = planVolumes{
+			mainGB:   order.VolumeGB,
+			backupGB: order.BackupGB,
+			giftGB:   order.GiftGB,
+			days:     days,
+			giftNote: order.GiftNote,
+		}
+	} else {
+		// fallback برای فاکتورهای قدیمی پیش از این آپدیت
+		pv = planVolumes{mainGB: 20, days: 30}
+		plans, _ := models.LoadPlans()
+		for _, p := range plans {
+			if p.ID == order.PlanName {
+				pv.mainGB = p.VolumeGB
+				pv.days = p.Days
+				pv.backupGB = p.BackupGB
+				pv.giftGB = p.GiftGB
+				pv.giftNote = p.GiftNote
+				break
+			}
 		}
 	}
 
