@@ -567,3 +567,102 @@ func UpdateCleanupHandler(w http.ResponseWriter, r *http.Request) {
 	db.LogEventf("general", "success", "🕐 مهلت حذف سفارش‌های پرداخت‌نشده: %d ساعت", hours)
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
 }
+
+// SavePlansHandler ذخیره لیست پلن‌های فروش در config.json
+func SavePlansHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Plans []models.Plan `json:"plans"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "فرمت داده‌های ارسالی نامعتبر است",
+		})
+		return
+	}
+
+	seen := make(map[string]bool)
+	cleaned := make([]models.Plan, 0, len(req.Plans))
+
+	for i, p := range req.Plans {
+		p.ID = strings.TrimSpace(p.ID)
+		p.Title = strings.TrimSpace(p.Title)
+		p.GiftNote = strings.TrimSpace(p.GiftNote)
+
+		if p.ID == "" {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("شناسه (ID) در پلن شماره %d نمی‌تواند خالی باشد", i+1),
+			})
+			return
+		}
+		key := strings.ToLower(p.ID)
+		if seen[key] {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("شناسه «%s» تکراری است؛ شناسه هر پلن باید یکتا باشد", p.ID),
+			})
+			return
+		}
+		seen[key] = true
+
+		if p.Title == "" {
+			p.Title = p.ID
+		}
+		if p.Price <= 0 {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("قیمت پلن «%s» باید بزرگ‌تر از صفر باشد", p.ID),
+			})
+			return
+		}
+		if p.VolumeGB <= 0 {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("حجم اصلی پلن «%s» باید حداقل ۱ گیگ باشد", p.ID),
+			})
+			return
+		}
+		if p.Days <= 0 {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("مدت اعتبار پلن «%s» باید حداقل ۱ روز باشد", p.ID),
+			})
+			return
+		}
+		if p.BackupGB < 0 {
+			p.BackupGB = 0
+		}
+		if p.GiftGB < 0 {
+			p.GiftGB = 0
+		}
+
+		cleaned = append(cleaned, p)
+	}
+
+	cfg := db.GetConfig()
+	cfg.Plans = cleaned
+	if err := db.SaveConfig(cfg); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "خطا در ذخیره فایل تنظیمات",
+		})
+		return
+	}
+
+	db.LogEventf("general", "success", "🏷️ لیست پلن‌های فروش بروزرسانی شد (%d پلن)", len(cleaned))
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("%d پلن با موفقیت ذخیره شد", len(cleaned)),
+	})
+}
