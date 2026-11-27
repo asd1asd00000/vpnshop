@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 	"sync"
-
-	"github.com/asd1asd00000/vpnshop/models"
 )
 
 // PanelConfig اطلاعات یک پنل VPN
@@ -17,9 +15,23 @@ type PanelConfig struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Role     string `json:"role"` // "main" | "backup" | "gift"
-	IsBackup bool   `json:"is_backup,omitempty"`
+	IsBackup bool   `json:"is_backup,omitempty"` // legacy
 	APIKey   string `json:"api_key"`
 	GroupIDs []int  `json:"group_ids,omitempty"`
+}
+
+// PlanConfig اطلاعات یک پلن فروش (ذخیره‌شده در config.json برای بکاپ و حفظ در آپدیت)
+type PlanConfig struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Price     int    `json:"price"`
+	VolumeGB  int    `json:"volume_gb"`
+	Days      int    `json:"days"`
+	IsSpecial bool   `json:"is_special"`
+	BackupGB  int    `json:"backup_gb"`
+	GiftGB    int    `json:"gift_gb"`
+	GiftNote  string `json:"gift_note"`
+	Disabled  bool   `json:"disabled"`
 }
 
 // CardInfo یک شماره کارت برای واریز
@@ -65,8 +77,8 @@ type CleanupConfig struct {
 type AppConfig struct {
 	Admin          AdminConfig          `json:"admin"`
 	Panels         []PanelConfig        `json:"panels"`
+	Plans          []PlanConfig         `json:"plans"`
 	Cards          []CardInfo           `json:"cards"`
-	Plans          []models.Plan        `json:"plans"`
 	EmailBackup    EmailBackupConfig    `json:"email_backup"`
 	TelegramBackup TelegramBackupConfig `json:"telegram_backup"`
 	BackupLogs     []BackupLog          `json:"backup_logs"`
@@ -86,36 +98,37 @@ func LoadConfig() *AppConfig {
 	config = &AppConfig{
 		Admin:          AdminConfig{},
 		Panels:         []PanelConfig{},
+		Plans:          []PlanConfig{},
 		Cards:          []CardInfo{},
-		Plans:          nil, // nil نشان می‌دهد هنوز به config.json منتقل نشده است
 		EmailBackup:    EmailBackupConfig{SMTPPort: 587},
 		TelegramBackup: TelegramBackupConfig{},
 		BackupLogs:     []BackupLog{},
 	}
 
-	configExisted := false
+	configExists := false
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		log.Println("ℹ️ فایل config.json وجود ندارد")
 	} else {
-		configExisted = true
+		configExists = true
 		if err := json.Unmarshal(data, config); err != nil {
 			log.Printf("❌ خطا در خواندن config.json: %v", err)
 		}
 	}
 
 	// انتقال خودکار پلن‌ها از plans.json به config.json در اولین اجرا
-	if config.Plans == nil {
-		if filePlans, perr := models.LoadPlansFromFile("plans.json"); perr == nil && len(filePlans) > 0 {
-			config.Plans = filePlans
-			log.Printf("✅ %d پلن از plans.json به config.json منتقل شد", len(filePlans))
-			if configExisted {
-				if out, merr := json.MarshalIndent(config, "", "  "); merr == nil {
-					os.WriteFile(configPath, out, 0600)
+	if len(config.Plans) == 0 {
+		if planBytes, perr := os.ReadFile("plans.json"); perr == nil {
+			var legacyPlans []PlanConfig
+			if jerr := json.Unmarshal(planBytes, &legacyPlans); jerr == nil && len(legacyPlans) > 0 {
+				config.Plans = legacyPlans
+				log.Printf("✅ %d پلن به‌صورت خودکار از plans.json به config.json منتقل شد", len(legacyPlans))
+				if configExists {
+					if out, merr := json.MarshalIndent(config, "", "  "); merr == nil {
+						os.WriteFile(configPath, out, 0600)
+					}
 				}
 			}
-		} else {
-			config.Plans = []models.Plan{}
 		}
 	}
 
@@ -146,10 +159,6 @@ func SaveConfig(cfg *AppConfig) error {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	if cfg.Plans == nil {
-		cfg.Plans = []models.Plan{}
-	}
-
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -173,11 +182,12 @@ func GetConfig() *AppConfig {
 	return LoadConfig()
 }
 
-func AddBackupLog(bLog BackupLog) {
+func AddBackupLog(logEntry BackupLog) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	config.BackupLogs = append([]BackupLog{bLog}, config.BackupLogs...)
+	config.BackupLogs = append([]BackupLog{logEntry}, config.BackupLogs...)
+
 	if len(config.BackupLogs) > 3 {
 		config.BackupLogs = config.BackupLogs[:3]
 	}
