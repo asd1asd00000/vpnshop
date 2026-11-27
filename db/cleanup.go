@@ -127,6 +127,18 @@ func MigrateOrders() {
 		if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN stats_fixed INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون stats_fixed به جدول orders اضافه شد")
 	}
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN volume_gb INTEGER DEFAULT 0`); err == nil {
+		log.Println("✅ ستون volume_gb به جدول orders اضافه شد")
+	}
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN backup_gb INTEGER DEFAULT 0`); err == nil {
+		log.Println("✅ ستون backup_gb به جدول orders اضافه شد")
+	}
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN gift_gb INTEGER DEFAULT 0`); err == nil {
+		log.Println("✅ ستون gift_gb به جدول orders اضافه شد")
+	}
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN gift_note TEXT DEFAULT ''`); err == nil {
+		log.Println("✅ ستون gift_note به جدول orders اضافه شد")
+	}
 }
 
 // StartOrderCleanup مایگریشن + پاکسازی‌ها
