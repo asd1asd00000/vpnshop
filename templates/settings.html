@@ -34,7 +34,7 @@
             background: linear-gradient(to left, #eef2ff, #f8fafc);
             border-bottom: 2px solid #c7d2fe;
         }
-        
+
         /* 🎯 افکت blur روی اکاردئون‌های بسته وقتی یکی بازه */
         .has-open-accordion .setting-accordion-item:not(.open) {
             opacity: 0.5;
@@ -48,7 +48,7 @@
             pointer-events: auto;
             cursor: pointer;
         }
-        
+
         .icon-box {
             width: 46px;
             height: 46px;
@@ -67,6 +67,10 @@
             width: 52px;
             height: 28px;
             flex-shrink: 0;
+        }
+        .toggle-switch.sm {
+            width: 44px;
+            height: 24px;
         }
         .toggle-switch input {
             opacity: 0;
@@ -96,13 +100,23 @@
             border-radius: 50%;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
+        .toggle-switch.sm .toggle-slider:before {
+            height: 18px;
+            width: 18px;
+        }
         input:checked + .toggle-slider {
             background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+        input:checked + .toggle-slider.green {
+            background: linear-gradient(135deg, #10b981, #059669);
         }
         input:checked + .toggle-slider:before {
             transform: translateX(-24px);
         }
-        
+        .toggle-switch.sm input:checked + .toggle-slider:before {
+            transform: translateX(-20px);
+        }
+
         /* 🎯 حالت غیرفعال برای بخش بکاپ */
         .backup-section-disabled {
             position: relative;
@@ -129,8 +143,6 @@
             pointer-events: none;
             user-select: none;
         }
-        
-        /* انیمیشن transition برای blur */
         .backup-section {
             transition: all 0.3s ease;
         }
@@ -180,7 +192,7 @@
                     </div>
                     <div id="section-general" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
-                            
+
                             <!-- اطلاعات ورود ادمین -->
                             <div>
                                 <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><span>👤</span> اطلاعات ورود ادمین</h3>
@@ -237,7 +249,70 @@
                 </div>
 
                 <!-- ============================================== -->
-                <!-- بخش ۲: پنل‌های VPN -->
+                <!-- بخش ۲: مدیریت پلن‌های فروش -->
+                <!-- ============================================== -->
+                <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-plans" onclick="toggleSettingsAccordion(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box bg-emerald-100 text-emerald-600">🏷️</div>
+                            <div>
+                                <h2 class="text-base md:text-lg font-bold text-gray-800">مدیریت پلن‌های فروش</h2>
+                                <p class="text-[11px] md:text-xs text-gray-500 mt-1">{{.PlansCount}} پلن تعریف شده ({{.ActivePlansCount}} فعال) — ویرایش، افزودن، حذف و غیرفعال‌سازی موقت</p>
+                            </div>
+                        </div>
+                        <svg class="chevron-icon w-6 h-6 text-gray-400 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                    <div id="section-plans" class="setting-accordion-content">
+                        <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-5">
+
+                            <!-- ⚠️ هشدار فاکتورهای در انتظار پرداخت + راهنما -->
+                            {{if gt .PendingCount 0}}
+                            <div class="bg-amber-50 border border-amber-300 rounded-xl p-4 text-xs md:text-sm text-amber-900 space-y-1.5 shadow-sm">
+                                <div class="font-bold flex items-center gap-1.5">
+                                    <span>⚠️</span>
+                                    <span>هم‌اکنون {{.PendingCount}} فاکتور در انتظار پرداخت (Pending) در سیستم وجود دارد!</span>
+                                </div>
+                                <p class="leading-relaxed text-amber-800">
+                                    برای جلوگیری از تداخل احتمالی با فاکتورهای قدیمی، توصیه می‌شود هنگام وجود فاکتور پرداخت‌نشده، <b>شناسه (ID)</b> پلن‌ها را تغییر ندهید یا حذف نکنید. (فاکتورهای جدید، حجم و مدت اعتبار خود را در لحظه صدور قفل می‌کنند و از تغییرات بعدی مصون هستند.)
+                                </p>
+                            </div>
+                            {{else}}
+                            <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs md:text-sm text-emerald-800 flex items-start gap-2 shadow-sm">
+                                <span>✅</span>
+                                <div>
+                                    <b>هم‌اکنون هیچ فاکتور در انتظار پرداختی در سیستم وجود ندارد.</b>
+                                    با خیال راحت می‌توانید پلن‌ها را ویرایش، اضافه، حذف یا موقتاً غیرفعال کنید. (تمام پلن‌ها در <code>config.json</code> و بکاپ‌ها ذخیره می‌شوند.)
+                                </div>
+                            </div>
+                            {{end}}
+
+                            <!-- لیست کارت‌های پلن -->
+                            <div id="plansList" class="space-y-4"></div>
+
+                            <!-- پیام وضعیت ذخیره -->
+                            <div id="plansStatusMsg"></div>
+
+                            <!-- دکمه‌های افزودن و ذخیره -->
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-gray-200">
+                                <button type="button" onclick="addNewPlan()"
+                                        class="bg-white hover:bg-emerald-50 text-emerald-700 border-2 border-dashed border-emerald-400 font-bold px-5 py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2">
+                                    <span>➕</span>
+                                    <span>افزودن پلن جدید</span>
+                                </button>
+                                <button type="button" id="savePlansBtn" onclick="savePlans()"
+                                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-7 py-2.5 rounded-xl transition text-sm shadow-md flex items-center justify-center gap-2">
+                                    <span>💾</span>
+                                    <span>ذخیره تغییرات پلن‌ها</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- بخش ۳: پنل‌های VPN -->
                 <!-- ============================================== -->
                 <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
                     <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-panels" onclick="toggleSettingsAccordion(this)">
@@ -254,7 +329,7 @@
                     </div>
                     <div id="section-panels" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30">
-                            
+
                             <div class="space-y-3 mb-6">
                                 {{range $i, $p := .Config.Panels}}
                                 <div class="bg-white border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm hover:border-blue-300 transition">
@@ -328,7 +403,7 @@
                 </div>
 
                 <!-- ============================================== -->
-                <!-- بخش ۳: شماره کارت‌ها -->
+                <!-- بخش ۴: شماره کارت‌ها -->
                 <!-- ============================================== -->
                 <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
                     <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-cards" onclick="toggleSettingsAccordion(this)">
@@ -345,7 +420,7 @@
                     </div>
                     <div id="section-cards" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30">
-                            
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                                 {{range $i, $c := .Config.Cards}}
                                 <div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
@@ -382,7 +457,7 @@
                 </div>
 
                 <!-- ============================================== -->
-                <!-- بخش ۴: بکاپ خودکار -->
+                <!-- بخش ۵: بکاپ خودکار -->
                 <!-- ============================================== -->
                 <div class="setting-accordion-item bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
                     <div class="accordion-header flex items-center justify-between p-4 md:p-5 cursor-pointer hover:bg-gray-50 transition" data-target="section-backup" onclick="toggleSettingsAccordion(this)">
@@ -399,8 +474,8 @@
                     </div>
                     <div id="section-backup" class="setting-accordion-content">
                         <div class="p-4 md:p-6 border-t border-gray-100 bg-gray-50/30 space-y-8">
-                            
-                            <!-- 🎯 بکاپ به ایمیل با toggle -->
+
+                            <!-- بکاپ به ایمیل -->
                             <div class="backup-section" id="emailBackupSection">
                                 <div class="flex items-center justify-between mb-4">
                                     <div class="flex items-center gap-2">
@@ -468,7 +543,7 @@
 
                             <hr class="border-gray-200 border-dashed">
 
-                            <!-- 🎯 بکاپ به تلگرام با toggle -->
+                            <!-- بکاپ به تلگرام -->
                             <div class="backup-section" id="telegramBackupSection">
                                 <div class="flex items-center justify-between mb-4">
                                     <div class="flex items-center gap-2">
@@ -556,7 +631,7 @@
         </div>
     </div>
 
-    <!-- 🆕 Modal مدیریت گروه‌های Pasarguard -->
+    <!-- Modal مدیریت گروه‌های Pasarguard -->
     <div id="groupsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div class="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4 flex justify-between items-center">
@@ -599,380 +674,135 @@
     </div>
 
     <script>
+        const adminBase = '{{.AdminBase}}';
+        let plansData = {{.PlansJSON}};
+
+        function escapeHtml(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"')
+                .replace(/'/g, ''');
+        }
+
+        function refreshOpenAccordionHeight() {
+            const openContent = document.querySelector('.setting-accordion-item.open .setting-accordion-content');
+            if (openContent) {
+                openContent.style.maxHeight = (openContent.scrollHeight + 200) + 'px';
+            }
+        }
+
         // ── 🎯 کنترل اکاردئون با افکت blur ──
         function toggleSettingsAccordion(header) {
             const item = header.closest('.setting-accordion-item');
             const content = item.querySelector('.setting-accordion-content');
             const container = document.getElementById('accordionContainer');
-            const targetId = header.dataset.target;
-            
             const isOpen = item.classList.contains('open');
-            
-            // بستن بقیه اکاردئون‌ها
+
             document.querySelectorAll('.setting-accordion-item.open').forEach(opened => {
-                if(opened !== item) {
+                if (opened !== item) {
                     opened.classList.remove('open');
                     opened.querySelector('.setting-accordion-content').style.maxHeight = null;
                 }
             });
 
             if (isOpen) {
-                // بستن فعلی
-                content.style.maxHeight = content.scrollHeight + 'px'; 
+                content.style.maxHeight = content.scrollHeight + 'px';
                 requestAnimationFrame(() => {
                     content.style.maxHeight = null;
                     item.classList.remove('open');
                     container.classList.remove('has-open-accordion');
                 });
             } else {
-                // باز کردن
                 item.classList.add('open');
-                content.style.maxHeight = content.scrollHeight + 1500 + 'px'; 
+                content.style.maxHeight = (content.scrollHeight + 200) + 'px';
                 container.classList.add('has-open-accordion');
-                
+
                 setTimeout(() => {
                     header.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 300);
             }
         }
 
-        // ── 🎯 Toggle برای بکاپ ایمیل (ذخیره خودکار) ──
-        function toggleEmailBackup() {
-            const toggle = document.getElementById('emailBackupToggle');
-            const section = document.getElementById('emailBackupSection');
-            const hiddenInput = document.getElementById('emailEnabledInput');
-            const isEnabled = toggle.checked;
-            
-            // بررسی اینکه آیا مقدار تغییر کرده است
-            const currentValue = hiddenInput.value;
-            const newValue = isEnabled ? '1' : '0';
-            
-            // اگر مقدار تغییر نکرده، submit نکن
-            if (currentValue === newValue) {
-                // فقط ظاهر را به‌روز کن
-                if (isEnabled) {
-                    section.classList.remove('backup-section-disabled');
-                } else {
-                    section.classList.add('backup-section-disabled');
-                }
+        // ── 🏷️ مدیریت پلن‌های فروش ──
+        function formatToman(val) {
+            const n = parseInt(val, 10);
+            if (isNaN(n) || n <= 0) return '0 تومان';
+            return n.toLocaleString('en-US') + ' تومان';
+        }
+
+        function renderPlans() {
+            const container = document.getElementById('plansList');
+            if (!container) return;
+
+            if (!Array.isArray(plansData) || plansData.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 text-sm py-8 bg-white border border-gray-200 border-dashed rounded-xl">هیچ پلنی تعریف نشده است. روی «افزودن پلن جدید» کلیک کنید.</div>';
+                refreshOpenAccordionHeight();
                 return;
             }
-            
-            // به‌روزرسانی مقدار مخفی
-            hiddenInput.value = newValue;
-            
-            // تغییر ظاهر
-            if (isEnabled) {
-                section.classList.remove('backup-section-disabled');
-            } else {
-                section.classList.add('backup-section-disabled');
-            }
-            
-            // ارسال خودکار فرم پس از 300 میلی‌ثانیه
-            setTimeout(() => {
-                document.getElementById('emailBackupForm').submit();
-            }, 300);
-        }
 
-        // ── 🎯 Toggle برای بکاپ تلگرام (ذخیره خودکار) ──
-        function toggleTelegramBackup() {
-            const toggle = document.getElementById('telegramBackupToggle');
-            const section = document.getElementById('telegramBackupSection');
-            const hiddenInput = document.getElementById('telegramEnabledInput');
-            const isEnabled = toggle.checked;
-            
-            // بررسی اینکه آیا مقدار تغییر کرده است
-            const currentValue = hiddenInput.value;
-            const newValue = isEnabled ? '1' : '0';
-            
-            // اگر مقدار تغییر نکرده، submit نکن
-            if (currentValue === newValue) {
-                // فقط ظاهر را به‌روز کن
-                if (isEnabled) {
-                    section.classList.remove('backup-section-disabled');
-                } else {
-                    section.classList.add('backup-section-disabled');
-                }
-                return;
-            }
-            
-            // به‌روزرسانی مقدار مخفی
-            hiddenInput.value = newValue;
-            
-            // تغییر ظاهر
-            if (isEnabled) {
-                section.classList.remove('backup-section-disabled');
-            } else {
-                section.classList.add('backup-section-disabled');
-            }
-            
-            // ارسال خودکار فرم پس از 300 میلی‌ثانیه
-            setTimeout(() => {
-                document.getElementById('telegramBackupForm').submit();
-            }, 300);
-        }
+            container.innerHTML = plansData.map((p, idx) => {
+                const isActive = !p.disabled;
+                const cardClass = isActive
+                    ? 'bg-white border-gray-200 hover:border-emerald-300'
+                    : 'bg-gray-100/80 border-gray-300 opacity-75';
 
-        // ── اجرای اولیه هنگام بارگذاری صفحه ──
-        document.addEventListener('DOMContentLoaded', function() {
-            // فقط ظاهر را به‌روز کن، submit نکن
-            const emailToggle = document.getElementById('emailBackupToggle');
-            const emailSection = document.getElementById('emailBackupSection');
-            if (emailToggle && emailSection) {
-                if (emailToggle.checked) {
-                    emailSection.classList.remove('backup-section-disabled');
-                } else {
-                    emailSection.classList.add('backup-section-disabled');
-                }
-            }
-            
-            const telegramToggle = document.getElementById('telegramBackupToggle');
-            const telegramSection = document.getElementById('telegramBackupSection');
-            if (telegramToggle && telegramSection) {
-                if (telegramToggle.checked) {
-                    telegramSection.classList.remove('backup-section-disabled');
-                } else {
-                    telegramSection.classList.add('backup-section-disabled');
-                }
-            }
-        });
+                return `
+                <div class="border rounded-2xl p-4 shadow-sm transition ${cardClass}">
+                    <!-- هدر کارت پلن -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-gray-100">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="bg-gray-800 text-white text-xs font-bold px-2.5 py-1 rounded-lg">#${idx + 1}</span>
+                            <span class="font-bold text-gray-800 text-sm" id="plan-head-title-${idx}">${escapeHtml(p.title || p.id || 'پلن جدید')}</span>
+                            ${p.is_special ? '<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold px-2 py-0.5 rounded-full">⭐ ویژه</span>' : ''}
+                            ${isActive
+                                ? '<span class="bg-emerald-100 text-emerald-700 text-[11px] font-bold px-2 py-0.5 rounded-full">فعال</span>'
+                                : '<span class="bg-red-100 text-red-700 text-[11px] font-bold px-2 py-0.5 rounded-full">⏸️ غیرفعال موقت</span>'
+                            }
+                        </div>
 
-        // ── اجرای اولیه هنگام بارگذاری صفحه ──
-        document.addEventListener('DOMContentLoaded', function() {
-            toggleEmailBackup();
-            toggleTelegramBackup();
-        });
-
-        // ── توابع عمومی ──
-        function confirmAdminChange() {
-            return confirm('⚠️ آیا از تغییر اطلاعات ورود اطمینان دارید؟');
-        }
-
-        // ── مدیریت فیلدهای فرم پنل بر اساس نوع پنل ──
-        (function() {
-            const typeSelect = document.querySelector('select[name="panel_type"]');
-            const usernameInput = document.querySelector('input[name="panel_username"]');
-            const passwordInput = document.querySelector('input[name="panel_password"]');
-            const apiKeyInput = document.querySelector('input[name="panel_api_key"]');
-            if (!typeSelect) return;
-
-            function setFieldState(input, disabled, required, placeholder) {
-                if (!input) return;
-                input.disabled = disabled;
-                input.required = required;
-                input.placeholder = placeholder;
-                if (disabled) {
-                    input.value = '';
-                    input.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
-                } else {
-                    input.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
-                }
-            }
-
-            function updateFields() {
-                const type = typeSelect.value;
-                if (type === 'guards' || type === 'conf') {
-                    setFieldState(apiKeyInput, false, true, 'API Key پنل (الزامی)');
-                    setFieldState(usernameInput, true, false, 'نیازی نیست — فقط API Key');
-                    setFieldState(passwordInput, true, false, 'نیازی نیست — فقط API Key');
-                } else if (type === 'marzban') {
-                    setFieldState(apiKeyInput, true, false, 'نیازی نیست — یوزرنیم/پسورد');
-                    setFieldState(usernameInput, false, true, 'نام کاربری ادمین');
-                    setFieldState(passwordInput, false, true, 'رمز عبور');
-                } else {
-                    setFieldState(apiKeyInput, true, false, 'نیازی نیست');
-                    setFieldState(usernameInput, false, true, 'نام کاربری ادمین');
-                    setFieldState(passwordInput, false, true, 'رمز عبور');
-                }
-            }
-            typeSelect.addEventListener('change', updateFields);
-            updateFields();
-        })();
-
-        // ── مدیریت Modal گروه‌ها ──
-        let currentPanelId = null;
-        let currentGroups = [];
-        let currentSelected = [];
-        const adminBase = '{{.AdminBase}}';
-
-        function openGroupsModal(panelId, panelName) {
-            currentPanelId = panelId;
-            document.getElementById('panelName').textContent = panelName;
-            document.getElementById('groupsModal').classList.remove('hidden');
-            document.getElementById('groupsList').innerHTML = '<div class="text-center text-gray-500 py-8 border border-dashed rounded-lg bg-gray-50">روی «بارگذاری گروه‌ها از پنل» کلیک کنید یا ID ها رو دستی وارد کنید</div>';
-            document.getElementById('statusMsg').innerHTML = '';
-            document.getElementById('selectedCount').textContent = '0';
-            currentGroups = [];
-            currentSelected = [];
-        }
-
-        function closeGroupsModal() {
-            document.getElementById('groupsModal').classList.add('hidden');
-            currentPanelId = null;
-        }
-
-        function showStatus(msg, color) {
-            const colors = {
-                green: 'bg-green-50 border-green-300 text-green-800',
-                red: 'bg-red-50 border-red-300 text-red-800',
-                yellow: 'bg-yellow-50 border-yellow-300 text-yellow-800'
-            };
-            document.getElementById('statusMsg').innerHTML =
-                `<div class="${colors[color]} border rounded-lg p-3 text-sm font-bold shadow-sm">${msg}</div>`;
-        }
-
-        function renderGroupsList() {
-            const list = document.getElementById('groupsList');
-            if (currentGroups.length === 0) {
-                list.innerHTML = '<div class="text-center text-gray-500 py-8 border border-dashed rounded-lg bg-gray-50">هیچ گروهی در لیست نیست</div>';
-                return;
-            }
-            list.innerHTML = currentGroups.map(g => `
-                <label class="flex items-center gap-3 bg-white hover:bg-purple-50 border border-gray-200 hover:border-purple-300 rounded-lg p-3 cursor-pointer transition shadow-sm">
-                    <input type="checkbox" class="group-checkbox w-5 h-5 accent-purple-600" value="${g.id}" ${currentSelected.includes(g.id) ? 'checked' : ''} onchange="updateSelectedCount()">
-                    <div class="flex-1">
-                        <div class="font-bold text-gray-800 text-sm">${escapeHtml(g.name)}</div>
-                        <div class="text-[11px] text-gray-500 font-mono mt-0.5">ID: ${g.id}</div>
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <span class="text-xs font-bold ${isActive ? 'text-emerald-700' : 'text-gray-500'}">${isActive ? 'فعال' : 'غیرفعال'}</span>
+                                <span class="toggle-switch sm">
+                                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="updatePlanField(${idx}, 'disabled', !this.checked, true)">
+                                    <span class="toggle-slider green"></span>
+                                </span>
+                            </label>
+                            <button type="button" onclick="deletePlan(${idx})"
+                                    class="bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                                🗑️ حذف
+                            </button>
+                        </div>
                     </div>
-                </label>
-            `).join('');
-            updateSelectedCount();
-        }
 
-        async function fetchGroups() {
-            const btn = document.getElementById('fetchBtn');
-            const list = document.getElementById('groupsList');
-
-            btn.disabled = true;
-            btn.innerHTML = '⏳ در حال بارگذاری...';
-            document.getElementById('statusMsg').innerHTML = '';
-            list.innerHTML = '<div class="text-center py-8"><div class="animate-spin inline-block w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full"></div></div>';
-
-            try {
-                const resp = await fetch(adminBase + '/settings/fetch-groups', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({panel_id: parseInt(currentPanelId)})
-                });
-                const data = await resp.json();
-
-                if (!data.success) {
-                    list.innerHTML = '';
-                    showStatus(`❌ ${data.error} — می‌تونید ID ها رو دستی وارد کنید`, 'red');
-                    return;
-                }
-
-                currentGroups = data.groups || [];
-                if (currentGroups.length === 0) {
-                    list.innerHTML = '';
-                    showStatus('⚠️ هیچ گروهی در این پنل یافت نشد', 'yellow');
-                    return;
-                }
-
-                renderGroupsList();
-                showStatus(`✅ ${currentGroups.length} گروه با موفقیت بارگذاری شد`, 'green');
-            } catch (err) {
-                list.innerHTML = '';
-                showStatus(`❌ خطا در ارتباط با سرور: ${err.message}`, 'red');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '🔄 بارگذاری گروه‌ها از پنل';
-            }
-        }
-
-        function addManualGroups() {
-            const input = document.getElementById('manualGroupsInput');
-            const raw = input.value.trim();
-            if (!raw) return;
-
-            const ids = raw.split(/[\s,،]+/)
-                .map(s => parseInt(s))
-                .filter(n => !isNaN(n) && n > 0);
-
-            if (ids.length === 0) {
-                showStatus('❌ شناسه معتبری وارد نشد', 'red');
-                return;
-            }
-
-            const existing = new Set(currentGroups.map(g => g.id));
-            let added = 0;
-            for (const id of ids) {
-                if (!existing.has(id)) {
-                    currentGroups.push({id: id, name: `Group-${id} (دستی)`});
-                    existing.add(id);
-                    added++;
-                }
-            }
-
-            renderGroupsList();
-            input.value = '';
-            showStatus(`✅ ${added} گروه دستی اضافه شد`, 'green');
-        }
-
-function escapeHtml(s) {
-    return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-        function updateSelectedCount() {
-            const checkboxes = document.querySelectorAll('.group-checkbox:checked');
-            currentSelected = Array.from(checkboxes).map(cb => parseInt(cb.value));
-            document.getElementById('selectedCount').textContent = currentSelected.length;
-        }
-
-        function selectAll() {
-            document.querySelectorAll('.group-checkbox').forEach(cb => cb.checked = true);
-            updateSelectedCount();
-        }
-
-        function deselectAll() {
-            document.querySelectorAll('.group-checkbox').forEach(cb => cb.checked = false);
-            updateSelectedCount();
-        }
-
-        async function saveGroups() {
-            const saveBtn = document.getElementById('saveBtn');
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '⏳ ذخیره...';
-
-            try {
-                const resp = await fetch(adminBase + '/settings/save-groups', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        panel_id: parseInt(currentPanelId),
-                        group_ids: currentSelected
-                    })
-                });
-                const data = await resp.json();
-
-                if (!data.success) {
-                    showStatus(`❌ ${data.error}`, 'red');
-                    return;
-                }
-
-                showStatus(`✅ ${data.message}`, 'green');
-                setTimeout(() => {
-                    closeGroupsModal();
-                    window.location.reload();
-                }, 1500);
-            } catch (err) {
-                showStatus(`❌ خطا: ${err.message}`, 'red');
-            } finally {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = '💾 ذخیره گروه‌ها';
-            }
-        }
-
-        document.getElementById('groupsModal').addEventListener('click', (e) => {
-            if (e.target.id === 'groupsModal') closeGroupsModal();
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeGroupsModal();
-        });
-    </script>
-</body>
-</html>
+                    <!-- فیلدهای پلن -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-600 mb-1">شناسه یکتا (ID)</label>
+                            <input type="text" value="${escapeHtml(p.id)}" placeholder="20GB-1M" dir="ltr"
+                                   oninput="updatePlanField(${idx}, 'id', this.value)"
+                                   class="w-full border border-gray-300 bg-white rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-emerald-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-600 mb-1">عنوان نمایشی</label>
+                            <input type="text" value="${escapeHtml(p.title)}" placeholder="20GB - 1 Month"
+                                   oninput="updatePlanField(${idx}, 'title', this.value)"
+                                   class="w-full border border-gray-300 bg-white rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-600 mb-1">قیمت (تومان)</label>
+                            <input type="number" min="1000" step="1000" value="${p.price || 0}" dir="ltr"
+                                   oninput="updatePlanField(${idx}, 'price', parseInt(this.value, 10) \vert{}\vert{} 0); document.getElementById('price-fmt-${idx}').textContent = formatToman(this.value)"
+                                   class="w-full border border-gray-300 bg-white rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-emerald-400 outline-none">
+                            <div class="text-[10px] text-emerald-700 font-bold mt-0.5" id="price-fmt-${idx}">${formatToman(p.price)}</div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-600 mb-1">حجم اصلی (GB)</label>
+                            <input type="number" min="1" value="${p.volume_gb || 0}" dir="ltr"
+                                   oninput="updatePlanField(${idx}, 'volume_gb', parseInt(this.value, 10) || 0)"
+                                   class="w-full border border-gray-300 bg-white rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-emerald-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-
