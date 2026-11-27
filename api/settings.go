@@ -37,13 +37,35 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 		flash = "✈️ فایل تست در حال ارسال به تلگرام است — وضعیت را در تاریخچه پایین صفحه بررسی کنید"
 	case "groups_saved":
 		flash = "✅ گروه‌های پنل ذخیره شد"
+	case "plans_saved":
+		flash = "✅ تغییرات پلن‌های فروش با موفقیت ذخیره و در فروشگاه اعمال شد"
 	}
 
 	cfg := db.GetConfig()
+
+	var pendingCount int
+	db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE status = 'pending' AND IFNULL(archived, 0) = 0`).Scan(&pendingCount)
+
+	activePlansCount := 0
+	for _, p := range cfg.Plans {
+		if !p.Disabled {
+			activePlansCount++
+		}
+	}
+
+	plansJSONBytes, err := json.Marshal(cfg.Plans)
+	if err != nil || string(plansJSONBytes) == "null" {
+		plansJSONBytes = []byte("[]")
+	}
+
 	if err := tmpl.Execute(w, map[string]interface{}{
-		"Config":    cfg,
-		"AdminBase": AdminBasePath(),
-		"Flash":     flash,
+		"Config":           cfg,
+		"AdminBase":        AdminBasePath(),
+		"Flash":            flash,
+		"PendingCount":     pendingCount,
+		"PlansCount":       len(cfg.Plans),
+		"ActivePlansCount": activePlansCount,
+		"PlansJSON":        template.JS(plansJSONBytes),
 	}); err != nil {
 		log.Printf("❌ خطای اجرای قالب settings: %v", err)
 	}
