@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"sync"
+
+	"github.com/asd1asd00000/vpnshop/models"
 )
 
 // PanelConfig اطلاعات یک پنل VPN
@@ -15,7 +17,7 @@ type PanelConfig struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Role     string `json:"role"` // "main" | "backup" | "gift"
-	IsBackup bool   `json:"is_backup,omitempty"` // legacy
+	IsBackup bool   `json:"is_backup,omitempty"`
 	APIKey   string `json:"api_key"`
 	GroupIDs []int  `json:"group_ids,omitempty"`
 }
@@ -42,7 +44,6 @@ type EmailBackupConfig struct {
 	ZipPassword   string `json:"zip_password"`
 }
 
-// 🆕 ساختار بکاپ تلگرام
 type TelegramBackupConfig struct {
 	Enabled       bool   `json:"enabled"`
 	BotToken      string `json:"bot_token"`
@@ -51,7 +52,6 @@ type TelegramBackupConfig struct {
 	ZipPassword   string `json:"zip_password"`
 }
 
-// 🆕 ساختار ذخیره وضعیت آخرین بکاپ‌ها
 type BackupLog struct {
 	Time    string `json:"time"`
 	Success bool   `json:"success"`
@@ -66,9 +66,10 @@ type AppConfig struct {
 	Admin          AdminConfig          `json:"admin"`
 	Panels         []PanelConfig        `json:"panels"`
 	Cards          []CardInfo           `json:"cards"`
+	Plans          []models.Plan        `json:"plans"`
 	EmailBackup    EmailBackupConfig    `json:"email_backup"`
-	TelegramBackup TelegramBackupConfig `json:"telegram_backup"` // 🆕
-	BackupLogs     []BackupLog          `json:"backup_logs"`     // 🆕 لیست ۳ بکاپ اخیر
+	TelegramBackup TelegramBackupConfig `json:"telegram_backup"`
+	BackupLogs     []BackupLog          `json:"backup_logs"`
 	Cleanup        CleanupConfig        `json:"cleanup"`
 }
 
@@ -86,20 +87,36 @@ func LoadConfig() *AppConfig {
 		Admin:          AdminConfig{},
 		Panels:         []PanelConfig{},
 		Cards:          []CardInfo{},
+		Plans:          nil, // nil نشان می‌دهد هنوز به config.json منتقل نشده است
 		EmailBackup:    EmailBackupConfig{SMTPPort: 587},
 		TelegramBackup: TelegramBackupConfig{},
 		BackupLogs:     []BackupLog{},
 	}
 
+	configExisted := false
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		log.Println("ℹ️ فایل config.json وجود ندارد")
-		return config
+	} else {
+		configExisted = true
+		if err := json.Unmarshal(data, config); err != nil {
+			log.Printf("❌ خطا در خواندن config.json: %v", err)
+		}
 	}
 
-	if err := json.Unmarshal(data, config); err != nil {
-		log.Printf("❌ خطا در خواندن config.json: %v", err)
-		return config
+	// انتقال خودکار پلن‌ها از plans.json به config.json در اولین اجرا
+	if config.Plans == nil {
+		if filePlans, perr := models.LoadPlansFromFile("plans.json"); perr == nil && len(filePlans) > 0 {
+			config.Plans = filePlans
+			log.Printf("✅ %d پلن از plans.json به config.json منتقل شد", len(filePlans))
+			if configExisted {
+				if out, merr := json.MarshalIndent(config, "", "  "); merr == nil {
+					os.WriteFile(configPath, out, 0600)
+				}
+			}
+		} else {
+			config.Plans = []models.Plan{}
+		}
 	}
 
 	for i := range config.Panels {
@@ -129,6 +146,10 @@ func SaveConfig(cfg *AppConfig) error {
 	configMu.Lock()
 	defer configMu.Unlock()
 
+	if cfg.Plans == nil {
+		cfg.Plans = []models.Plan{}
+	}
+
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -144,27 +165,23 @@ func SaveConfig(cfg *AppConfig) error {
 
 func GetConfig() *AppConfig {
 	configMu.RLock()
-	defer configMu.RUnlock()
-	if config == nil {
-		LoadConfig()
+	if config != nil {
+		defer configMu.RUnlock()
+		return config
 	}
-	return config
+	configMu.RUnlock()
+	return LoadConfig()
 }
 
-// 🆕 تابع کمکی برای ذخیره ۳ لاگ اخیر بکاپ‌ها
-func AddBackupLog(log BackupLog) {
+func AddBackupLog(bLog BackupLog) {
 	configMu.Lock()
 	defer configMu.Unlock()
-	
-	// اضافه کردن به ابتدای لیست
-	config.BackupLogs = append([]BackupLog{log}, config.BackupLogs...)
-	
-	// نگهداری فقط ۳ تای اول
+
+	config.BackupLogs = append([]BackupLog{bLog}, config.BackupLogs...)
 	if len(config.BackupLogs) > 3 {
 		config.BackupLogs = config.BackupLogs[:3]
 	}
-	
-	// ذخیره مستقیم
+
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err == nil {
 		os.WriteFile(configPath, data, 0600)
