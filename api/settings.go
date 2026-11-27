@@ -19,13 +19,16 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := template.ParseFiles("templates/settings.html")
+	tmpl, err := template.New("settings.html").Funcs(template.FuncMap{
+		"formatPrice": formatPrice,
+	}).ParseFiles("templates/settings.html")
 	if err != nil {
 		http.Error(w, "خطا در بارگذاری قالب تنظیمات", http.StatusInternalServerError)
 		return
 	}
 
 	flash := ""
+	flashError := false
 	switch r.URL.Query().Get("msg") {
 	case "email_saved":
 		flash = "✅ تنظیمات بکاپ ایمیل ذخیره گردید"
@@ -37,38 +40,171 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 		flash = "✈️ فایل تست در حال ارسال به تلگرام است — وضعیت را در تاریخچه پایین صفحه بررسی کنید"
 	case "groups_saved":
 		flash = "✅ گروه‌های پنل ذخیره شد"
-	case "plans_saved":
-		flash = "✅ تغییرات پلن‌های فروش با موفقیت ذخیره و در فروشگاه اعمال شد"
+	case "plan_saved":
+		flash = "✅ پلن با موفقیت ذخیره شد و بلافاصله در فروشگاه اعمال گردید"
+	case "plan_deleted":
+		flash = "🗑️ پلن با موفقیت حذف شد"
+	case "plan_toggled":
+		flash = "✅ وضعیت فعال/غیرفعال پلن تغییر کرد"
+	case "plan_dup_id":
+		flash = "❌ شناسه پلن (ID) تکراری است — لطفاً یک شناسه یکتا انتخاب کنید"
+		flashError = true
+	case "plan_invalid":
+		flash = "❌ اطلاعات واردشده برای پلن نامعتبر است (شناسه، عنوان، قیمت، حجم و روز الزامی هستند)"
+		flashError = true
+	}
+
+	// شمارش فاکتورهای در انتظار پرداخت برای هشدار مدیریت پلن‌ها
+	var pendingCount int
+	if db.DB != nil {
+		db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE status = 'pending' AND IFNULL(archived, 0) = 0`).Scan(&pendingCount)
+	}
+
+	cfg := db.GetConfig()
+	if err := tmpl.Execute(w, map[string]interface{}{
+		"Config":             cfg,
+		"AdminBase":          AdminBasePath(),
+		"Flash":              flash,
+		"FlashError":         flashError,
+		"PendingOrdersCount": pendingCount,
+		"OpenSection":        r.URL.Query().Get("open"),
+	}); err != nil {
+		log.Printf("❌ خطای اجرای قالب settings: %v", err)
+	}
+}
+
+// SavePlanHandler افزودن پلن جدید یا ویرایش پلن موجود
+func SavePlanHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idx, err := strconv.Atoi(strings.TrimSpace(r.FormValue("plan_index")))
+	if err != nil {
+		idx = -1
+	}
+
+	planID := strings.TrimSpace(r.FormValue("plan_id"))
+	title := strings.TrimSpace(r.FormValue("plan_title"))
+	priceStr := strings.ReplaceAll(strings.TrimSpace(r.FormValue("plan_price")), ",", "")
+	price, _ := strconv.Atoi(priceStr)
+	volumeGB, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("plan_volume_gb")))
+	days, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("plan_days")))
+	backupGB, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("plan_backup_gb")))
+	giftGB, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("plan_gift_gb")))
+	giftNote := strings.TrimSpace(r.FormValue("plan_gift_note"))
+	isSpecial := r.FormValue("plan_is_special") == "1" || r.FormValue("plan_is_special") == "on"
+	enabled := r.FormValue("plan_enabled") == "1" || r.FormValue("plan_enabled") == "on"
+
+	if planID == "" || title == "" || price <= 0 || volumeGB <= 0 || days <= 0 || backupGB < 0 || giftGB < 0 {
+		http.Redirect(w, r, AdminBasePath()+"/settings?msg=plan_invalid&open=plans", http.StatusSeeOther)
+		return
 	}
 
 	cfg := db.GetConfig()
 
-	var pendingCount int
-	db.DB.QueryRow(`SELECT COUNT(*) FROM orders WHERE status = 'pending' AND IFNULL(archived, 0) = 0`).Scan(&pendingCount)
-
-	activePlansCount := 0
-	for _, p := range cfg.Plans {
-		if !p.Disabled {
-			activePlansCount++
+	// بررسی یکتا بودن شناسه پلن
+	for i, p := range cfg.Plans {
+		if i != idx && strings.EqualFold(p.ID, planID) {
+			http.Redirect(w, r, AdminBasePath()+"/settings?msg=plan_dup_id&open=plans", http.StatusSeeOther)
+			return
 		}
 	}
 
-	plansJSONBytes, err := json.Marshal(cfg.Plans)
-	if err != nil || string(plansJSONBytes) == "null" {
-		plansJSONBytes = []byte("[]")
+	newPlan := db.PlanConfig{
+		ID:        planID,
+		Title:     title,
+		Price:     price,
+		VolumeGB:  volumeGB,
+		Days:      days,
+		IsSpecial: isSpecial,
+		BackupGB:  backupGB,
+		GiftGB:    giftGB,
+		GiftNote:  giftNote,
+		Disabled:  !enabled,
 	}
 
-	if err := tmpl.Execute(w, map[string]interface{}{
-		"Config":           cfg,
-		"AdminBase":        AdminBasePath(),
-		"Flash":            flash,
-		"PendingCount":     pendingCount,
-		"PlansCount":       len(cfg.Plans),
-		"ActivePlansCount": activePlansCount,
-		"PlansJSON":        template.JS(plansJSONBytes),
-	}); err != nil {
-		log.Printf("❌ خطای اجرای قالب settings: %v", err)
+	if idx >= 0 && idx < len(cfg.Plans) {
+		cfg.Plans[idx] = newPlan
+		db.LogEventf("general", "success", "✏️ پلن %s ویرایش شد (قیمت: %d | حجم: %dGB | روز: %d | فعال: %v)", planID, price, volumeGB, days, enabled)
+	} else {
+		cfg.Plans = append(cfg.Plans, newPlan)
+		db.LogEventf("general", "success", "➕ پلن جدید اضافه شد: %s (قیمت: %d | حجم: %dGB | روز: %d)", planID, price, volumeGB, days)
 	}
+
+	if err := db.SaveConfig(cfg); err != nil {
+		http.Error(w, "خطا در ذخیره پلن‌ها", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, AdminBasePath()+"/settings?msg=plan_saved&open=plans", http.StatusSeeOther)
+}
+
+// TogglePlanHandler فعال یا غیرفعال کردن سریع یک پلن
+func TogglePlanHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idx, err := strconv.Atoi(strings.TrimSpace(r.FormValue("plan_index")))
+	if err != nil {
+		http.Error(w, "شناسه نامعتبر", http.StatusBadRequest)
+		return
+	}
+
+	cfg := db.GetConfig()
+	if idx >= 0 && idx < len(cfg.Plans) {
+		cfg.Plans[idx].Disabled = !cfg.Plans[idx].Disabled
+		if err := db.SaveConfig(cfg); err != nil {
+			http.Error(w, "خطا در ذخیره", http.StatusInternalServerError)
+			return
+		}
+		state := "فعال"
+		if cfg.Plans[idx].Disabled {
+			state = "غیرفعال"
+		}
+		db.LogEventf("general", "info", "🔄 وضعیت پلن %s به «%s» تغییر کرد", cfg.Plans[idx].ID, state)
+	}
+
+	http.Redirect(w, r, AdminBasePath()+"/settings?msg=plan_toggled&open=plans", http.StatusSeeOther)
+}
+
+// DeletePlanHandler حذف یک پلن
+func DeletePlanHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkAdminAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idx, err := strconv.Atoi(strings.TrimSpace(r.FormValue("plan_index")))
+	if err != nil {
+		http.Error(w, "شناسه نامعتبر", http.StatusBadRequest)
+		return
+	}
+
+	cfg := db.GetConfig()
+	if idx >= 0 && idx < len(cfg.Plans) {
+		planID := cfg.Plans[idx].ID
+		cfg.Plans = append(cfg.Plans[:idx], cfg.Plans[idx+1:]...)
+		if err := db.SaveConfig(cfg); err != nil {
+			http.Error(w, "خطا در حذف پلن", http.StatusInternalServerError)
+			return
+		}
+		db.LogEventf("general", "warning", "🗑️ پلن حذف شد: %s", planID)
+	}
+
+	http.Redirect(w, r, AdminBasePath()+"/settings?msg=plan_deleted&open=plans", http.StatusSeeOther)
 }
 
 // UpdateAdminHandler تغییر یوزرنیم و پسورد ادمین
@@ -136,21 +272,18 @@ func AddPanelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// اعتبارسنجی بر اساس نوع پنل:
 	switch panelType {
 	case "conf", "guards":
-		// Conf و Guards: فقط API Key
 		if apiKey == "" && password == "" {
 			http.Error(w, "برای پنل‌های Guards و Conf، API Key الزامی است", http.StatusBadRequest)
 			return
 		}
 		if apiKey == "" {
-			apiKey = password // سازگاری با فرم قدیمی
+			apiKey = password
 		}
 		username = ""
 		password = ""
 	case "marzban":
-		// Pasarguard: فقط نام کاربری + رمز عبور
 		if username == "" || password == "" {
 			http.Error(w, "برای پنل Pasarguard، نام کاربری و رمز عبور الزامی است", http.StatusBadRequest)
 			return
@@ -266,7 +399,6 @@ func FetchPanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🎯 استفاده از تابع مشترک (simple → groups fallback)
 	groups, source, err := fetchPasarguardGroups(panel)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -320,7 +452,6 @@ func SavePanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ذخیره group_ids در پنل
 	cfg.Panels[req.PanelID].GroupIDs = req.GroupIDs
 
 	if err := db.SaveConfig(cfg); err != nil {
@@ -343,7 +474,7 @@ func SavePanelGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 🎯 EmailBackupHandler ذخیره تنظیمات ایمیل بکاپ + تست ارسال (با پشتیبانی از toggle)
+// EmailBackupHandler ذخیره تنظیمات ایمیل بکاپ + تست ارسال
 func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -360,8 +491,7 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	smtpPass := r.FormValue("smtp_pass")
 	intervalHours, _ := strconv.Atoi(r.FormValue("interval_hours"))
 	zipPassword := r.FormValue("zip_password")
-	
-	// 🎯 خواندن وضعیت toggle از فرم
+
 	emailEnabledStr := r.FormValue("email_enabled")
 	enabled := emailEnabledStr == "1"
 
@@ -417,7 +547,7 @@ func EmailBackupHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, AdminBasePath()+"/settings?msg=email_saved", http.StatusSeeOther)
 }
 
-// 🎯 TelegramBackupHandler تنظیمات و تست بکاپ تلگرام (با پشتیبانی از toggle)
+// TelegramBackupHandler تنظیمات و تست بکاپ تلگرام
 func TelegramBackupHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkAdminAuth(w, r) {
 		return
@@ -431,8 +561,7 @@ func TelegramBackupHandler(w http.ResponseWriter, r *http.Request) {
 	chatID := strings.TrimSpace(r.FormValue("chat_id"))
 	intervalHours, _ := strconv.Atoi(r.FormValue("interval_hours"))
 	zipPassword := r.FormValue("zip_password")
-	
-	// 🎯 خواندن وضعیت toggle از فرم
+
 	telegramEnabledStr := r.FormValue("telegram_enabled")
 	enabled := telegramEnabledStr == "1"
 
@@ -566,103 +695,4 @@ func UpdateCleanupHandler(w http.ResponseWriter, r *http.Request) {
 
 	db.LogEventf("general", "success", "🕐 مهلت حذف سفارش‌های پرداخت‌نشده: %d ساعت", hours)
 	http.Redirect(w, r, AdminBasePath()+"/settings", http.StatusSeeOther)
-}
-
-// SavePlansHandler ذخیره لیست پلن‌های فروش در config.json
-func SavePlansHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkAdminAuth(w, r) {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	var req struct {
-		Plans []models.Plan `json:"plans"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "فرمت داده‌های ارسالی نامعتبر است",
-		})
-		return
-	}
-
-	seen := make(map[string]bool)
-	cleaned := make([]models.Plan, 0, len(req.Plans))
-
-	for i, p := range req.Plans {
-		p.ID = strings.TrimSpace(p.ID)
-		p.Title = strings.TrimSpace(p.Title)
-		p.GiftNote = strings.TrimSpace(p.GiftNote)
-
-		if p.ID == "" {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("شناسه (ID) در پلن شماره %d نمی‌تواند خالی باشد", i+1),
-			})
-			return
-		}
-		key := strings.ToLower(p.ID)
-		if seen[key] {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("شناسه «%s» تکراری است؛ شناسه هر پلن باید یکتا باشد", p.ID),
-			})
-			return
-		}
-		seen[key] = true
-
-		if p.Title == "" {
-			p.Title = p.ID
-		}
-		if p.Price <= 0 {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("قیمت پلن «%s» باید بزرگ‌تر از صفر باشد", p.ID),
-			})
-			return
-		}
-		if p.VolumeGB <= 0 {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("حجم اصلی پلن «%s» باید حداقل ۱ گیگ باشد", p.ID),
-			})
-			return
-		}
-		if p.Days <= 0 {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("مدت اعتبار پلن «%s» باید حداقل ۱ روز باشد", p.ID),
-			})
-			return
-		}
-		if p.BackupGB < 0 {
-			p.BackupGB = 0
-		}
-		if p.GiftGB < 0 {
-			p.GiftGB = 0
-		}
-
-		cleaned = append(cleaned, p)
-	}
-
-	cfg := db.GetConfig()
-	cfg.Plans = cleaned
-	if err := db.SaveConfig(cfg); err != nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "خطا در ذخیره فایل تنظیمات",
-		})
-		return
-	}
-
-	db.LogEventf("general", "success", "🏷️ لیست پلن‌های فروش بروزرسانی شد (%d پلن)", len(cleaned))
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": fmt.Sprintf("%d پلن با موفقیت ذخیره شد", len(cleaned)),
-	})
 }
