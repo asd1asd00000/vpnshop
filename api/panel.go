@@ -19,8 +19,8 @@ type ConfigItem struct {
 	Role      string `json:"role"`       // main | backup | gift
 	Volume    int    `json:"volume"`     // حجم به GB
 	Note      string `json:"note"`       // توضیح هدیه
-	Username  string `json:"username"`   // 🎯 نام کاربری
-	PanelType string `json:"panel_type"` // 🎯 نوع پنل (guards | marzban | conf)
+	Username  string `json:"username"`   // نام کاربری
+	PanelType string `json:"panel_type"` // نوع پنل (guards | marzban | conf)
 }
 
 // planVolumes حجم‌های تعریف‌شده در پلن
@@ -56,16 +56,48 @@ func sortConfigItems(items []ConfigItem) []ConfigItem {
 	return sorted
 }
 
+// resolveOrderPlanVolumes اول از Snapshot قفل‌شده در خود فاکتور می‌خواند؛ برای فاکتورهای قدیمی به لیست پلن‌ها رجوع می‌کند
+func resolveOrderPlanVolumes(order models.Order) (planVolumes, bool) {
+	if order.VolumeGB > 0 {
+		days := order.PlanDays
+		if days <= 0 {
+			days = 30
+		}
+		return planVolumes{
+			mainGB:   order.VolumeGB,
+			backupGB: order.BackupGB,
+			giftGB:   order.GiftGB,
+			days:     days,
+			giftNote: order.GiftNote,
+		}, true
+	}
+
+	plans, _ := models.LoadPlans()
+	for _, p := range plans {
+		if p.ID == order.PlanName {
+			return planVolumes{
+				mainGB:   p.VolumeGB,
+				backupGB: p.BackupGB,
+				giftGB:   p.GiftGB,
+				days:     p.Days,
+				giftNote: p.GiftNote,
+			}, true
+		}
+	}
+	return planVolumes{mainGB: 20, days: 30}, false
+}
+
 func GenerateConfigFromOrder(order models.Order) (string, error) {
-	// 🎯 همیشه اطلاعات تمدید و مشخصات قفل‌شده (Snapshot) فاکتور را مستقیماً از دیتابیس بخوان
+	// خواندن اطلاعات تمدید و Snapshot قفل‌شده پلن مستقیماً از دیتابیس
 	if order.ID > 0 {
 		db.DB.QueryRow(`SELECT IFNULL(renew_username, ''), IFNULL(carry_gb, 0),
-			IFNULL(plan_days, 0), IFNULL(volume_gb, 0), IFNULL(backup_gb, 0), IFNULL(gift_gb, 0), IFNULL(gift_note, '')
-			FROM orders WHERE id = ?`, order.ID).
+		                       IFNULL(plan_days, 0), IFNULL(volume_gb, 0),
+		                       IFNULL(backup_gb, 0), IFNULL(gift_gb, 0), IFNULL(gift_note, '')
+		                FROM orders WHERE id = ?`, order.ID).
 			Scan(&order.RenewUsername, &order.CarryGB, &order.PlanDays, &order.VolumeGB, &order.BackupGB, &order.GiftGB, &order.GiftNote)
 	}
 
-	// 🎯 اگه تمدید هست، از منطق تمدید استفاده کن
+	// اگه تمدید هست، از منطق تمدید با Snapshot استفاده کن
 	if order.RenewUsername != "" {
 		log.Printf("🔄 [تمدید] شناسایی شد: username=%s, carry=%dGB", order.RenewUsername, order.CarryGB)
 		return generateConfigFromRenewalOrder(order)
@@ -76,35 +108,7 @@ func GenerateConfigFromOrder(order models.Order) (string, error) {
 		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
 	}
 
-	// 🎯 اولویت با مشخصات قفل‌شده در لحظه صدور فاکتور (جلوگیری از تداخل هنگام ویرایش پلن)
-	var pv planVolumes
-	if order.VolumeGB > 0 {
-		days := order.PlanDays
-		if days <= 0 {
-			days = 30
-		}
-		pv = planVolumes{
-			mainGB:   order.VolumeGB,
-			backupGB: order.BackupGB,
-			giftGB:   order.GiftGB,
-			days:     days,
-			giftNote: order.GiftNote,
-		}
-	} else {
-		// fallback برای فاکتورهای قدیمی پیش از این آپدیت
-		pv = planVolumes{mainGB: 20, days: 30}
-		plans, _ := models.LoadPlans()
-		for _, p := range plans {
-			if p.ID == order.PlanName {
-				pv.mainGB = p.VolumeGB
-				pv.days = p.Days
-				pv.backupGB = p.BackupGB
-				pv.giftGB = p.GiftGB
-				pv.giftNote = p.GiftNote
-				break
-			}
-		}
-	}
+	pv, _ := resolveOrderPlanVolumes(order)
 
 	var lastErr error
 	for attempt := 0; attempt < 5; attempt++ {
@@ -136,7 +140,6 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 	anyDup := false
 
 	for _, panel := range panels {
-		// 🎯 تعیین حجم بر اساس نقش پنل (از پلن)
 		var panelVolume int
 		switch panel.Role {
 		case "backup":
@@ -147,7 +150,6 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 			panelVolume = pv.mainGB
 		}
 
-		// اگه حجمی برای این نقش تعریف نشده، رد شو
 		if panelVolume <= 0 {
 			continue
 		}
@@ -201,7 +203,6 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 			}
 		}
 
-		// 🎯 ساخت ConfigItem با فیلدهای جدید (role, volume, note, username)
 		role := panel.Role
 		if role == "" {
 			role = "main"
@@ -237,38 +238,9 @@ func generateConfigFromRenewalOrder(order models.Order) (string, error) {
 		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
 	}
 
-	var pv planVolumes
-	if order.VolumeGB > 0 {
-		days := order.PlanDays
-		if days <= 0 {
-			days = 30
-		}
-		pv = planVolumes{
-			mainGB:   order.VolumeGB,
-			backupGB: order.BackupGB,
-			giftGB:   order.GiftGB,
-			days:     days,
-			giftNote: order.GiftNote,
-		}
-	} else {
-		plans, _ := models.LoadPlans()
-		var selectedPlan *models.Plan
-		for _, p := range plans {
-			if p.ID == order.PlanName {
-				selectedPlan = &p
-				break
-			}
-		}
-		if selectedPlan == nil {
-			return "", fmt.Errorf("پلن یافت نشد")
-		}
-		pv = planVolumes{
-			mainGB:   selectedPlan.VolumeGB,
-			backupGB: selectedPlan.BackupGB,
-			giftGB:   selectedPlan.GiftGB,
-			days:     selectedPlan.Days,
-			giftNote: selectedPlan.GiftNote,
-		}
+	pv, found := resolveOrderPlanVolumes(order)
+	if !found {
+		return "", fmt.Errorf("پلن یافت نشد")
 	}
 
 	carryGB := order.CarryGB
@@ -293,7 +265,7 @@ func generateConfigFromRenewalOrder(order models.Order) (string, error) {
 	return string(jsonData), nil
 }
 
-// GenerateConfigFromRenewal نسخه سازگار با فراخوانی‌های قدیمی
+// GenerateConfigFromRenewal تمدید اشتراک با carry-over (سازگاری عقب‌مانده)
 func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int) (string, error) {
 	return generateConfigFromRenewalOrder(models.Order{
 		RenewUsername: renewUsername,
@@ -398,20 +370,16 @@ func renewOnAllPanels(panels []db.PanelConfig, username string, mainGB, backupGB
 
 // buildTelegramText متن آماده کپی برای تلگرام می‌سازه
 func buildTelegramText(items []ConfigItem) string {
-	// 🎯 مرتب‌سازی: ۱. اصلی (main) ۲. زاپاس (backup) ۳. هدیه (gift)
 	sortedItems := sortConfigItems(items)
 
-	// 1. ساخت بخش هدر (لوگو و آدرس)
 	var header strings.Builder
 	header.WriteString("🛡️ **Oklavpn** 🛡️\n")
 	header.WriteString("👉 https://t.me/oklavpn\n")
 
-	// 🎯 اضافه کردن نام کاربری و مدت اعتبار به هدر
 	if len(sortedItems) > 0 && sortedItems[0].Username != "" {
 		header.WriteString("\n")
 		header.WriteString(fmt.Sprintf("👤 نام کاربری: `%s`\n", sortedItems[0].Username))
 
-		// استخراج مدت اعتبار از کانفیگ اصلی (main)
 		for _, it := range sortedItems {
 			if it.Role == "main" || it.Role == "" {
 				if strings.Contains(it.Desc, "روز") {
@@ -426,11 +394,9 @@ func buildTelegramText(items []ConfigItem) string {
 
 	var blocks []string
 
-	// 2. حلقه ساخت بلاک‌ها به ترتیب (اصلی -> زاپاس -> هدیه)
 	for _, it := range sortedItems {
 		var b strings.Builder
 
-		// 🎯 برای پنل Conf، حجم به روز تبدیل میشه
 		volText := fmt.Sprintf("%d گیگ", it.Volume)
 		if it.PanelType == "conf" {
 			volText = fmt.Sprintf("%d روز (حجم نامحدود)", it.Volume*confDaysPerGB)
@@ -460,6 +426,5 @@ func buildTelegramText(items []ConfigItem) string {
 		blocks = append(blocks, b.String())
 	}
 
-	// 3. ترکیب هدر با بقیه متن‌ها
 	return header.String() + strings.Join(blocks, "\n------------------------------------------------------\n")
 }
