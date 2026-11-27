@@ -43,24 +43,24 @@ func ensureDBPragmas() {
 	})
 }
 
-// insertOrderWithRetry ثبت مقاوم فاکتور در دیتابیس با تلاش مجدد در صورت قفل بودن لحظه‌ای SQLite
-func insertOrderWithRetry(planID string, basePrice int, days int, renewUsername string, carryGB int) (string, int, error) {
+// insertOrderWithRetry ثبت مقاوم فاکتور همراه با قفل کردن حجم‌ها و توضیحات پلن در لحظه صدور
+func insertOrderWithRetry(plan models.Plan, renewUsername string, carryGB int) (string, int, error) {
 	ensureDBPragmas()
 
 	var lastErr error
 	for attempt := 0; attempt < 5; attempt++ {
-		uniqueAmount := basePrice + rand.Intn(999) + 1
+		uniqueAmount := plan.Price + rand.Intn(999) + 1
 		trackingCode := generateTrackingCode()
 
 		var err error
 		if renewUsername != "" {
-			_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, renew_username, carry_gb, status) 
-				VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-				trackingCode, planID, basePrice, uniqueAmount, days, renewUsername, carryGB)
+			_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, volume_gb, backup_gb, gift_gb, gift_note, renew_username, carry_gb, status) 
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+				trackingCode, plan.ID, plan.Price, uniqueAmount, plan.Days, plan.VolumeGB, plan.BackupGB, plan.GiftGB, plan.GiftNote, renewUsername, carryGB)
 		} else {
-			_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, status) 
-				VALUES (?, ?, ?, ?, ?, 'pending')`,
-				trackingCode, planID, basePrice, uniqueAmount, days)
+			_, err = db.DB.Exec(`INSERT INTO orders (tracking_code, plan_name, base_price, unique_amount, plan_days, volume_gb, backup_gb, gift_gb, gift_note, status) 
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+				trackingCode, plan.ID, plan.Price, uniqueAmount, plan.Days, plan.VolumeGB, plan.BackupGB, plan.GiftGB, plan.GiftNote)
 		}
 
 		if err == nil {
