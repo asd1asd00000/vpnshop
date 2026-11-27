@@ -20,7 +20,7 @@ func TehranNow() time.Time {
 	return time.Now().In(TehranTZ)
 }
 
-// 🎯 مهلت نگهداری فاکتور پرداخت‌شده بعد از انقضا (ثابت)
+// مهلت نگهداری فاکتور پرداخت‌شده بعد از انقضا (ثابت)
 const PaidGraceDays = 10
 
 func FormatTehranUTC(s string) string {
@@ -49,7 +49,6 @@ func FormatTehranUTC(s string) string {
 	return fmt.Sprintf("%d/%02d/%02d - %02d:%02d", jy, jm, jd, tt.Hour(), tt.Minute())
 }
 
-// parseUTC برای محاسبات انقضا
 func parseUTC(s string) (time.Time, bool) {
 	layouts := []string{
 		"2006-01-02 15:04:05",
@@ -72,7 +71,7 @@ func gregorianToJalali(gy, gm, gd int) (int, int, int) {
 		gy2 = gy + 1
 	}
 	days := 355666 + 365*gy + (gy2+3)/4 - (gy2+99)/100 + (gy2+399)/400 + gd + gdm[gm-1]
-	jy := -1595 + 33 * (days / 12053)
+	jy := -1595 + 33*(days/12053)
 	days %= 12053
 	jy += 4 * (days / 1461)
 	days %= 1461
@@ -111,22 +110,23 @@ func MigrateOrders() {
 		log.Println("✅ ستون admin_note به جدول orders اضافه شد")
 	}
 
-	// 🎯 ستون‌های آرشیو
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN plan_days INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون plan_days به جدول orders اضافه شد")
 	}
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN archived INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون archived به جدول orders اضافه شد")
 	}
-		if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN renew_username TEXT DEFAULT ''`); err == nil {
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN renew_username TEXT DEFAULT ''`); err == nil {
 		log.Println("✅ ستون renew_username به جدول orders اضافه شد")
 	}
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN carry_gb INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون carry_gb به جدول orders اضافه شد")
 	}
-		if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN stats_fixed INTEGER DEFAULT 0`); err == nil {
+	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN stats_fixed INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون stats_fixed به جدول orders اضافه شد")
 	}
+
+	// ستون‌های Snapshot پلن (قفل کردن مشخصات پلن در لحظه صدور فاکتور)
 	if _, err := DB.Exec(`ALTER TABLE orders ADD COLUMN volume_gb INTEGER DEFAULT 0`); err == nil {
 		log.Println("✅ ستون volume_gb به جدول orders اضافه شد")
 	}
@@ -141,7 +141,6 @@ func MigrateOrders() {
 	}
 }
 
-// StartOrderCleanup مایگریشن + پاکسازی‌ها
 func StartOrderCleanup() {
 	MigrateOrders()
 	cleanOldOrders()
@@ -157,7 +156,6 @@ func StartOrderCleanup() {
 	}()
 }
 
-// cleanOldOrders حذف سفارش‌های پرداخت‌نشده قدیمی
 func cleanOldOrders() {
 	hours := GetConfig().Cleanup.OrderExpireHours
 	if hours <= 0 {
@@ -176,7 +174,6 @@ func cleanOldOrders() {
 	}
 }
 
-// 🎯 cleanExpiredPaidOrders آرشیو فاکتورهای پرداخت‌شده‌ی منقضی
 func cleanExpiredPaidOrders() {
 	rows, err := DB.Query(`SELECT id, tracking_code, plan_days, paid_at FROM orders WHERE status = 'paid' AND IFNULL(archived, 0) = 0 AND paid_at IS NOT NULL`)
 	if err != nil {
@@ -186,8 +183,8 @@ func cleanExpiredPaidOrders() {
 	defer rows.Close()
 
 	type exp struct {
-		id     int
-		code   string
+		id   int
+		code string
 	}
 	var toArchive []exp
 
@@ -200,12 +197,12 @@ func cleanExpiredPaidOrders() {
 
 		t, ok := parseUTC(paidAt)
 		if !ok {
-			continue // احتیاط: اگه تاریخ نامعتبر بود، دست نزن
+			continue
 		}
 
 		days := planDays
 		if days <= 0 {
-			days = 30 // fallback برای فاکتورهای قدیمی
+			days = 30
 		}
 
 		expiry := t.AddDate(0, 0, days+PaidGraceDays)
