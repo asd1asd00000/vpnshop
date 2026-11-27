@@ -230,43 +230,57 @@ func createOnAllPanels(panels []db.PanelConfig, username string, pv planVolumes)
 	return items, false, nil
 }
 
-// GenerateConfigFromRenewal تمدید اشتراک با carry-over
-func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int) (string, error) {
+// generateConfigFromRenewalOrder تمدید اشتراک با استفاده از Snapshot قفل‌شده در فاکتور
+func generateConfigFromRenewalOrder(order models.Order) (string, error) {
 	cfg := db.GetConfig()
 	if len(cfg.Panels) == 0 {
 		return "", fmt.Errorf("هیچ پنلی در تنظیمات تعریف نشده است")
 	}
 
-	plans, _ := models.LoadPlans()
-	var selectedPlan *models.Plan
-	for _, p := range plans {
-		if p.ID == planID {
-			selectedPlan = &p
-			break
+	var pv planVolumes
+	if order.VolumeGB > 0 {
+		days := order.PlanDays
+		if days <= 0 {
+			days = 30
+		}
+		pv = planVolumes{
+			mainGB:   order.VolumeGB,
+			backupGB: order.BackupGB,
+			giftGB:   order.GiftGB,
+			days:     days,
+			giftNote: order.GiftNote,
+		}
+	} else {
+		plans, _ := models.LoadPlans()
+		var selectedPlan *models.Plan
+		for _, p := range plans {
+			if p.ID == order.PlanName {
+				selectedPlan = &p
+				break
+			}
+		}
+		if selectedPlan == nil {
+			return "", fmt.Errorf("پلن یافت نشد")
+		}
+		pv = planVolumes{
+			mainGB:   selectedPlan.VolumeGB,
+			backupGB: selectedPlan.BackupGB,
+			giftGB:   selectedPlan.GiftGB,
+			days:     selectedPlan.Days,
+			giftNote: selectedPlan.GiftNote,
 		}
 	}
-	if selectedPlan == nil {
-		return "", fmt.Errorf("پلن یافت نشد")
-	}
 
+	carryGB := order.CarryGB
 	if carryGB < 0 {
 		carryGB = 0
 	}
 
-	pv := planVolumes{
-		mainGB:   selectedPlan.VolumeGB,
-		backupGB: selectedPlan.BackupGB,
-		giftGB:   selectedPlan.GiftGB,
-		days:     selectedPlan.Days,
-		giftNote: selectedPlan.GiftNote,
-	}
-
-	// 🎯 carry-over فقط به پنل اصلی اضافه می‌شود و زمان همان روزهای پلن جدید (pv.days) است
 	mainVolume := pv.mainGB + carryGB
 	backupVolume := pv.backupGB
 	giftVolume := pv.giftGB
 
-	items, err := renewOnAllPanels(cfg.Panels, renewUsername, mainVolume, backupVolume, giftVolume, pv.days, pv.giftNote)
+	items, err := renewOnAllPanels(cfg.Panels, order.RenewUsername, mainVolume, backupVolume, giftVolume, pv.days, pv.giftNote)
 	if len(items) == 0 {
 		return "", err
 	}
@@ -277,6 +291,15 @@ func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int)
 	items = sortConfigItems(items)
 	jsonData, _ := json.Marshal(items)
 	return string(jsonData), nil
+}
+
+// GenerateConfigFromRenewal نسخه سازگار با فراخوانی‌های قدیمی
+func GenerateConfigFromRenewal(renewUsername string, planID string, carryGB int) (string, error) {
+	return generateConfigFromRenewalOrder(models.Order{
+		RenewUsername: renewUsername,
+		PlanName:      planID,
+		CarryGB:       carryGB,
+	})
 }
 
 // renewOnAllPanels تمدید روی همه پنل‌ها
