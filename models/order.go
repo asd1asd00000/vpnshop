@@ -15,6 +15,10 @@ type Order struct {
 	AdminNote      string `json:"admin_note"`
 	Archived       int    `json:"archived"`
 	PlanDays       int    `json:"plan_days"`
+	VolumeGB       int    `json:"volume_gb"`
+	BackupGB       int    `json:"backup_gb"`
+	GiftGB         int    `json:"gift_gb"`
+	GiftNote       string `json:"gift_note"`
 	RenewUsername  string `json:"renew_username"`
 	CarryGB        int    `json:"carry_gb"`
 }
